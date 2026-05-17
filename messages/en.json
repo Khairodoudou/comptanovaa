@@ -1,0 +1,72 @@
+{
+  "app": {
+    "name": "ComptaNova"
+  },
+  "nav": {
+    "home": "Home",
+    "login": "Login",
+    "register": "Register",
+    "about": "About",
+    "contact": "Contact"
+  },
+  "auth": {
+    "login": "Login",
+    "register": "Register",
+    "email": "Email",
+    "password": "Password",
+    "name": "Full name",
+    "phone": "Phone",
+    "role": "Role",
+    "comptable": "Accountant",
+    "client": "Client / SME",
+    "submit": "Sign in",
+    "logout": "Logout"
+  },
+  "dashboard": {
+    "welcome": "Welcome",
+    "documents": "Documents",
+    "journal": "Journal",
+    "bank": "Bank reconciliation",
+    "profile": "Profile",
+    "clients": "Clients",
+    "validate": "Validate entries",
+    "settings": "Settings"
+  },
+  "documents": {
+    "upload": "Upload document",
+    "status": "Status",
+    "uploaded": "Uploaded",
+    "processing": "Processing",
+    "reviewed": "Reviewed",
+    "validated": "Validated",
+    "type": "Type",
+    "date": "Date",
+    "amount": "Amount"
+  },
+  "journal": {
+    "date": "Date",
+    "description": "Description",
+    "debit": "Debit",
+    "credit": "Credit",
+    "amount": "Amount",
+    "status": "Status",
+    "proposed": "Proposed",
+    "validated": "Validated",
+    "rejected": "Rejected",
+    "validate": "Validate",
+    "reject": "Reject",
+    "comment": "Comment"
+  },
+  "bank": {
+    "import": "Import CSV",
+    "matched": "Matched",
+    "unmatched": "Unmatched",
+    "reconcile": "Reconcile"
+  },
+  "errors": {
+    "required": "This field is required",
+    "invalid_email": "Invalid email",
+    "invalid_password": "Password must be at least 8 characters",
+    "server_error": "Server error, please try again"
+  }
+}

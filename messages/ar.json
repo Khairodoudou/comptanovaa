@@ -1,0 +1,72 @@
+{
+  "app": {
+    "name": "ComptaNova"
+  },
+  "nav": {
+    "home": "الرئيسية",
+    "login": "تسجيل الدخول",
+    "register": "إنشاء حساب",
+    "about": "حول",
+    "contact": "اتصل بنا"
+  },
+  "auth": {
+    "login": "تسجيل الدخول",
+    "register": "إنشاء حساب",
+    "email": "البريد الإلكتروني",
+    "password": "كلمة المرور",
+    "name": "الاسم الكامل",
+    "phone": "رقم الهاتف",
+    "role": "الدور",
+    "comptable": "محاسب",
+    "client": "عميل / مؤسسة",
+    "submit": "دخول",
+    "logout": "تسجيل الخروج"
+  },
+  "dashboard": {
+    "welcome": "مرحباً",
+    "documents": "المستندات",
+    "journal": "دفتر اليومية",
+    "bank": "التسوية البنكية",
+    "profile": "الملف الشخصي",
+    "clients": "العملاء",
+    "validate": "التحقق من القيود",
+    "settings": "الإعدادات"
+  },
+  "documents": {
+    "upload": "رفع مستند",
+    "status": "الحالة",
+    "uploaded": "تم الرفع",
+    "processing": "قيد المعالجة",
+    "reviewed": "تمت المراجعة",
+    "validated": "تم التحقق",
+    "type": "النوع",
+    "date": "التاريخ",
+    "amount": "المبلغ"
+  },
+  "journal": {
+    "date": "التاريخ",
+    "description": "الوصف",
+    "debit": "مدين",
+    "credit": "دائن",
+    "amount": "المبلغ",
+    "status": "الحالة",
+    "proposed": "مقترح",
+    "validated": "معتمد",
+    "rejected": "مرفوض",
+    "validate": "اعتماد",
+    "reject": "رفض",
+    "comment": "تعليق"
+  },
+  "bank": {
+    "import": "استيراد CSV",
+    "matched": "متطابق",
+    "unmatched": "غير متطابق",
+    "reconcile": "تسوية"
+  },
+  "errors": {
+    "required": "هذا الحقل مطلوب",
+    "invalid_email": "البريد الإلكتروني غير صالح",
+    "invalid_password": "كلمة المرور يجب أن تحتوي على 8 أحرف على الأقل",
+    "server_error": "خطأ في الخادم، يرجى المحاولة مجدداً"
+  }
+}

@@ -1,0 +1,506 @@
+{
+  "navbar": {
+    "features": "Fonctionnalités",
+    "how": "Comment ça marche",
+    "about": "À propos",
+    "contact": "Contact",
+    "login": "Connexion",
+    "register": "Commencer gratuitement",
+    "language": "Langue"
+  },
+  "footer": {
+    "about": "À propos",
+    "contact": "Contact",
+    "privacy": "Confidentialité",
+    "terms": "Conditions",
+    "rights": "© 2026 ComptaNova"
+  },
+  "home": {
+    "hero": {
+      "title_1": "L'Expert-Comptable",
+      "title_2": "Digital",
+      "subtitle": "La première plateforme SaaS en Algérie qui automatise la saisie comptable via l'IA et connecte en temps réel les PME à leur expert-comptable.",
+      "cta_primary": "Commencer gratuitement",
+      "cta_secondary": "Espace Client"
+    },
+    "stats": [
+      { "value": "90%", "label": "Réduction de la saisie manuelle" },
+      { "value": "2 rôles", "label": "Comptable & Client PME" },
+      { "value": "3 langues", "label": "Français, Arabe, Anglais" }
+    ],
+    "features_section": {
+      "title": "Tout ce dont vous avez besoin",
+      "subtitle": "Une plateforme complète pour digitaliser votre cabinet comptable ou votre PME.",
+      "items": [
+        {
+          "title": "Centralisation des documents",
+          "description": "Uploadez vos factures, bons de livraison et relevés bancaires en un seul endroit. Fini les documents éparpillés."
+        },
+        {
+          "title": "Extraction automatique OCR",
+          "description": "Notre système lit automatiquement vos documents et extrait la date, le montant, le fournisseur et le type."
+        },
+        {
+          "title": "Écritures comptables automatiques",
+          "description": "À partir des données extraites, ComptaNova génère les écritures comptables selon les règles du PCG algérien."
+        },
+        {
+          "title": "Validation par le comptable",
+          "description": "Le comptable vérifie, modifie et valide chaque écriture proposée avant qu'elle soit définitivement enregistrée."
+        },
+        {
+          "title": "Rapprochement bancaire",
+          "description": "Importez votre relevé CSV et laissez l'algorithme matcher automatiquement vos transactions avec vos écritures."
+        },
+        {
+          "title": "Notifications en temps réel",
+          "description": "Restez informé à chaque étape : nouveau document reçu, écriture validée, rapprochement terminé."
+        }
+      ]
+    },
+    "how_section": {
+      "title": "Comment ça marche ?",
+      "subtitle": "Un flux de travail simple et efficace entre le client et son comptable.",
+      "items": [
+        {
+          "title": "Le client uploade ses documents",
+          "description": "Factures PDF, images de chèques, bons de livraison — tout est centralisé dans l'espace client."
+        },
+        {
+          "title": "L'OCR extrait les données",
+          "description": "Le système lit automatiquement chaque document et propose une écriture comptable correspondante."
+        },
+        {
+          "title": "Le comptable valide",
+          "description": "Le comptable vérifie les écritures proposées, les modifie si besoin, puis les valide en un clic."
+        },
+        {
+          "title": "Journal et rapprochement",
+          "description": "Les écritures validées alimentent le journal. Le relevé bancaire est réconcilié automatiquement."
+        }
+      ]
+    },
+    "roles_section": {
+      "title": "Deux rôles, une plateforme",
+      "accountant": {
+        "title": "Comptable",
+        "subtitle": "Gérez plusieurs clients depuis un tableau de bord unifié.",
+        "list": [
+          "Valider ou rejeter les écritures proposées",
+          "Journal consolidé multi-clients",
+          "Configurer les règles comptables",
+          "Notifications en temps réel"
+        ],
+        "link": "Créer un compte comptable"
+      },
+      "client": {
+        "title": "Client / PME",
+        "subtitle": "Gérez vos documents et suivez votre comptabilité simplement.",
+        "list": [
+          "Uploader factures et relevés bancaires",
+          "Suivre l'état de ses documents",
+          "Consulter son journal validé",
+          "Rapprochement bancaire automatique"
+        ],
+        "link": "Créer un compte client"
+      }
+    },
+    "cta_section": {
+      "title": "Prêt à digitaliser votre comptabilité ?",
+      "subtitle": "Rejoignez ComptaNova et automatisez vos tâches comptables dès aujourd'hui.",
+      "button_primary": "Créer mon compte",
+      "button_secondary": "Nous contacter"
+    }
+  },
+  "login": {
+    "welcome": "Bienvenue sur votre espace comptable digital",
+    "description": "Automatisez vos écritures, validez vos documents et réconciliez votre banque — tout en un seul endroit.",
+    "features": {
+      "ocr": "Extraction auto",
+      "security": "Sécurisé",
+      "roles": "Comptable / PME",
+      "languages": "FR / AR / EN"
+    },
+    "title": "Connexion",
+    "noAccount": "Pas encore de compte ?",
+    "createAccount": "Créer un compte",
+    "client": "Client / PME",
+    "accountant": "Comptable",
+    "email": "Email",
+    "password": "Mot de passe",
+    "submit": "Se connecter",
+    "terms": "En vous connectant, vous acceptez nos conditions d'utilisation."
+  },
+  "register": {
+    "welcome": "Rejoignez ComptaNova aujourd'hui",
+    "description": "Créez votre compte en moins de 2 minutes et commencez à digitaliser votre comptabilité.",
+    "features": {
+      "no_card": "Aucune carte bancaire requise",
+      "instant": "Accès immédiat après inscription",
+      "languages": "Interface en français, arabe et anglais",
+      "secure": "Données sécurisées"
+    },
+    "title": "Créer un compte",
+    "hasAccount": "Déjà inscrit ?",
+    "login": "Se connecter",
+    "client": "Client / PME",
+    "accountant": "Comptable",
+    "fullName": "Nom complet",
+    "email": "Email",
+    "phone": "Téléphone",
+    "optional": "(optionnel)",
+    "password": "Mot de passe",
+    "passwordPlaceholder": "Minimum 8 caractères",
+    "strength": {
+      "label": "Force :",
+      "weak": "Faible",
+      "medium": "Moyen",
+      "strong": "Fort"
+    },
+    "submit": "Créer mon compte",
+    "terms": "En créant un compte, vous acceptez nos conditions d'utilisation."
+  },
+  "about": {
+    "hero": {
+      "title_1": "Repenser la comptabilité",
+      "title_2": "pour les PME algériennes",
+      "subtitle": "ComptaNova est née d'une vision simple : éliminer la saisie manuelle et redonner aux experts-comptables leur véritable rôle de conseiller stratégique."
+    },
+    "story": {
+      "title": "Notre Histoire",
+      "p1": "Face à la lenteur des processus comptables traditionnels et aux tas de factures papier, nous avons conçu une plateforme capable d'automatiser le traitement des données grâce à l'intelligence artificielle (OCR).",
+      "p2": "En tant que projet académique MVP, ComptaNova vise à prouver qu'il est possible de créer un écosystème collaboratif et fluide entre le comptable et son client, tout en respectant strictement le Plan Comptable Général (PCG) algérien."
+    },
+    "goal": {
+      "title": "Notre Objectif",
+      "subtitle": "Zéro papier, 100% de traçabilité et une réconciliation bancaire instantanée."
+    },
+    "values": {
+      "title": "Nos valeurs",
+      "subtitle": "Les principes qui guident le développement de ComptaNova au quotidien.",
+      "items": {
+        "innovation": {
+          "title": "Innovation",
+          "desc": "L'utilisation de technologies modernes (OCR, Next.js) pour résoudre des problèmes concrets."
+        },
+        "reliability": {
+          "title": "Fiabilité",
+          "desc": "Une architecture sécurisée et des calculs comptables précis, conformes aux normes."
+        },
+        "collaboration": {
+          "title": "Collaboration",
+          "desc": "Une plateforme qui réunit tous les acteurs (clients, comptables) sur une interface commune."
+        }
+      }
+    },
+    "cta": {
+      "title": "Prêt à franchir le pas de la digitalisation ?",
+      "subtitle": "Rejoignez les PME et les comptables qui utilisent déjà ComptaNova pour gagner un temps précieux chaque jour.",
+      "button": "Créer mon compte gratuit"
+    }
+  },
+  "contact": {
+    "hero": {
+      "title_1": "Contactez-",
+      "title_2": "nous",
+      "subtitle": "Une question sur nos tarifs ? Besoin d'aide pour configurer votre espace ? Notre équipe est là pour vous accompagner."
+    },
+    "info": {
+      "title": "Discutons de vos besoins",
+      "subtitle": "Remplissez le formulaire et nous vous répondrons dans les plus brefs délais (généralement sous 24h).",
+      "email": {
+        "title": "Email",
+        "desc": "Pour toute question générale :"
+      },
+      "phone": {
+        "title": "Téléphone",
+        "desc": "Du dimanche au jeudi, de 9h à 17h :"
+      },
+      "office": {
+        "title": "Nos bureaux",
+        "desc1": "Cyberparc de Sidi Abdellah,",
+        "desc2": "Rahmania, Alger, Algérie"
+      }
+    },
+    "form": {
+      "success": {
+        "title": "Message envoyé !",
+        "desc": "Merci de nous avoir contactés. Notre équipe reviendra vers vous très rapidement.",
+        "button": "Envoyer un autre message"
+      },
+      "firstName": "Prénom",
+      "firstNamePlaceholder": "Ex: Amine",
+      "lastName": "Nom",
+      "lastNamePlaceholder": "Ex: Benali",
+      "email": "Adresse email",
+      "emailPlaceholder": "vous@exemple.com",
+      "subject": {
+        "label": "Sujet",
+        "support": "Support technique",
+        "sales": "Question commerciale",
+        "partnership": "Partenariat",
+        "other": "Autre"
+      },
+      "message": "Message",
+      "messagePlaceholder": "Comment pouvons-nous vous aider ?",
+      "submit": "Envoyer le message"
+    }
+  },
+  "dashboard": {
+    "sidebar": {
+      "client_space": "Espace Client",
+      "accountant_space": "Espace Comptable",
+      "dashboard": "Tableau de bord",
+      "documents": "Documents",
+      "journal": "Journal",
+      "bank": "Rapprochement",
+      "profile": "Mon profil",
+      "settings": "Paramètres",
+      "clients": "Clients",
+      "validate": "Valider écritures",
+      "grand_livre": "Grand Livre",
+      "rapprochement": "Rapprochement Bancaire",
+      "notifications": "Notifications",
+      "logout": "Déconnexion"
+    },
+    "kpi": {
+      "total_clients": "Total clients",
+      "pending_entries": "Écritures en attente",
+      "docs_today": "Documents reçus aujourd'hui",
+      "validated_month": "Validées ce mois",
+      "docs_uploaded": "Documents uploadés",
+      "validated_entries": "Écritures validées",
+      "pending": "En attente",
+      "rejected": "Rejetées"
+    },
+    "charts": {
+      "entries_week": "Écritures par jour (7 derniers jours)",
+      "docs_months": "Documents par mois (6 derniers mois)"
+    },
+    "activity": {
+      "title": "Activité récente",
+      "empty": "Aucune activité récente",
+      "greeting": "Bonjour",
+      "overview": "Voici votre vue d'ensemble",
+      "accounting_state": "Voici l'état de votre comptabilité"
+    },
+    "documents": {
+      "title": "Documents",
+      "subtitle": "Uploadez vos factures, relevés et justificatifs",
+      "my_docs": "Mes documents",
+      "empty": "Aucun document uploadé pour le moment.",
+      "filename": "Nom du fichier",
+      "type": "Type",
+      "size": "Taille",
+      "status": "Statut",
+      "date": "Date",
+      "entries": "Écritures",
+      "uploader": {
+        "drop": "Glissez un fichier ici ou",
+        "browse": "cliquez pour parcourir",
+        "hint": "PDF, image (PNG/JPG), CSV — max 10 Mo",
+        "send": "Envoyer",
+        "processing": "Traitement...",
+        "ocr_title": "Document traité — Écriture générée",
+        "supplier": "Fournisseur / Référence",
+        "date": "Date",
+        "amount": "Montant",
+        "detected_type": "Type détecté",
+        "debit": "Débit",
+        "credit": "Crédit",
+        "entry_pending": "Écriture créée en statut Proposé — en attente de validation par votre comptable."
+      }
+    },
+    "journal": {
+      "title": "Mon journal",
+      "export_csv": "Exporter CSV",
+      "total_validated": "Total validé",
+      "validated": "Validées",
+      "pending": "En attente",
+      "rejected": "Rejetées",
+      "empty": "Aucune écriture trouvée.",
+      "col_date": "Date",
+      "col_description": "Description",
+      "col_debit": "Débit",
+      "col_credit": "Crédit",
+      "col_amount": "Montant (DA)",
+      "col_document": "Document",
+      "col_status": "Statut",
+      "col_client": "Client",
+      "filter_account": "Filtrer par compte (ex: 607)",
+      "clear": "Effacer"
+    },
+    "bank": {
+      "title": "Rapprochement bancaire",
+      "subtitle": "Importez votre relevé CSV et lancez le rapprochement automatique",
+      "import_title": "1. Importer le relevé bancaire (CSV)",
+      "format_hint": "Format attendu :",
+      "format_detail": "(séparateur virgule)",
+      "choose_csv": "Choisir un fichier CSV",
+      "run": "Lancer le rapprochement",
+      "running": "Rapprochement...",
+      "history": "Historique des transactions",
+      "col_date": "Date",
+      "col_description": "Description",
+      "col_amount": "Montant (DA)",
+      "col_reconciled": "Rapprochement",
+      "col_entry": "Écriture liée",
+      "imported": "Transactions importées",
+      "matched": "Rapprochées",
+      "unmatched": "Non rapprochées",
+      "results": "Résultats",
+      "matched_label": "✓ Rapproché",
+      "unmatched_label": "○ Non rapproché"
+    },
+    "profile": {
+      "title": "Mon profil",
+      "subtitle": "Gérez vos informations personnelles",
+      "role_badge": "Client PME",
+      "form_title": "Informations personnelles",
+      "fullname": "Nom complet",
+      "email": "Adresse e-mail",
+      "email_readonly": "L'adresse e-mail ne peut pas être modifiée ici.",
+      "phone": "Téléphone",
+      "lang": "Langue préférée",
+      "save": "Enregistrer les modifications",
+      "saving": "Sauvegarde...",
+      "success": "Profil mis à jour avec succès.",
+      "lang_fr": "Français",
+      "lang_ar": "العربية",
+      "lang_en": "English"
+    },
+    "status": {
+      "UPLOADED": "Uploadé",
+      "PROCESSING": "En cours",
+      "REVIEWED": "Analysé",
+      "VALIDATED": "Validé",
+      "PROPOSED": "Proposé",
+      "REJECTED": "Rejeté"
+    },
+    "recent_docs": "Documents récents",
+    "no_docs": "Aucun document uploadé.",
+    "comptable": {
+      "dashboard_title": "Tableau de bord",
+      "dashboard_subtitle": "Bonjour",
+      "dashboard_overview": "Voici votre vue d'ensemble",
+      "chart_title": "Écritures par jour (7 derniers jours)",
+      "activity_title": "Activité récente",
+      "activity_empty": "Aucune activité récente",
+      "validated_label": "Validée",
+      "clients_title": "Clients",
+      "clients_subtitle_one": "client enregistré",
+      "clients_subtitle_many": "clients enregistrés",
+      "col_client": "Client",
+      "col_company": "Entreprise",
+      "col_documents": "Documents",
+      "col_pending": "En attente",
+      "col_last_activity": "Dernière activité",
+      "col_total_clients": "Total clients",
+      "col_total_documents": "Total documents",
+      "clients_empty": "Aucun client enregistré pour le moment.",
+      "see": "Voir",
+      "validate_title": "File de validation",
+      "validate_subtitle_one": "écriture en attente de validation",
+      "validate_subtitle_many": "écritures en attente de validation",
+      "validate_empty_title": "File vide",
+      "validate_empty_desc": "Toutes les écritures ont été traitées.",
+      "ref": "Réf",
+      "debit": "Débit",
+      "credit": "Crédit",
+      "amount": "Montant",
+      "validate_btn": "Valider",
+      "reject_btn": "Rejeter",
+      "reject_modal_title": "Motif de rejet",
+      "reject_placeholder": "Expliquez la raison du rejet (optionnel)...",
+      "reject_cancel": "Annuler",
+      "reject_confirm": "Confirmer le rejet",
+      "journal_title": "Journal consolidé",
+      "journal_export": "Exporter CSV",
+      "journal_empty": "Aucune écriture trouvée.",
+      "filter_all_statuses": "Tous les statuts",
+      "filter_all_clients": "Tous les clients",
+      "filter_clear": "Effacer",
+      "filter_proposed": "En attente",
+      "filter_validated": "Validées",
+      "filter_rejected": "Rejetées",
+      "settings_title": "Paramètres",
+      "settings_subtitle": "Configuration du plan comptable et des règles automatiques",
+      "settings_rules_title": "Règles comptables automatiques",
+      "settings_rules_desc": "Ces règles s'appliquent automatiquement lors du traitement OCR d'un document. Les écritures sont créées en statut Proposé et doivent être validées.",
+      "settings_notif_title": "Préférences notifications",
+      "settings_notif_new_doc": "Nouveau document uploadé par un client",
+      "settings_notif_new_doc_desc": "Recevoir une notification à chaque upload de document",
+      "settings_notif_validation": "Écriture à valider",
+      "settings_notif_validation_desc": "Alertes lorsqu'une nouvelle écriture arrive en file d'attente",
+      "settings_notif_bank": "Rapprochement bancaire complété",
+      "settings_notif_bank_desc": "Notification à la fin d'un rapprochement bancaire client",
+      "settings_connected_as": "Connecté en tant que",
+      "rule_supplier_invoice": "Facture fournisseur",
+      "rule_client_invoice": "Facture client",
+      "rule_cheque": "Chèque (paiement)",
+      "rule_bank_statement": "Relevé bancaire"
+    },
+    "grand_livre": {
+      "title": "Grand Livre",
+      "subtitle": "Comptes en T par mois — soldes débiteurs et créditeurs",
+      "filter_client": "Filtrer par client",
+      "filter_all_clients": "Tous les clients",
+      "filter_company": "Entreprise",
+      "no_company": "Aucune entreprise trouvée",
+      "no_entries": "Aucune écriture validée pour ce mois.",
+      "month_label": "Mois",
+      "debit_col": "DÉBIT",
+      "credit_col": "CRÉDIT",
+      "solde_initial": "Solde initial",
+      "solde_final": "Solde final",
+      "total": "Total",
+      "set_solde_btn": "Définir solde initial",
+      "modal_title": "Définir le solde initial",
+      "modal_account": "Compte",
+      "modal_month": "Mois / Année",
+      "modal_amount": "Solde initial (DA)",
+      "modal_save": "Enregistrer",
+      "modal_saving": "Enregistrement...",
+      "modal_cancel": "Annuler",
+      "account_512": "Banque (512)",
+      "nature_debiteur": "Débiteur",
+      "nature_crediteur": "Créditeur"
+    },
+    "rapprochement": {
+      "title": "Rapprochement Bancaire",
+      "subtitle": "Comparaison Compte 512 vs Relevé Bancaire",
+      "filter_client": "Client",
+      "filter_all_clients": "Tous les clients",
+      "filter_month": "Mois",
+      "import_title": "Importer un relevé bancaire (CSV)",
+      "format_hint": "Format attendu :",
+      "format_detail": "date,description,montant (ou avec N° chèque en 4ème colonne)",
+      "choose_csv": "Choisir CSV",
+      "run": "Lancer le rapprochement",
+      "running": "Analyse en cours...",
+      "col_compte512": "Compte 512 (Écritures)",
+      "col_releve": "Relevé Bancaire",
+      "col_date": "Date",
+      "col_description": "Description",
+      "col_cheque": "N° Chèque",
+      "col_debit": "Sortie",
+      "col_credit": "Entrée",
+      "col_amount": "Montant (DA)",
+      "col_statut": "Statut",
+      "matched_exact": "✓ Exact",
+      "matched_partial": "~ Partiel",
+      "unmatched": "✗ Non rapproché",
+      "summary_matched": "Rapprochés",
+      "summary_unmatched": "Non rapprochés",
+      "summary_ecart": "Écart total",
+      "summary_total": "Total transactions",
+      "correct_btn": "Corriger",
+      "correct_modal_title": "Lier manuellement",
+      "correct_select_entry": "Sélectionner une écriture",
+      "correct_save": "Lier",
+      "correct_cancel": "Annuler",
+      "no_data": "Importez un relevé pour voir le rapprochement.",
+      "empty_512": "Aucune écriture sur le compte 512 pour ce mois."
+    }
+  }
+}

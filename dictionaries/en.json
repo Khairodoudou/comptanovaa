@@ -1,0 +1,506 @@
+{
+  "navbar": {
+    "features": "Features",
+    "how": "How it works",
+    "about": "About",
+    "contact": "Contact",
+    "login": "Login",
+    "register": "Start for free",
+    "language": "Language"
+  },
+  "footer": {
+    "about": "About",
+    "contact": "Contact",
+    "privacy": "Privacy",
+    "terms": "Terms",
+    "rights": "© 2026 ComptaNova"
+  },
+  "home": {
+    "hero": {
+      "title_1": "The Digital",
+      "title_2": "Accountant",
+      "subtitle": "The first SaaS platform in Algeria that automates accounting entry via AI and connects SMEs in real-time to their accountant.",
+      "cta_primary": "Start for free",
+      "cta_secondary": "Client Area"
+    },
+    "stats": [
+      { "value": "90%", "label": "Reduction in manual entry" },
+      { "value": "2 roles", "label": "Accountant & SME Client" },
+      { "value": "3 languages", "label": "English, Arabic, French" }
+    ],
+    "features_section": {
+      "title": "Everything you need",
+      "subtitle": "A complete platform to digitalize your accounting firm or your SME.",
+      "items": [
+        {
+          "title": "Document Centralization",
+          "description": "Upload your invoices, delivery notes, and bank statements in one place. No more scattered documents."
+        },
+        {
+          "title": "Automatic OCR Extraction",
+          "description": "Our system automatically reads your documents and extracts the date, amount, supplier, and type."
+        },
+        {
+          "title": "Automatic Accounting Entries",
+          "description": "Based on the extracted data, ComptaNova generates accounting entries according to the Algerian PCG rules."
+        },
+        {
+          "title": "Validation by Accountant",
+          "description": "The accountant checks, modifies, and validates each proposed entry before it is definitively recorded."
+        },
+        {
+          "title": "Bank Reconciliation",
+          "description": "Import your CSV statement and let the algorithm automatically match your transactions with your entries."
+        },
+        {
+          "title": "Real-time Notifications",
+          "description": "Stay informed at every step: new document received, entry validated, reconciliation completed."
+        }
+      ]
+    },
+    "how_section": {
+      "title": "How does it work?",
+      "subtitle": "A simple and efficient workflow between the client and their accountant.",
+      "items": [
+        {
+          "title": "The client uploads documents",
+          "description": "PDF invoices, check images, delivery notes — everything is centralized in the client area."
+        },
+        {
+          "title": "OCR extracts the data",
+          "description": "The system automatically reads each document and proposes a corresponding accounting entry."
+        },
+        {
+          "title": "The accountant validates",
+          "description": "The accountant verifies the proposed entries, modifies them if necessary, then validates them in one click."
+        },
+        {
+          "title": "Journal and reconciliation",
+          "description": "Validated entries feed the journal. The bank statement is reconciled automatically."
+        }
+      ]
+    },
+    "roles_section": {
+      "title": "Two roles, one platform",
+      "accountant": {
+        "title": "Accountant",
+        "subtitle": "Manage multiple clients from a unified dashboard.",
+        "list": [
+          "Validate or reject proposed entries",
+          "Multi-client consolidated journal",
+          "Configure accounting rules",
+          "Real-time notifications"
+        ],
+        "link": "Create an accountant account"
+      },
+      "client": {
+        "title": "Client / SME",
+        "subtitle": "Manage your documents and track your accounting simply.",
+        "list": [
+          "Upload invoices and bank statements",
+          "Track the status of documents",
+          "Consult the validated journal",
+          "Automatic bank reconciliation"
+        ],
+        "link": "Create a client account"
+      }
+    },
+    "cta_section": {
+      "title": "Ready to digitalize your accounting?",
+      "subtitle": "Join ComptaNova and automate your accounting tasks today.",
+      "button_primary": "Create my account",
+      "button_secondary": "Contact us"
+    }
+  },
+  "login": {
+    "welcome": "Welcome to your digital accounting workspace",
+    "description": "Automate your entries, validate your documents and reconcile your bank — all in one place.",
+    "features": {
+      "ocr": "Auto extraction",
+      "security": "Secured",
+      "roles": "Accountant / SME",
+      "languages": "EN / AR / FR"
+    },
+    "title": "Login",
+    "noAccount": "Don't have an account yet?",
+    "createAccount": "Create an account",
+    "client": "Client / SME",
+    "accountant": "Accountant",
+    "email": "Email",
+    "password": "Password",
+    "submit": "Login",
+    "terms": "By logging in, you accept our terms of service."
+  },
+  "register": {
+    "welcome": "Join ComptaNova today",
+    "description": "Create your account in under 2 minutes and start digitizing your accounting.",
+    "features": {
+      "no_card": "No credit card required",
+      "instant": "Instant access after registration",
+      "languages": "Interface in English, Arabic, and French",
+      "secure": "Secured data"
+    },
+    "title": "Create an account",
+    "hasAccount": "Already registered?",
+    "login": "Login",
+    "client": "Client / SME",
+    "accountant": "Accountant",
+    "fullName": "Full name",
+    "email": "Email",
+    "phone": "Phone",
+    "optional": "(optional)",
+    "password": "Password",
+    "passwordPlaceholder": "Minimum 8 characters",
+    "strength": {
+      "label": "Strength:",
+      "weak": "Weak",
+      "medium": "Medium",
+      "strong": "Strong"
+    },
+    "submit": "Create my account",
+    "terms": "By creating an account, you accept our terms of service."
+  },
+  "about": {
+    "hero": {
+      "title_1": "Rethinking accounting",
+      "title_2": "for Algerian SMEs",
+      "subtitle": "ComptaNova was born from a simple vision: eliminate manual data entry and restore accountants to their true role as strategic advisors."
+    },
+    "story": {
+      "title": "Our Story",
+      "p1": "Faced with slow traditional accounting processes and piles of paper invoices, we designed a platform capable of automating data processing using artificial intelligence (OCR).",
+      "p2": "As an academic MVP project, ComptaNova aims to prove that it is possible to create a smooth, collaborative ecosystem between the accountant and their client, while strictly adhering to the Algerian General Accounting Plan (PCG)."
+    },
+    "goal": {
+      "title": "Our Goal",
+      "subtitle": "Zero paper, 100% traceability, and instant bank reconciliation."
+    },
+    "values": {
+      "title": "Our values",
+      "subtitle": "The principles that guide the daily development of ComptaNova.",
+      "items": {
+        "innovation": {
+          "title": "Innovation",
+          "desc": "Using modern technologies (OCR, Next.js) to solve concrete problems."
+        },
+        "reliability": {
+          "title": "Reliability",
+          "desc": "A secure architecture and precise accounting calculations, compliant with standards."
+        },
+        "collaboration": {
+          "title": "Collaboration",
+          "desc": "A platform that brings all actors (clients, accountants) together on a common interface."
+        }
+      }
+    },
+    "cta": {
+      "title": "Ready to take the step towards digitalization?",
+      "subtitle": "Join the SMEs and accountants who already use ComptaNova to save precious time every day.",
+      "button": "Create my free account"
+    }
+  },
+  "contact": {
+    "hero": {
+      "title_1": "Contact ",
+      "title_2": "us",
+      "subtitle": "A question about our pricing? Need help setting up your workspace? Our team is here to support you."
+    },
+    "info": {
+      "title": "Let's discuss your needs",
+      "subtitle": "Fill out the form and we will get back to you as soon as possible (usually within 24h).",
+      "email": {
+        "title": "Email",
+        "desc": "For general questions:"
+      },
+      "phone": {
+        "title": "Phone",
+        "desc": "Sunday to Thursday, 9am to 5pm:"
+      },
+      "office": {
+        "title": "Our offices",
+        "desc1": "Sidi Abdellah Cyberpark,",
+        "desc2": "Rahmania, Algiers, Algeria"
+      }
+    },
+    "form": {
+      "success": {
+        "title": "Message sent!",
+        "desc": "Thank you for contacting us. Our team will get back to you shortly.",
+        "button": "Send another message"
+      },
+      "firstName": "First name",
+      "firstNamePlaceholder": "Ex: Amine",
+      "lastName": "Last name",
+      "lastNamePlaceholder": "Ex: Benali",
+      "email": "Email address",
+      "emailPlaceholder": "you@example.com",
+      "subject": {
+        "label": "Subject",
+        "support": "Technical support",
+        "sales": "Sales inquiry",
+        "partnership": "Partnership",
+        "other": "Other"
+      },
+      "message": "Message",
+      "messagePlaceholder": "How can we help you?",
+      "submit": "Send message"
+    }
+  },
+  "dashboard": {
+    "sidebar": {
+      "client_space": "Client Area",
+      "accountant_space": "Accountant Area",
+      "dashboard": "Dashboard",
+      "documents": "Documents",
+      "journal": "Journal",
+      "bank": "Reconciliation",
+      "profile": "My Profile",
+      "settings": "Settings",
+      "clients": "Clients",
+      "validate": "Validate Entries",
+      "grand_livre": "General Ledger",
+      "rapprochement": "Bank Reconciliation",
+      "notifications": "Notifications",
+      "logout": "Logout"
+    },
+    "kpi": {
+      "total_clients": "Total clients",
+      "pending_entries": "Pending entries",
+      "docs_today": "Documents received today",
+      "validated_month": "Validated this month",
+      "docs_uploaded": "Documents uploaded",
+      "validated_entries": "Validated entries",
+      "pending": "Pending",
+      "rejected": "Rejected"
+    },
+    "charts": {
+      "entries_week": "Entries per day (last 7 days)",
+      "docs_months": "Documents per month (last 6 months)"
+    },
+    "activity": {
+      "title": "Recent activity",
+      "empty": "No recent activity",
+      "greeting": "Hello",
+      "overview": "Here is your overview",
+      "accounting_state": "Here is the state of your accounting"
+    },
+    "documents": {
+      "title": "Documents",
+      "subtitle": "Upload your invoices, statements and receipts",
+      "my_docs": "My documents",
+      "empty": "No documents uploaded yet.",
+      "filename": "Filename",
+      "type": "Type",
+      "size": "Size",
+      "status": "Status",
+      "date": "Date",
+      "entries": "Entries",
+      "uploader": {
+        "drop": "Drag a file here or",
+        "browse": "click to browse",
+        "hint": "PDF, image (PNG/JPG), CSV — max 10 MB",
+        "send": "Send",
+        "processing": "Processing...",
+        "ocr_title": "Document processed — Entry generated",
+        "supplier": "Supplier / Reference",
+        "date": "Date",
+        "amount": "Amount",
+        "detected_type": "Detected type",
+        "debit": "Debit",
+        "credit": "Credit",
+        "entry_pending": "Entry created with status Proposed — awaiting validation by your accountant."
+      }
+    },
+    "journal": {
+      "title": "My journal",
+      "export_csv": "Export CSV",
+      "total_validated": "Total validated",
+      "validated": "Validated",
+      "pending": "Pending",
+      "rejected": "Rejected",
+      "empty": "No entries found.",
+      "col_date": "Date",
+      "col_description": "Description",
+      "col_debit": "Debit",
+      "col_credit": "Credit",
+      "col_amount": "Amount (DZD)",
+      "col_document": "Document",
+      "col_status": "Status",
+      "col_client": "Client",
+      "filter_account": "Filter by account (e.g.: 607)",
+      "clear": "Clear"
+    },
+    "bank": {
+      "title": "Bank Reconciliation",
+      "subtitle": "Import your CSV statement and run the automatic reconciliation",
+      "import_title": "1. Import bank statement (CSV)",
+      "format_hint": "Expected format:",
+      "format_detail": "(comma separator)",
+      "choose_csv": "Choose a CSV file",
+      "run": "Run reconciliation",
+      "running": "Reconciling...",
+      "history": "Transaction history",
+      "col_date": "Date",
+      "col_description": "Description",
+      "col_amount": "Amount (DZD)",
+      "col_reconciled": "Reconciliation",
+      "col_entry": "Linked entry",
+      "imported": "Imported transactions",
+      "matched": "Matched",
+      "unmatched": "Unmatched",
+      "results": "Results",
+      "matched_label": "✓ Matched",
+      "unmatched_label": "○ Unmatched"
+    },
+    "profile": {
+      "title": "My Profile",
+      "subtitle": "Manage your personal information",
+      "role_badge": "SME Client",
+      "form_title": "Personal information",
+      "fullname": "Full name",
+      "email": "Email address",
+      "email_readonly": "The email address cannot be changed here.",
+      "phone": "Phone",
+      "lang": "Preferred language",
+      "save": "Save changes",
+      "saving": "Saving...",
+      "success": "Profile updated successfully.",
+      "lang_fr": "Français",
+      "lang_ar": "العربية",
+      "lang_en": "English"
+    },
+    "status": {
+      "UPLOADED": "Uploaded",
+      "PROCESSING": "Processing",
+      "REVIEWED": "Reviewed",
+      "VALIDATED": "Validated",
+      "PROPOSED": "Proposed",
+      "REJECTED": "Rejected"
+    },
+    "recent_docs": "Recent documents",
+    "no_docs": "No documents uploaded.",
+    "comptable": {
+      "dashboard_title": "Dashboard",
+      "dashboard_subtitle": "Hello",
+      "dashboard_overview": "Here is your overview",
+      "chart_title": "Entries per day (last 7 days)",
+      "activity_title": "Recent activity",
+      "activity_empty": "No recent activity",
+      "validated_label": "Validated",
+      "clients_title": "Clients",
+      "clients_subtitle_one": "registered client",
+      "clients_subtitle_many": "registered clients",
+      "col_client": "Client",
+      "col_company": "Company",
+      "col_documents": "Documents",
+      "col_pending": "Pending",
+      "col_last_activity": "Last activity",
+      "col_total_clients": "Total clients",
+      "col_total_documents": "Total documents",
+      "clients_empty": "No clients registered yet.",
+      "see": "View",
+      "validate_title": "Validation queue",
+      "validate_subtitle_one": "entry pending validation",
+      "validate_subtitle_many": "entries pending validation",
+      "validate_empty_title": "Queue empty",
+      "validate_empty_desc": "All entries have been processed.",
+      "ref": "Ref",
+      "debit": "Debit",
+      "credit": "Credit",
+      "amount": "Amount",
+      "validate_btn": "Validate",
+      "reject_btn": "Reject",
+      "reject_modal_title": "Rejection reason",
+      "reject_placeholder": "Explain the rejection reason (optional)...",
+      "reject_cancel": "Cancel",
+      "reject_confirm": "Confirm rejection",
+      "journal_title": "Consolidated journal",
+      "journal_export": "Export CSV",
+      "journal_empty": "No entries found.",
+      "filter_all_statuses": "All statuses",
+      "filter_all_clients": "All clients",
+      "filter_clear": "Clear",
+      "filter_proposed": "Pending",
+      "filter_validated": "Validated",
+      "filter_rejected": "Rejected",
+      "settings_title": "Settings",
+      "settings_subtitle": "Configure the chart of accounts and automatic rules",
+      "settings_rules_title": "Automatic accounting rules",
+      "settings_rules_desc": "These rules apply automatically when processing a document via OCR. Entries are created with status Proposed and must be validated.",
+      "settings_notif_title": "Notification preferences",
+      "settings_notif_new_doc": "New document uploaded by a client",
+      "settings_notif_new_doc_desc": "Receive a notification on every document upload",
+      "settings_notif_validation": "Entry to validate",
+      "settings_notif_validation_desc": "Alerts when a new entry arrives in the queue",
+      "settings_notif_bank": "Bank reconciliation completed",
+      "settings_notif_bank_desc": "Notification at the end of a client bank reconciliation",
+      "settings_connected_as": "Connected as",
+      "rule_supplier_invoice": "Supplier invoice",
+      "rule_client_invoice": "Client invoice",
+      "rule_cheque": "Cheque (payment)",
+      "rule_bank_statement": "Bank statement"
+    },
+    "grand_livre": {
+      "title": "General Ledger",
+      "subtitle": "T-Accounts by month — debit and credit balances",
+      "filter_client": "Filter by client",
+      "filter_all_clients": "All clients",
+      "filter_company": "Company",
+      "no_company": "No company found",
+      "no_entries": "No validated entries for this month.",
+      "month_label": "Month",
+      "debit_col": "DEBIT",
+      "credit_col": "CREDIT",
+      "solde_initial": "Opening balance",
+      "solde_final": "Closing balance",
+      "total": "Total",
+      "set_solde_btn": "Set opening balance",
+      "modal_title": "Set opening balance",
+      "modal_account": "Account",
+      "modal_month": "Month / Year",
+      "modal_amount": "Opening balance (DZD)",
+      "modal_save": "Save",
+      "modal_saving": "Saving...",
+      "modal_cancel": "Cancel",
+      "account_512": "Bank (512)",
+      "nature_debiteur": "Debit",
+      "nature_crediteur": "Credit"
+    },
+    "rapprochement": {
+      "title": "Bank Reconciliation",
+      "subtitle": "Account 512 vs Bank Statement comparison",
+      "filter_client": "Client",
+      "filter_all_clients": "All clients",
+      "filter_month": "Month",
+      "import_title": "Import bank statement (CSV)",
+      "format_hint": "Expected format:",
+      "format_detail": "date,description,amount (or with cheque no. as 4th column)",
+      "choose_csv": "Choose CSV",
+      "run": "Run reconciliation",
+      "running": "Analysing...",
+      "col_compte512": "Account 512 (Entries)",
+      "col_releve": "Bank Statement",
+      "col_date": "Date",
+      "col_description": "Description",
+      "col_cheque": "Cheque No.",
+      "col_debit": "Out",
+      "col_credit": "In",
+      "col_amount": "Amount (DZD)",
+      "col_statut": "Status",
+      "matched_exact": "✓ Exact",
+      "matched_partial": "~ Partial",
+      "unmatched": "✗ Unmatched",
+      "summary_matched": "Matched",
+      "summary_unmatched": "Unmatched",
+      "summary_ecart": "Total difference",
+      "summary_total": "Total transactions",
+      "correct_btn": "Fix",
+      "correct_modal_title": "Link manually",
+      "correct_select_entry": "Select an entry",
+      "correct_save": "Link",
+      "correct_cancel": "Cancel",
+      "no_data": "Import a statement to view the reconciliation.",
+      "empty_512": "No entries on account 512 for this month."
+    }
+  }
+}

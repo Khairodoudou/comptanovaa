@@ -1,0 +1,142 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ─── Enums ────────────────────────────────────────────────
+
+enum DocumentType {
+  FACTURE_FOURNISSEUR
+  FACTURE_CLIENT
+  BON_LIVRAISON
+  RELEVE_BANCAIRE
+  CHEQUE
+  AUTRE
+}
+
+enum DocumentStatus {
+  UPLOADED
+  PROCESSING
+  REVIEWED
+  VALIDATED
+}
+
+enum EntryStatus {
+  PROPOSED
+  VALIDATED
+  REJECTED
+}
+
+// ─── Models ───────────────────────────────────────────────
+
+model User {
+  id               String         @id @default(cuid())
+  name             String
+  email            String         @unique
+  passwordHash     String
+  phone            String?
+  preferredLang    String         @default("fr")
+  role             String
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  // Client owns companies
+  companies        Company[]      @relation("ClientCompanies")
+  // Comptable is assigned to companies
+  assignedClients  Company[]      @relation("AssignedComptable")
+  validatedEntries JournalEntry[] @relation("ValidatedEntries")
+  notifications    Notification[]
+}
+
+model Company {
+  id               String            @id @default(cuid())
+  name             String
+  clientId         String
+  client           User              @relation("ClientCompanies", fields: [clientId], references: [id])
+  // Optional: assigned comptable for this company
+  comptableId      String?
+  comptable        User?             @relation("AssignedComptable", fields: [comptableId], references: [id])
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  documents        Document[]
+  bankTransactions BankTransaction[]
+  accountBalances  AccountBalance[]
+}
+
+model Document {
+  id             String         @id @default(cuid())
+  filename       String
+  originalName   String
+  mimeType       String
+  size           Int
+  type           DocumentType   @default(AUTRE)
+  status         DocumentStatus @default(UPLOADED)
+  uploadedAt     DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  ocrData        String?
+  companyId      String
+  company        Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  journalEntries JournalEntry[]
+}
+
+model JournalEntry {
+  id              String           @id @default(cuid())
+  date            DateTime
+  description     String
+  debitAccount    String
+  creditAccount   String
+  amount          Float
+  reference       String?
+  status          EntryStatus      @default(PROPOSED)
+  comment         String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  documentId      String?
+  document        Document?        @relation(fields: [documentId], references: [id])
+  validatedById   String?
+  validatedBy     User?            @relation("ValidatedEntries", fields: [validatedById], references: [id])
+  validatedAt     DateTime?
+  bankTransaction BankTransaction?
+}
+
+model BankTransaction {
+  id             String        @id @default(cuid())
+  date           DateTime
+  description    String
+  amount         Float
+  chequeNumber   String?
+  matched        Boolean       @default(false)
+  createdAt      DateTime      @default(now())
+  companyId      String
+  company        Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  journalEntryId String?       @unique
+  journalEntry   JournalEntry? @relation(fields: [journalEntryId], references: [id])
+}
+
+model AccountBalance {
+  id           String   @id @default(cuid())
+  account      String
+  month        Int
+  year         Int
+  soldeInitial Float    @default(0)
+  companyId    String
+  company      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  setById      String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([account, month, year, companyId])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  message   String
+  type      String   @default("info")
+  read      Boolean  @default(false)
+  link      String?
+  createdAt DateTime @default(now())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}

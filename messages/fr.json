@@ -1,0 +1,25 @@
+{
+  "app": {
+    "name": "ComptaNova"
+  },
+  "nav": {
+    "home": "Accueil",
+    "login": "Connexion",
+    "register": "Inscription",
+    "about": "À propos",
+    "contact": "Contact"
+  },
+  "auth": {
+    "login": "Connexion",
+    "register": "Inscription",
+    "email": "Email",
+    "password": "Mot de passe",
+    "name": "Nom complet",
+    "phone": "Téléphone",
+    "role": "Rôle",
+    "comptable": "Comptable",
+    "client": "Client / PME",
+    "submit": "Se connecter",
+    "logout": "Déconnexion"
+  }
+}
