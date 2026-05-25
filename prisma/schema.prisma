@@ -11,6 +11,7 @@ datasource db {
 enum DocumentType {
   FACTURE_FOURNISSEUR
   FACTURE_CLIENT
+  BON_RECEPTION
   BON_LIVRAISON
   RELEVE_BANCAIRE
   CHEQUE
@@ -63,6 +64,7 @@ model Company {
   documents        Document[]
   bankTransactions BankTransaction[]
   accountBalances  AccountBalance[]
+  subAccounts      SubAccount[]
 }
 
 model Document {
@@ -139,4 +141,17 @@ model Notification {
   createdAt DateTime @default(now())
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model SubAccount {
+  id            String   @id @default(cuid())
+  parentAccount String   // e.g., "380", "401", "411"
+  subAccount    String   // e.g., "380.1", "401.A"
+  name          String   // e.g., "Stock Marchandises A", "Fournisseur X"
+  companyId     String
+  company       Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([subAccount, companyId])
 }

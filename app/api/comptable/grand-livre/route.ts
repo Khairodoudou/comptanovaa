@@ -15,96 +15,9 @@
 import { getCurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
+import { getAccountNature, computeSoldeFinal, computeOpeningBalance } from "@/lib/accounting";
 
 export const runtime = "nodejs";
-
-// ─── Account nature ───────────────────────────────────────────────────────────
-// Simplified Algerian PCG rules:
-//   Créditeur: 1xx (capitaux), 40x (fournisseurs), 44x (TVA collectée 7xx), 7xx (produits)
-//   Débiteur: everything else (2xx actifs, 3xx stocks, 41x clients, 5xx trésorerie, 6xx charges)
-function getAccountNature(account: string): "debiteur" | "crediteur" {
-  const parent = account.split(".")[0]; // support sub-accounts like 380.0
-  const num = parseInt(parent, 10);
-  if (isNaN(num)) return "debiteur";
-  // 1xx: capitaux propres & dettes long terme → créditeur
-  if (num >= 100 && num < 200) return "crediteur";
-  // 40x: fournisseurs → créditeur
-  if (num >= 400 && num <= 409) return "crediteur";
-  // 44x (TVA): depends but 4456/44566 are créditeur (TVA collectée)
-  if (num >= 445 && num <= 449) return "crediteur";
-  // 7xx: produits → créditeur
-  if (num >= 700 && num < 800) return "crediteur";
-  // Everything else: débiteur
-  return "debiteur";
-}
-
-function computeSoldeFinal(
-  nature: "debiteur" | "crediteur",
-  soldeInitial: number,
-  totalDebit: number,
-  totalCredit: number
-): number {
-  if (nature === "debiteur") {
-    return soldeInitial + totalDebit - totalCredit;
-  }
-  return soldeInitial + totalCredit - totalDebit;
-}
-
-// ─── Compute opening balance from previous months ─────────────────────────────
-async function computeOpeningBalance(
-  account: string,
-  month: number,
-  year: number,
-  companyId: string
-): Promise<number> {
-  // Check if a manual balance is recorded for the PREVIOUS month
-  let prevMonth = month - 1;
-  let prevYear = year;
-  if (prevMonth === 0) {
-    prevMonth = 12;
-    prevYear = year - 1;
-  }
-
-  // Look for manual balance in previous month first
-  const manualPrev = await db.accountBalance.findUnique({
-    where: {
-      account_month_year_companyId: {
-        account,
-        month: prevMonth,
-        year: prevYear,
-        companyId,
-      },
-    },
-  });
-
-  // Get all VALIDATED entries for previous month on this account
-  const startOfPrevMonth = new Date(prevYear, prevMonth - 1, 1);
-  const endOfPrevMonth = new Date(prevYear, prevMonth, 1);
-
-  const prevEntries = await db.journalEntry.findMany({
-    where: {
-      status: "VALIDATED",
-      date: { gte: startOfPrevMonth, lt: endOfPrevMonth },
-      OR: [{ debitAccount: account }, { creditAccount: account }],
-      document: { companyId },
-    },
-    select: { debitAccount: true, creditAccount: true, amount: true },
-  });
-
-  const nature = getAccountNature(account);
-  const prevTotalDebit = prevEntries
-    .filter((e) => e.debitAccount === account)
-    .reduce((s, e) => s + e.amount, 0);
-  const prevTotalCredit = prevEntries
-    .filter((e) => e.creditAccount === account)
-    .reduce((s, e) => s + e.amount, 0);
-
-  // The opening balance of the previous month
-  const prevSoldeInitial = manualPrev?.soldeInitial ?? 0;
-
-  // Closing balance of the previous month = opening balance of current month
-  return computeSoldeFinal(nature, prevSoldeInitial, prevTotalDebit, prevTotalCredit);
-}
 
 // ─── Route ────────────────────────────────────────────────────────────────────
 export async function GET(req: NextRequest) {

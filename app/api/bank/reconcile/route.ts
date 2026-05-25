@@ -6,10 +6,12 @@
  *   - date ±3 days tolerance
  *   - matchScore: "exact" | "cheque" | "partial" | "none"
  *   - chequeNumber extracted from CSV 4th column or from description
+ *   - PDF support via OCR → bank statement line parsing
  */
 import { getCurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { NextRequest } from "next/server";
+import { runOcr } from "@/lib/ocr/professional-ocr";
 
 // ─── CSV parser ───────────────────────────────────────────────────────────────
 function parseCsv(
@@ -43,6 +45,55 @@ function parseCsv(
       return { date, description: description.trim(), amount, chequeNumber };
     })
     .filter(Boolean) as { date: string; description: string; amount: number; chequeNumber?: string }[];
+}
+
+// ─── PDF raw-text parser ──────────────────────────────────────────────────────
+// Tries to extract bank statement lines from OCR raw text.
+// Matches lines containing a date + amount pattern.
+function parsePdfBankText(
+  rawText: string
+): { date: string; description: string; amount: number; chequeNumber?: string }[] {
+  const results: { date: string; description: string; amount: number; chequeNumber?: string }[] = [];
+
+  // Patterns for amounts in Algerian bank statements (e.g. "1 234 567,89" or "1234567.89")
+  const AMOUNT_RE = /(\d[\d\s]*[\d](?:[.,]\d{2})?)/g;
+  // Date patterns: DD/MM/YYYY, DD-MM-YYYY, YYYY-MM-DD
+  const DATE_RE = /(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{4}|\d{4}[\/\-\.]\d{2}[\/\-\.]\d{2})/;
+
+  const lines = rawText.split(/\n+/).map(l => l.trim()).filter(l => l.length > 5);
+
+  for (const line of lines) {
+    const dateMatch = line.match(DATE_RE);
+    if (!dateMatch) continue;
+
+    const date = normalizeDate(dateMatch[1]);
+    if (!date) continue;
+
+    // Find all numbers in the line
+    const numbers: number[] = [];
+    let m: RegExpExecArray | null;
+    const re = /(\d[\d\s]*\d(?:[.,]\d{2})?)/g;
+    while ((m = re.exec(line)) !== null) {
+      const n = parseFloat(m[1].replace(/\s/g, "").replace(",", "."));
+      if (!isNaN(n) && n > 0) numbers.push(n);
+    }
+
+    if (numbers.length === 0) continue;
+
+    // Take the largest number as the transaction amount
+    const amount = Math.max(...numbers);
+    if (amount < 1) continue;
+
+    // Extract description: text between date and first number
+    const afterDate = line.slice(dateMatch.index! + dateMatch[1].length).trim();
+    const description = afterDate.replace(/\d[\d\s]*[\d](?:[.,]\d{2})?/g, "").replace(/\s+/g, " ").trim() || line.trim();
+
+    const chequeNumber = extractChequeFromText(line) || undefined;
+
+    results.push({ date, description: description.slice(0, 120), amount, chequeNumber });
+  }
+
+  return results;
 }
 
 function normalizeDate(raw: string): string | null {
@@ -117,7 +168,7 @@ function findBestMatch(
 // ─── Route ────────────────────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
   const user = await getCurrentUser();
-  if (!user || user.role !== "CLIENT") {
+  if (!user || !["CLIENT", "COMPTABLE"].includes(user.role)) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -132,28 +183,61 @@ export async function POST(req: NextRequest) {
   const companyId = formData.get("companyId") as string | null;
 
   if (!file || !companyId) {
-    return Response.json({ error: "Fichier CSV et companyId requis" }, { status: 400 });
+    return Response.json({ error: "Fichier (CSV ou PDF) et companyId requis" }, { status: 400 });
   }
 
   const company = await db.company.findFirst({
-    where: { id: companyId, clientId: user.userId },
+    where: { 
+      id: companyId,
+      ...(user.role === "CLIENT" ? { clientId: user.userId } : { comptableId: user.userId })
+    },
   });
   if (!company) {
     return Response.json({ error: "Entreprise introuvable" }, { status: 403 });
   }
 
-  const csvText = await file.text();
-  const rows = parseCsv(csvText);
+  // ── Detect file type and parse rows ────────────────────────────────────────
+  const mimeType = file.type || "";
+  const fileName = file.name || "";
+  const isPdf = mimeType === "application/pdf" || fileName.toLowerCase().endsWith(".pdf");
+  const isCsv = mimeType === "text/csv" || fileName.toLowerCase().endsWith(".csv");
 
-  if (rows.length === 0) {
+  let rows: { date: string; description: string; amount: number; chequeNumber?: string }[] = [];
+
+  if (isCsv) {
+    const csvText = await file.text();
+    rows = parseCsv(csvText);
+    if (rows.length === 0) {
+      return Response.json(
+        { error: "Aucune transaction valide dans le CSV. Format: date,description,montant" },
+        { status: 400 }
+      );
+    }
+  } else if (isPdf) {
+    try {
+      const buffer = Buffer.from(await file.arrayBuffer());
+      const ocrResult = await runOcr(buffer, fileName, mimeType);
+      rows = parsePdfBankText(ocrResult.rawText);
+      if (rows.length === 0) {
+        return Response.json(
+          { error: "Aucune transaction détectée dans le PDF. Vérifiez que le relevé est lisible." },
+          { status: 400 }
+        );
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Erreur OCR";
+      return Response.json({ error: `Échec de l'analyse du PDF: ${msg}` }, { status: 500 });
+    }
+  } else {
     return Response.json(
-      { error: "Aucune transaction valide dans le CSV. Format: date,description,montant" },
+      { error: "Format non supporté. Utilisez un fichier CSV ou PDF." },
       { status: 400 }
     );
   }
 
+
   const journalEntries = await db.journalEntry.findMany({
-    where: { status: "PROPOSED", document: { companyId } },
+    where: { status: "VALIDATED", document: { companyId } },
     select: {
       id: true,
       date: true,

@@ -38,6 +38,11 @@ export default async function RapprochementPage({
   const startOfMonth = new Date(selectedYear, selectedMonth - 1, 1);
   const endOfMonth = new Date(selectedYear, selectedMonth, 1);
 
+  let soldeInitial512 = 0;
+  let totalDebit512 = 0;
+  let totalCredit512 = 0;
+  let soldeFinal512 = 0;
+
   const [bankTransactions, journalEntries512] = selectedCompanyId
     ? await Promise.all([
         db.bankTransaction.findMany({
@@ -74,6 +79,22 @@ export default async function RapprochementPage({
       ])
     : [[], []];
 
+  if (selectedCompanyId) {
+    const { computeOpeningBalance, computeSoldeFinal, getAccountNature } = await import("@/lib/accounting");
+    soldeInitial512 = await computeOpeningBalance("512", selectedMonth, selectedYear, selectedCompanyId);
+    
+    totalDebit512 = journalEntries512.filter(e => e.debitAccount === "512").reduce((sum, e) => sum + e.amount, 0);
+    totalCredit512 = journalEntries512.filter(e => e.creditAccount === "512").reduce((sum, e) => sum + e.amount, 0);
+    soldeFinal512 = computeSoldeFinal(getAccountNature("512"), soldeInitial512, totalDebit512, totalCredit512);
+  }
+
+  const accountSummary512 = {
+    soldeInitial: soldeInitial512,
+    totalDebit: totalDebit512,
+    totalCredit: totalCredit512,
+    soldeFinal: soldeFinal512,
+  };
+
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-6">
       <div>
@@ -88,6 +109,7 @@ export default async function RapprochementPage({
         selectedYear={selectedYear}
         bankTransactions={JSON.parse(JSON.stringify(bankTransactions))}
         journalEntries512={JSON.parse(JSON.stringify(journalEntries512))}
+        accountSummary512={accountSummary512}
         lang={lang}
         locale={locale}
         t={t}

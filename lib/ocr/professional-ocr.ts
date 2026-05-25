@@ -67,7 +67,15 @@ async function runTesseract(
         "،؛؟ءآأؤإئابةتثجحخدذرزسشصضطظعغفقكلمنهوىي٠١٢٣٤٥٦٧٨٩",
     });
     const { data: { text, confidence } } = await worker.recognize(buffer);
+    
+    console.log("═══════════════════════════════════════════════════");
+    console.log("[OCR] Raw text from Tesseract:");
+    console.log(text);
+    console.log("═══════════════════════════════════════════════════");
+    
     const extracted = extractDocumentData(text, filename);
+    
+    console.log("[OCR] Extracted data:", JSON.stringify(extracted, null, 2));
     
     if (confidence < LOW_CONFIDENCE_THRESHOLD) {
       throw new Error(`Confidence too low: ${confidence}`);

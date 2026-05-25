@@ -22,7 +22,12 @@ interface UploaderT {
 
 interface OcrResult {
   date: string;
-  amount: string;
+  amount: string;       // fallback (legacy)
+  amountTTC?: string;   // TTC (from API)
+  amountHT?: string;    // HT (from API, only if extracted from PDF)
+  amountTVA?: string;   // TVA (from API, only if extracted from PDF)
+  htFromPDF?: boolean;  // true only when HT was actually read from the document
+  tvaRate?: string;     // e.g. "19%"
   supplier: string;
   type: string;
   entryDebit: string;
@@ -44,6 +49,7 @@ interface UploadResult {
     amount: number;
   };
 }
+
 
 // ── OCR Progress Steps ──────────────────────────────────────────────────────
 const STEPS = [
@@ -68,9 +74,11 @@ export function DocumentUploader({
   const abortRef = useRef<AbortController | null>(null);
 
   const [dragging, setDragging] = useState(false);
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
+  const [currentIdx, setCurrentIdx] = useState(0);
   const [uploading, setUploading] = useState(false);
-  const [result, setResult] = useState<UploadResult | null>(null);
+  const [results, setResults] = useState<UploadResult[]>([]);
+  const [batchMessage, setBatchMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   
   // Manual override state
@@ -87,9 +95,9 @@ export function DocumentUploader({
   const [elapsed, setElapsed] = useState(0);
   const [progressPct, setProgressPct] = useState(0);
 
-  function handleFile(f: File) {
-    setFile(f);
-    setResult(null);
+  function handleFiles(newFiles: File[]) {
+    setFiles(prev => [...prev, ...newFiles]);
+    setResults([]);
     setError(null);
     setManualMode(false);
   }
@@ -125,21 +133,29 @@ export function DocumentUploader({
       clearInterval(elapsedInterval);
       clearInterval(slowPulse);
     };
-  }, [uploading]);
+  }, [uploading, currentIdx]);
 
-  async function handleUpload(isManualSubmit = false) {
-    if (!file || !companyId) return;
+  async function processFile(idx: number, isManualSubmit = false) {
+    if (idx >= files.length) {
+      setUploading(false);
+      setFiles([]);
+      setCurrentIdx(0);
+      router.refresh();
+      return;
+    }
+
+    setCurrentIdx(idx);
     setUploading(true);
     setError(null);
-    setResult(null);
 
+    const fileToUpload = files[idx];
     const controller = new AbortController();
     abortRef.current = controller;
     const timeoutId = setTimeout(() => controller.abort(), UPLOAD_TIMEOUT_MS);
 
     try {
       const formData = new FormData();
-      formData.append("file", file);
+      formData.append("file", fileToUpload);
       formData.append("companyId", companyId);
       
       if (isManualSubmit) {
@@ -163,17 +179,15 @@ export function DocumentUploader({
         const data = await res.json().catch(() => ({}));
         if (res.status === 422 && data.error === "OCR_FAILED") {
           setManualMode(true);
-          throw new Error("L'analyse OCR a échoué. Veuillez saisir les informations manuellement.");
+          throw new Error("L'analyse OCR a échoué pour ce fichier. Veuillez saisir les informations manuellement.");
         }
         throw new Error(data.message ?? data.error ?? `Erreur serveur (${res.status})`);
       }
 
       const data: UploadResult = await res.json();
       
-      // If confidence < 30%, force manual mode (if not already manual)
       if (!isManualSubmit && data.ocrResult.confidence < 30 && data.ocrResult.method !== "manual") {
         setManualMode(true);
-        // Pre-fill what we have
         setManualData({
           date: data.ocrResult.date || new Date().toISOString().split("T")[0],
           amount: data.ocrResult.amount || "",
@@ -187,12 +201,12 @@ export function DocumentUploader({
       setStepIdx(STEPS.length - 1);
       setProgressPct(100);
 
+      setResults(prev => [data, ...prev]);
+      setManualMode(false);
+
       setTimeout(() => {
-        setResult(data);
-        setFile(null);
-        setManualMode(false);
-        router.refresh();
-      }, 400);
+        processFile(idx + 1, false);
+      }, 1000);
 
     } catch (err: unknown) {
       clearTimeout(timeoutId);
@@ -201,10 +215,60 @@ export function DocumentUploader({
       } else {
         setError(err instanceof Error ? err.message : "Erreur inconnue");
       }
+      setUploading(false); // Pause on error to let user handle it
     } finally {
-      setUploading(false);
       abortRef.current = null;
     }
+  }
+
+  async function startUpload() {
+    setResults([]);
+    setBatchMessage(null);
+    setError(null);
+    
+    if (files.length === 2) {
+      setUploading(true);
+      setStepIdx(0);
+      setProgressPct(0);
+
+      try {
+        const formData = new FormData();
+        formData.append("file1", files[0]);
+        formData.append("file2", files[1]);
+        formData.append("companyId", companyId);
+
+        const res = await fetch("/api/documents/upload-batch", {
+          method: "POST",
+          body: formData,
+        });
+
+        const data = await res.json();
+
+        if (!res.ok || data.erreur) {
+          if (data.code === "AMBIGUOUS_TYPE") {
+            setError("Impossible de déterminer si la facture est une vente ou un achat. Veuillez traiter les fichiers un par un ou préciser manuellement.");
+          } else {
+            setError(data.message || `Erreur serveur (${res.status})`);
+          }
+          setUploading(false);
+          return;
+        }
+
+        setResults(data.results);
+        setBatchMessage(data.message);
+        setStepIdx(STEPS.length - 1);
+        setProgressPct(100);
+        setUploading(false);
+        setFiles([]);
+        router.refresh();
+      } catch (err: any) {
+        setError(err.message || "Erreur lors du traitement groupé.");
+        setUploading(false);
+      }
+      return;
+    }
+
+    processFile(0, false);
   }
 
   const currentStep = STEPS[Math.min(stepIdx, STEPS.length - 1)];
@@ -220,8 +284,8 @@ export function DocumentUploader({
         onDrop={(e) => {
           e.preventDefault();
           setDragging(false);
-          const f = e.dataTransfer.files[0];
-          if (f) handleFile(f);
+          const fs = Array.from(e.dataTransfer.files);
+          if (fs.length > 0) handleFiles(fs);
         }}
         onClick={() => !uploading && !manualMode && inputRef.current?.click()}
         className={`border-2 border-dashed rounded-2xl p-10 text-center transition-all ${
@@ -237,11 +301,12 @@ export function DocumentUploader({
         <input
           ref={inputRef}
           type="file"
+          multiple
           accept=".pdf,.png,.jpg,.jpeg,.csv"
           className="hidden"
           onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) handleFile(f);
+            const fs = Array.from(e.target.files || []);
+            if (fs.length > 0) handleFiles(fs);
           }}
           disabled={uploading || manualMode}
         />
@@ -252,25 +317,33 @@ export function DocumentUploader({
         <p className="text-xs text-[#64748b] mt-1">{t.hint}</p>
       </div>
 
-      {/* Selected file + upload button */}
-      {file && !uploading && !manualMode && (
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 flex items-center gap-4">
-          <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center shrink-0">
-            <FileText size={20} className="text-[#1a6fbf]" />
+      {/* Selected files + upload button */}
+      {files.length > 0 && !uploading && !manualMode && (
+        <div className="space-y-2">
+          <div className="max-h-48 overflow-y-auto space-y-2 pr-2">
+            {files.map((f, i) => (
+              <div key={i} className="bg-white rounded-xl border border-gray-100 shadow-sm p-3 flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
+                  <FileText size={16} className="text-[#1a6fbf]" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-[#0f172a] text-sm truncate">{f.name}</p>
+                  <p className="text-xs text-[#64748b]">{(f.size / 1024).toFixed(0)} Ko · {f.type || "fichier"}</p>
+                </div>
+                <button onClick={() => setFiles(files.filter((_, idx) => idx !== i))} className="text-[#64748b] hover:text-red-500 transition-colors shrink-0">
+                  <X size={16} />
+                </button>
+              </div>
+            ))}
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="font-medium text-[#0f172a] text-sm truncate">{file.name}</p>
-            <p className="text-xs text-[#64748b]">{(file.size / 1024).toFixed(0)} Ko · {file.type || "fichier"}</p>
+          <div className="flex justify-end pt-2">
+            <button
+              onClick={() => startUpload()}
+              className="flex items-center gap-2 px-5 py-2.5 bg-[#2d8f5e] hover:bg-[#278054] text-white rounded-xl text-sm font-medium transition-all"
+            >
+              <Upload size={16} /> Envoyer {files.length > 1 ? `${files.length} fichiers` : 'le fichier'}
+            </button>
           </div>
-          <button onClick={() => setFile(null)} className="text-[#64748b] hover:text-red-500 transition-colors shrink-0">
-            <X size={16} />
-          </button>
-          <button
-            onClick={() => handleUpload(false)}
-            className="flex items-center gap-2 px-4 py-2 bg-[#2d8f5e] hover:bg-[#278054] text-white rounded-lg text-sm font-medium transition-all shrink-0"
-          >
-            <Upload size={14} /> {t.send}
-          </button>
         </div>
       )}
 
@@ -280,7 +353,10 @@ export function DocumentUploader({
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <StepIcon size={16} className="text-[#1a6fbf] animate-pulse" />
-              <p className="text-sm font-medium text-[#0f172a]">{currentStep.label}</p>
+              <p className="text-sm font-medium text-[#0f172a]">
+                {files.length > 1 && <span className="text-[#64748b] mr-1">[{currentIdx + 1}/{files.length}]</span>}
+                {currentStep.label}
+              </p>
             </div>
             <span className="text-xs text-[#64748b] tabular-nums">{elapsed.toFixed(0)}s</span>
           </div>
@@ -288,7 +364,7 @@ export function DocumentUploader({
             <div className="absolute inset-y-0 left-0 bg-gradient-to-r from-[#1a6fbf] to-[#2d8f5e] rounded-full transition-all duration-500" style={{ width: `${progressPct}%` }} />
             <div className="absolute inset-y-0 w-16 bg-white/30 rounded-full animate-[shimmer_1.5s_ease-in-out_infinite]" style={{ left: `${Math.max(0, progressPct - 15)}%` }} />
           </div>
-          <p className="text-[11px] text-[#64748b] text-center">L'analyse OCR peut prendre 10–30 secondes</p>
+          <p className="text-[11px] text-[#64748b] text-center">L'analyse OCR peut prendre 10–30 secondes par fichier</p>
         </div>
       )}
 
@@ -297,11 +373,17 @@ export function DocumentUploader({
         <div className="flex items-start gap-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
           <AlertCircle size={16} className="shrink-0 mt-0.5" />
           <p>{error}</p>
+          <button onClick={() => {
+            setFiles(files.filter((_, i) => i !== currentIdx));
+            setError(null);
+          }} className="ml-auto text-red-500 hover:text-red-700">
+            <X size={16} />
+          </button>
         </div>
       )}
 
       {/* Manual Form */}
-      {manualMode && file && !uploading && (
+      {manualMode && files[currentIdx] && !uploading && (
         <div className="bg-white rounded-2xl border border-red-200 shadow-sm overflow-hidden">
           <div className="bg-red-50 border-b border-red-100 px-5 py-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -309,11 +391,15 @@ export function DocumentUploader({
                 <AlertCircle size={16} />
               </div>
               <div>
-                <h3 className="font-semibold text-red-800 text-sm">Lecture échouée</h3>
+                <h3 className="font-semibold text-red-800 text-sm">Lecture échouée ({files[currentIdx].name})</h3>
                 <p className="text-xs text-red-600">Le document n'a pas pu être lu. Saisie manuelle requise.</p>
               </div>
             </div>
-            <button onClick={() => setFile(null)} className="text-red-500 hover:bg-red-100 p-2 rounded-lg">
+            <button onClick={() => {
+              setFiles(files.filter((_, i) => i !== currentIdx));
+              setManualMode(false);
+              setError(null);
+            }} className="text-red-500 hover:bg-red-100 p-2 rounded-lg" title="Ignorer ce fichier">
               <X size={16} />
             </button>
           </div>
@@ -377,7 +463,7 @@ export function DocumentUploader({
             </div>
             <div className="pt-2 flex justify-end">
               <button
-                onClick={() => handleUpload(true)}
+                onClick={() => processFile(currentIdx, true)}
                 disabled={!manualData.amount || !manualData.supplier}
                 className="flex items-center gap-2 px-5 py-2.5 bg-[#2d8f5e] hover:bg-[#278054] disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-xl text-sm font-medium transition-all"
               >
@@ -388,73 +474,92 @@ export function DocumentUploader({
         </div>
       )}
 
-      {/* OCR Result */}
-      {result && (
-        <div className={`bg-white rounded-2xl border shadow-sm p-6 space-y-4 ${
-          result.ocrResult.method === "manual" ? "border-blue-200" :
-          result.ocrResult.confidence >= 70 ? "border-green-200" : "border-orange-200"
-        }`}>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <CheckCircle size={18} className={
-                result.ocrResult.method === "manual" ? "text-blue-500" :
-                result.ocrResult.confidence >= 70 ? "text-[#2d8f5e]" : "text-orange-500"
-              } />
-              <h3 className="font-semibold text-[#0f172a]">{t.ocr_title}</h3>
-            </div>
-            <div className="flex items-center gap-2">
-              {result.ocrResult.method === "manual" ? (
-                <span className="text-[10px] px-2 py-0.5 bg-blue-100 text-blue-700 border border-blue-200 rounded-full font-medium">
-                  Saisie manuelle
-                </span>
-              ) : result.ocrResult.confidence >= 70 ? (
-                <span className="text-[10px] px-2 py-0.5 bg-green-100 text-green-700 border border-green-200 rounded-full font-medium">
-                  Lecture réussie {result.ocrResult.confidence}%
-                </span>
-              ) : (
-                <span className="text-[10px] px-2 py-0.5 bg-orange-100 text-orange-700 border border-orange-200 rounded-full font-medium">
-                  À vérifier {result.ocrResult.confidence}%
-                </span>
-              )}
-            </div>
-          </div>
+      {/* Batch Banner */}
+      {batchMessage && (
+        <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3">
+          <CheckCircle size={20} className="text-[#2d8f5e]" />
+          <p className="text-sm font-medium text-[#0f172a]">{batchMessage}</p>
+        </div>
+      )}
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <p className="text-[10px] text-[#64748b] uppercase tracking-wide mb-1">{t.supplier}</p>
-              <p className="text-sm font-medium text-[#0f172a]">{result.ocrResult.supplier}</p>
-            </div>
-            <div>
-              <p className="text-[10px] text-[#64748b] uppercase tracking-wide mb-1">{t.date}</p>
-              <p className="text-sm font-medium text-[#0f172a]">{result.ocrResult.date}</p>
-            </div>
-            <div>
-              <p className="text-[10px] text-[#64748b] uppercase tracking-wide mb-1">{t.amount}</p>
-              <p className="text-sm font-medium text-[#0f172a]">{result.ocrResult.amount} DA</p>
-            </div>
-            <div>
-              <p className="text-[10px] text-[#64748b] uppercase tracking-wide mb-1">{t.detected_type}</p>
-              <p className="text-sm font-medium text-[#0f172a]">{result.ocrResult.type.replace(/_/g, " ")}</p>
-            </div>
-          </div>
+      {/* OCR Results List */}
+      {results.length > 0 && (
+        <div className="space-y-3">
+          {results.map((result, idx) => (
+            <div key={idx} className={`bg-white rounded-2xl border shadow-sm p-6 space-y-4 ${
+              result.ocrResult.method === "manual" ? "border-blue-200" :
+              result.ocrResult.confidence >= 70 ? "border-green-200" : "border-orange-200"
+            }`}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <CheckCircle size={18} className={
+                    result.ocrResult.method === "manual" ? "text-blue-500" :
+                    result.ocrResult.confidence >= 70 ? "text-[#2d8f5e]" : "text-orange-500"
+                  } />
+                  <h3 className="font-semibold text-[#0f172a]">{result.document.originalName}</h3>
+                </div>
+                <div className="flex items-center gap-2">
+                  {result.ocrResult.method === "manual" ? (
+                    <span className="text-[10px] px-2 py-0.5 bg-blue-100 text-blue-700 border border-blue-200 rounded-full font-medium">
+                      Saisie manuelle
+                    </span>
+                  ) : result.ocrResult.confidence >= 70 ? (
+                    <span className="text-[10px] px-2 py-0.5 bg-green-100 text-green-700 border border-green-200 rounded-full font-medium">
+                      Lecture réussie {result.ocrResult.confidence}%
+                    </span>
+                  ) : (
+                    <span className="text-[10px] px-2 py-0.5 bg-orange-100 text-orange-700 border border-orange-200 rounded-full font-medium">
+                      À vérifier {result.ocrResult.confidence}%
+                    </span>
+                  )}
+                </div>
+              </div>
 
-          <div className="bg-[#f8fafc] rounded-xl p-4 grid grid-cols-3 gap-4">
-            <div>
-              <p className="text-[10px] text-[#64748b] uppercase tracking-wide mb-1">{t.debit}</p>
-              <p className="font-mono text-sm font-medium text-[#0f172a]">{result.journalEntry.debitAccount}</p>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-[10px] text-[#64748b] uppercase tracking-wide mb-1">{t.supplier}</p>
+                  <p className="text-sm font-medium text-[#0f172a]">{result.ocrResult.supplier}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-[#64748b] uppercase tracking-wide mb-1">{t.date}</p>
+                  <p className="text-sm font-medium text-[#0f172a]">{result.ocrResult.date}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-[#64748b] uppercase tracking-wide mb-1">Montant TTC</p>
+                  <p className="text-base font-bold text-[#2d8f5e]">
+                    {parseFloat(result.ocrResult.amountTTC ?? result.ocrResult.amount).toLocaleString("fr-DZ", { minimumFractionDigits: 2 })} DA
+                  </p>
+                  {result.ocrResult.htFromPDF && result.ocrResult.amountHT && (
+                    <p className="text-[11px] text-[#64748b] mt-0.5">
+                      HT : {parseFloat(result.ocrResult.amountHT).toLocaleString('fr-DZ', {minimumFractionDigits: 2})} DA &nbsp;·&nbsp; TVA ({result.ocrResult.tvaRate ?? "19%"}) : {result.ocrResult.amountTVA ? parseFloat(result.ocrResult.amountTVA).toLocaleString('fr-DZ', {minimumFractionDigits: 2}) : '—'} DA
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <p className="text-[10px] text-[#64748b] uppercase tracking-wide mb-1">{t.detected_type}</p>
+                  <p className="text-sm font-medium text-[#0f172a]">{result.ocrResult.type.replace(/_/g, " ")}</p>
+                </div>
+              </div>
+
+              <div className="bg-[#f8fafc] rounded-xl p-4 grid grid-cols-3 gap-4">
+                <div>
+                  <p className="text-[10px] text-[#64748b] uppercase tracking-wide mb-1">{t.debit}</p>
+                  <p className="font-mono text-sm font-medium text-[#0f172a]">{result.journalEntry.debitAccount}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-[#64748b] uppercase tracking-wide mb-1">{t.credit}</p>
+                  <p className="font-mono text-sm font-medium text-[#0f172a]">{result.journalEntry.creditAccount}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-[#64748b] uppercase tracking-wide mb-1">{t.amount}</p>
+                  <p className="text-sm font-semibold text-[#0f172a]">
+                    {result.journalEntry.amount.toLocaleString("fr-DZ", { minimumFractionDigits: 2 })} DA
+                  </p>
+                </div>
+              </div>
+              <p className="text-xs text-[#64748b]">✓ {t.entry_pending}</p>
             </div>
-            <div>
-              <p className="text-[10px] text-[#64748b] uppercase tracking-wide mb-1">{t.credit}</p>
-              <p className="font-mono text-sm font-medium text-[#0f172a]">{result.journalEntry.creditAccount}</p>
-            </div>
-            <div>
-              <p className="text-[10px] text-[#64748b] uppercase tracking-wide mb-1">{t.amount}</p>
-              <p className="text-sm font-semibold text-[#0f172a]">
-                {result.journalEntry.amount.toLocaleString("fr-DZ", { minimumFractionDigits: 2 })} DA
-              </p>
-            </div>
-          </div>
-          <p className="text-xs text-[#64748b]">✓ {t.entry_pending}</p>
+          ))}
         </div>
       )}
       <style>{`

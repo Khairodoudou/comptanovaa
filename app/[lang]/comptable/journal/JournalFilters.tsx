@@ -32,20 +32,11 @@ export function JournalFilters({
     [router, pathname, searchParams]
   );
 
-  const hasFilters = searchParams.get("status") || searchParams.get("client") || searchParams.get("from") || searchParams.get("to");
+  const hasFilters = searchParams.get("client") || searchParams.get("from") || searchParams.get("to");
 
   return (
     <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
       <div className="flex flex-wrap gap-3">
-        <select id="filter-status" defaultValue={searchParams.get("status") ?? ""}
-          onChange={(e) => updateFilter("status", e.target.value)}
-          className="border border-gray-200 rounded-lg px-3 py-2 text-sm text-[#0f172a] focus:outline-none focus:ring-2 focus:ring-[#1a6fbf]/30">
-          <option value="">{t.all_statuses}</option>
-          <option value="PROPOSED">{t.proposed}</option>
-          <option value="VALIDATED">{t.validated}</option>
-          <option value="REJECTED">{t.rejected}</option>
-        </select>
-
         <select id="filter-client" defaultValue={searchParams.get("client") ?? ""}
           onChange={(e) => updateFilter("client", e.target.value)}
           className="border border-gray-200 rounded-lg px-3 py-2 text-sm text-[#0f172a] focus:outline-none focus:ring-2 focus:ring-[#1a6fbf]/30">

@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Upload, Loader2, CheckCircle, AlertCircle, RefreshCw } from "lucide-react";
+import { Upload, Loader2, CheckCircle, AlertCircle, RefreshCw, FileText, FileSpreadsheet, X } from "lucide-react";
 
 interface BankT {
   import_title: string;
@@ -40,6 +40,22 @@ export function BankReconciler({
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<MatchResult[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [dragging, setDragging] = useState(false);
+
+  const isPdf = file?.name.toLowerCase().endsWith(".pdf");
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    setDragging(false);
+    const dropped = e.dataTransfer.files[0];
+    if (dropped && (dropped.name.endsWith(".csv") || dropped.name.endsWith(".pdf"))) {
+      setFile(dropped);
+      setResults(null);
+      setError(null);
+    } else {
+      setError("Seuls les fichiers CSV et PDF sont acceptés.");
+    }
+  }
 
   async function handleReconcile() {
     if (!file || !companyId) return;
@@ -77,54 +93,124 @@ export function BankReconciler({
 
   return (
     <div className="space-y-6">
-      {/* CSV Upload */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-        <h2 className="font-semibold text-[#0f172a] text-sm mb-3">{t.import_title}</h2>
-        <p className="text-xs text-[#64748b] mb-4">
-          {t.format_hint}{" "}
-          <code className="bg-gray-100 px-1 py-0.5 rounded text-[#0f172a]">date,description,amount</code>{" "}
-          {t.format_detail}
-        </p>
+      {/* Upload Zone */}
+      <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-6 space-y-4">
+        <div>
+          <h2 className="font-bold text-[#0f172a] text-base flex items-center gap-2">
+            <Upload size={16} className="text-[#1a6fbf]" />
+            {t.import_title}
+          </h2>
+          <p className="text-xs text-[#64748b] mt-1">
+            Importez votre relevé bancaire au format <strong>CSV</strong> ou <strong>PDF</strong> pour lancer le rapprochement automatique.
+          </p>
+        </div>
 
-        <div className="flex items-center gap-3 flex-wrap">
-          <button
-            id="bank-csv-select"
-            onClick={() => inputRef.current?.click()}
-            className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg text-sm text-[#0f172a] hover:bg-gray-50 transition-all"
-          >
-            <Upload size={15} />
-            {file ? file.name : t.choose_csv}
-          </button>
+        {/* Drag & Drop zone */}
+        <div
+          onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={handleDrop}
+          onClick={() => inputRef.current?.click()}
+          className={`relative border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all duration-200 ${
+            dragging
+              ? "border-[#1a6fbf] bg-blue-50/40"
+              : file
+              ? "border-green-300 bg-green-50/30"
+              : "border-slate-200 hover:border-[#1a6fbf]/50 hover:bg-slate-50/50"
+          }`}
+        >
           <input
             ref={inputRef}
             type="file"
-            accept=".csv"
+            accept=".csv,.pdf,text/csv,application/pdf"
             className="hidden"
             onChange={(e) => {
               setFile(e.target.files?.[0] ?? null);
               setResults(null);
+              setError(null);
             }}
           />
-          {file && (
-            <button
-              id="bank-reconcile-btn"
-              onClick={handleReconcile}
-              disabled={loading}
-              className="flex items-center gap-2 px-5 py-2 bg-[#1a6fbf] hover:bg-[#185fa5] text-white rounded-lg text-sm font-medium transition-all disabled:opacity-60"
-            >
-              {loading ? (
-                <><Loader2 size={14} className="animate-spin" /> {t.running}</>
+
+          {file ? (
+            <div className="flex flex-col items-center gap-2">
+              {isPdf ? (
+                <div className="w-12 h-12 rounded-xl bg-red-50 border border-red-100 flex items-center justify-center">
+                  <FileText size={22} className="text-red-500" />
+                </div>
               ) : (
-                <><RefreshCw size={14} /> {t.run}</>
+                <div className="w-12 h-12 rounded-xl bg-green-50 border border-green-100 flex items-center justify-center">
+                  <FileSpreadsheet size={22} className="text-green-600" />
+                </div>
               )}
-            </button>
+              <p className="font-semibold text-[#0f172a] text-sm">{file.name}</p>
+              <p className="text-xs text-[#64748b]">{(file.size / 1024).toFixed(1)} Ko — Cliquez pour changer</p>
+              <button
+                onClick={(e) => { e.stopPropagation(); setFile(null); setResults(null); }}
+                className="absolute top-3 right-3 text-slate-400 hover:text-slate-600"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center gap-3">
+              <div className="flex gap-3">
+                <div className="w-10 h-10 rounded-xl bg-green-50 border border-green-100 flex items-center justify-center">
+                  <FileSpreadsheet size={18} className="text-green-600" />
+                </div>
+                <div className="w-10 h-10 rounded-xl bg-red-50 border border-red-100 flex items-center justify-center">
+                  <FileText size={18} className="text-red-500" />
+                </div>
+              </div>
+              <p className="text-sm font-medium text-[#0f172a]">Glissez votre relevé ici</p>
+              <p className="text-xs text-[#64748b]">ou cliquez pour parcourir — CSV ou PDF acceptés</p>
+            </div>
           )}
         </div>
 
+        {/* Format hints */}
+        <div className="grid grid-cols-2 gap-3 text-xs">
+          <div className="bg-green-50/60 border border-green-100 rounded-xl p-3">
+            <p className="font-semibold text-green-800 flex items-center gap-1.5 mb-1">
+              <FileSpreadsheet size={12} /> Format CSV
+            </p>
+            <code className="text-green-700 text-[11px]">date,description,montant</code>
+            <p className="text-green-600 mt-1">Séparateur virgule — 1 ligne par transaction</p>
+          </div>
+          <div className="bg-red-50/60 border border-red-100 rounded-xl p-3">
+            <p className="font-semibold text-red-800 flex items-center gap-1.5 mb-1">
+              <FileText size={12} /> Format PDF
+            </p>
+            <p className="text-red-700 text-[11px]">Relevé bancaire scanné ou numérique</p>
+            <p className="text-red-600 mt-1">OCR automatique — données extraites intelligemment</p>
+          </div>
+        </div>
+
+        {file && (
+          <button
+            id="bank-reconcile-btn"
+            onClick={handleReconcile}
+            disabled={loading}
+            className="w-full flex items-center justify-center gap-2 px-5 py-3 bg-[#1a6fbf] hover:bg-[#185fa5] text-white rounded-xl text-sm font-semibold transition-all disabled:opacity-60 shadow-sm"
+          >
+            {loading ? (
+              <>
+                <Loader2 size={15} className="animate-spin" />
+                {isPdf ? "Analyse OCR en cours..." : t.running}
+              </>
+            ) : (
+              <>
+                <RefreshCw size={15} />
+                Lancer le rapprochement {isPdf ? "(PDF)" : "(CSV)"}
+              </>
+            )}
+          </button>
+        )}
+
         {error && (
-          <p className="mt-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-2">
-            {error}
-          </p>
+          <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-xl">
+            <AlertCircle size={16} className="text-red-500 mt-0.5 shrink-0" />
+            <p className="text-sm text-red-700">{error}</p>
+          </div>
         )}
       </div>
 

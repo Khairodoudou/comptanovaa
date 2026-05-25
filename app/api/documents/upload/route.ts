@@ -1,217 +1,26 @@
 /**
  * POST /api/documents/upload
- * Upload a document, run professional OCR, create journal entries (PCG Algérien).
+ * Upload a document, run professional OCR, create journal entries (PCN Algérien).
  *
  * Multi-entry accounting with TVA 19%:
- *   - FACTURE_FOURNISSEUR : 380 (HT) + 44566 (TVA) → 401 (TTC)
- *   - FACTURE_CLIENT      : 411 (TTC) → 700 (HT) + 44571 (TVA)
- *   - CHEQUE              : 401 → 512  (no TVA on payment; reference = cheque number)
- *   - RELEVE_BANCAIRE     : 512 → 401
- *   - BON_LIVRAISON/AUTRE : 607 (HT) + 44566 (TVA) → 401 (TTC)
+ *   - FACTURE_FOURNISSEUR : Débit 380.x (HT) + Débit 44566 (TVA) / Crédit 401.x (TTC)
+ *   - BON_RECEPTION       : Débit 30.x (stock) / Crédit 380.x (HT) — transfert stock
+ *   - FACTURE_CLIENT      : Débit 411.x (TTC) / Crédit 700 (HT) + Crédit 44571 (TVA)
+ *   - CHEQUE (émis)       : Débit 401.x / Crédit 512 — règlement fournisseur
+ *   - RELEVE_BANCAIRE     : Débit 512 / Crédit 401.x
+ *   - BON_LIVRAISON       : Débit 600 / Crédit 30.x — sortie de stock au coût d'achat
+ *   - AUTRE/Charge        : Débit 607|626 + Débit 44566 / Crédit 401.x|512|53
  */
 import { getCurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import { runOcr } from "@/lib/ocr/professional-ocr";
+import { generateEntries, TVA_RATE } from "@/lib/entry-generator";
 
 export const runtime = "nodejs"; // Required for sharp + Tesseract
 
+
 const MAX_SIZE = 10 * 1024 * 1024; // 10 MB
-const TVA_RATE = 0.19;
-
-// ─── Multi-entry accounting rules (PCG Algérien) ──────────────────────────────
-
-interface EntrySpec {
-  debitAccount: string;
-  creditAccount: string;
-  amount: number;
-  description: string;
-  reference: string | null;
-}
-
-// ── 3.1 Helper: derive a short numeric sub-account suffix from supplier name ──
-// e.g. "SARL DUPONT" → "001", "Air Algérie" → "002" (deterministic, 3 digits)
-function supplierSuffix(supplier: string): string {
-  let hash = 0;
-  for (let i = 0; i < supplier.length; i++) {
-    hash = (hash * 31 + supplier.charCodeAt(i)) & 0xffffff;
-  }
-  // Keep in range 1–999 and zero-pad to 3 digits
-  const n = (hash % 999) + 1;
-  return n.toString().padStart(3, "0");
-}
-
-// ── 3.3 Helper: detect charge account (607 goods vs 626 services) ─────────────
-// 626 = frais postaux, téléphone, publicité, honoraires, transport, internet
-const SERVICE_KEYWORDS =
-  /t[eé]l[eé]phone|internet|abonnement|honoraires?|publicit[eé]|transport|poste|courrier|assurance|locat|maint|conseil|formation|nettoyage|gardiennage/i;
-
-function chargeAccount(description: string): "607" | "626" {
-  return SERVICE_KEYWORDS.test(description) ? "626" : "607";
-}
-
-// ── 3.3 Helper: detect credit account (401 supplier credit vs 512 bank vs 531 cash) ─
-// If description mentions virement / prélèvement / banque → 512
-// If it mentions espèces / caisse / liquide → 531
-// Default: 401 (supplier credit — paid later)
-const BANK_KEYWORDS = /virement|pr[eé]l[eè]vement|banque|CB|carte/i;
-const CASH_KEYWORDS = /esp[eè]ces?|caisse|liquide|cash/i;
-
-function creditForCharge(description: string): "401" | "512" | "531" {
-  if (BANK_KEYWORDS.test(description)) return "512";
-  if (CASH_KEYWORDS.test(description)) return "531";
-  return "401";
-}
-
-/**
- * Generates one or more journal entry specifications for a document.
- *
- * @param docType     Detected document type (FACTURE_FOURNISSEUR, CHEQUE, …)
- * @param amountTTC   Total amount including VAT (TTC), as extracted by OCR
- * @param supplier    Supplier / client name for description + sub-account suffix
- * @param refNumber   Invoice or cheque number for the reference field
- * @param rawDesc     Raw OCR description — used to detect charge type and payment mode
- */
-function generateEntries(
-  docType: string,
-  amountTTC: number,
-  supplier: string,
-  refNumber: string | null,
-  rawDesc: string = ""
-): EntrySpec[] {
-  // Round to 2 decimal places to avoid floating-point drift
-  const ht  = Math.round((amountTTC / (1 + TVA_RATE)) * 100) / 100;
-  const tva = Math.round((amountTTC - ht) * 100) / 100;
-
-  const label  = supplier || "Inconnu";
-  // Fix 3.1: sub-account suffix derived from supplier name (deterministic)
-  const suffix = supplierSuffix(label);
-
-  switch (docType) {
-    // ── Achat marchandises ─────────────────────────────────────────────────
-    // Fix 3.1: 380.xxx (stock HT) + 44566 (TVA déductible) → 401.xxx (TTC)
-    case "FACTURE_FOURNISSEUR":
-      return [
-        {
-          debitAccount:  `380.${suffix}`,
-          creditAccount: `401.${suffix}`,
-          amount: ht,
-          description: `Achat marchandises HT — ${label}`,
-          reference: refNumber,
-        },
-        {
-          debitAccount:  "44566",
-          creditAccount: `401.${suffix}`,
-          amount: tva,
-          description: `TVA déductible 19% — ${label}`,
-          reference: refNumber,
-        },
-      ];
-
-    // ── Vente ──────────────────────────────────────────────────────────────
-    // Fix 3.1: 411.xxx (TTC) → 700 (HT) + 44571 (TVA collectée)
-    // Fix 3.2: + déstockage: 607 (coût marchandises) → 380.xxx (stock)
-    case "FACTURE_CLIENT":
-      return [
-        {
-          debitAccount:  `411.${suffix}`,
-          creditAccount: "700",
-          amount: ht,
-          description: `Vente HT — ${label}`,
-          reference: refNumber,
-        },
-        {
-          debitAccount:  `411.${suffix}`,
-          creditAccount: "44571",
-          amount: tva,
-          description: `TVA collectée 19% — ${label}`,
-          reference: refNumber,
-        },
-        // Fix 3.2 — Déstockage: sortie de stock au coût d'achat
-        {
-          debitAccount:  "607",
-          creditAccount: `380.${suffix}`,
-          amount: ht,
-          description: `Déstockage marchandises — ${label}`,
-          reference: refNumber,
-        },
-      ];
-
-    // ── Chèque / Paiement ──────────────────────────────────────────────────
-    // Fix 3.1: 401.xxx → 512 (banque). reference = cheque number from OCR.
-    case "CHEQUE":
-      return [
-        {
-          debitAccount:  `401.${suffix}`,
-          creditAccount: "512",
-          amount: amountTTC,
-          description: `Paiement chèque — ${label}`,
-          reference: refNumber,
-        },
-      ];
-
-    // ── Relevé bancaire ────────────────────────────────────────────────────
-    case "RELEVE_BANCAIRE":
-      return [
-        {
-          debitAccount:  "512",
-          creditAccount: `401.${suffix}`,
-          amount: amountTTC,
-          description: `Mouvement bancaire — ${label}`,
-          reference: refNumber,
-        },
-      ];
-
-    // ── Bon de livraison ───────────────────────────────────────────────────
-    // Fix 3.3: 607 vs 626 detected from description; credit 401/512/531
-    case "BON_LIVRAISON": {
-      const chargeAcc = chargeAccount(rawDesc || label);
-      const creditAcc = creditForCharge(rawDesc || label);
-      const credit    = creditAcc === "401" ? `401.${suffix}` : creditAcc;
-      return [
-        {
-          debitAccount:  chargeAcc,
-          creditAccount: credit,
-          amount: ht,
-          description: `Livraison HT — ${label}`,
-          reference: refNumber,
-        },
-        {
-          debitAccount:  "44566",
-          creditAccount: credit,
-          amount: tva,
-          description: `TVA déductible 19% — ${label}`,
-          reference: refNumber,
-        },
-      ];
-    }
-
-    // ── Charges générales / Autre ──────────────────────────────────────────
-    // Fix 3.3: auto-detect 607 vs 626; auto-detect 401 / 512 / 531
-    default: {
-      const chargeAcc = chargeAccount(rawDesc || label);
-      const creditAcc = creditForCharge(rawDesc || label);
-      const credit    = creditAcc === "401" ? `401.${suffix}` : creditAcc;
-      return [
-        {
-          debitAccount:  chargeAcc,
-          creditAccount: credit,
-          amount: ht,
-          description: `Charge HT — ${label}`,
-          reference: refNumber,
-        },
-        {
-          debitAccount:  "44566",
-          creditAccount: credit,
-          amount: tva,
-          description: `TVA déductible 19% — ${label}`,
-          reference: refNumber,
-        },
-      ];
-    }
-  }
-}
-
 
 // ─── Route ────────────────────────────────────────────────────────────────────
 
@@ -253,6 +62,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Company not found" }, { status: 403 });
   }
 
+  const subAccounts = await db.subAccount.findMany({
+    where: { companyId },
+  });
+
   // ── Run OCR pipeline ────────────────────────────────────────────────────────
   const arrayBuffer = await file.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
@@ -268,6 +81,8 @@ export async function POST(req: NextRequest) {
   let extracted: {
     documentType?: string;
     amount?: number;
+    amountHT?: number;
+    amountTVA?: number;
     date?: string;
     supplier?: string;
     invoiceNumber?: string;
@@ -315,6 +130,12 @@ export async function POST(req: NextRequest) {
   const date = extracted.date ?? new Date().toISOString().split("T")[0];
   const supplier = extracted.supplier ?? "Inconnu";
 
+  // Use HT/TVA from OCR if available; otherwise compute from TTC
+  const computedHT  = Math.round((amountTTC / 1.19) * 100) / 100;
+  const computedTVA = Math.round((amountTTC - computedHT) * 100) / 100;
+  const htForEntries  = extracted.amountHT  ?? computedHT;
+  const tvaForEntries = extracted.amountTVA ?? computedTVA;
+
   // Fix 2: for CHEQUE documents, use invoiceNumber as the cheque reference;
   // for all other documents, use invoiceNumber as the invoice reference.
   const refNumber: string | null =
@@ -349,7 +170,7 @@ export async function POST(req: NextRequest) {
   // ── Auto-generate PROPOSED journal entries (multi-line, with TVA) ───────────
   // Pass raw OCR text as rawDesc so charge/payment-mode keywords are detected
   const rawDesc = ocrResult.rawText !== "MANUAL_ENTRY" ? ocrResult.rawText : supplier;
-  const entrySpecs = generateEntries(docType, amountTTC, supplier, refNumber, rawDesc);
+  const entrySpecs = generateEntries(docType, amountTTC, supplier, refNumber, rawDesc, subAccounts, htForEntries, tvaForEntries);
 
   const journalEntries = await Promise.all(
     entrySpecs.map((spec) =>
@@ -391,8 +212,8 @@ export async function POST(req: NextRequest) {
   }
 
   // ── Compute HT/TVA for the response ─────────────────────────────────────────
-  const ht  = Math.round((amountTTC / (1 + TVA_RATE)) * 100) / 100;
-  const tva = Math.round((amountTTC - ht) * 100) / 100;
+  const htForResp  = htForEntries;
+  const tvaForResp = tvaForEntries;
 
   // First entry for backward-compatible clients still reading `journalEntry`
   const firstEntry = journalEntries[0];
@@ -407,8 +228,9 @@ export async function POST(req: NextRequest) {
       ocrResult: {
         date,
         amountTTC: amountTTC.toFixed(2),
-        amountHT:  ht.toFixed(2),
-        amountTVA: tva.toFixed(2),
+        amountHT:  htForResp.toFixed(2),
+        amountTVA: tvaForResp.toFixed(2),
+        htFromPDF: !!(extracted.amountHT),  // true only if extracted from PDF
         tvaRate:   `${TVA_RATE * 100}%`,
         supplier,
         type: docType,

@@ -11,9 +11,11 @@ interface FiltersT {
 export function ClientJournalFilters({
   filterAccountPlaceholder,
   clearLabel,
+  tStatuses,
 }: {
   filterAccountPlaceholder: string;
   clearLabel: string;
+  tStatuses: { all: string; proposed: string; validated: string; rejected: string };
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -30,11 +32,22 @@ export function ClientJournalFilters({
   );
 
   const hasFilters =
-    searchParams.get("from") || searchParams.get("to") || searchParams.get("account");
+    searchParams.get("from") || searchParams.get("to") || searchParams.get("account") || searchParams.get("status");
 
   return (
     <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
       <div className="flex flex-wrap gap-3">
+        <select
+          id="client-journal-filter-status"
+          defaultValue={searchParams.get("status") ?? ""}
+          onChange={(e) => updateFilter("status", e.target.value)}
+          className="border border-gray-200 rounded-lg px-3 py-2 text-sm text-[#0f172a] focus:outline-none focus:ring-2 focus:ring-[#2d8f5e]/30"
+        >
+          <option value="">{tStatuses.all}</option>
+          <option value="VALIDATED">{tStatuses.validated}</option>
+          <option value="PROPOSED">{tStatuses.proposed}</option>
+          <option value="REJECTED">{tStatuses.rejected}</option>
+        </select>
         <input
           id="client-journal-filter-from"
           type="date"

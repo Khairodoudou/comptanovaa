@@ -103,6 +103,12 @@ interface Props {
   selectedYear: number;
   bankTransactions: BankTx[];
   journalEntries512: JournalEntry512[];
+  accountSummary512: {
+    soldeInitial: number;
+    totalDebit: number;
+    totalCredit: number;
+    soldeFinal: number;
+  };
   lang: string;
   locale: string;
   t: RapprochementT;
@@ -271,6 +277,7 @@ export function RapprochementClient({
   selectedYear,
   bankTransactions: initialBankTxs,
   journalEntries512,
+  accountSummary512,
   lang,
   locale,
   t,
@@ -341,6 +348,22 @@ export function RapprochementClient({
   // Entries not yet linked to a bank tx (for the correction modal)
   const unlinkEntries = journalEntries512.filter((e) => !e.bankTransaction);
 
+  const [dragging, setDragging] = useState(false);
+  const isPdf = file?.name.toLowerCase().endsWith(".pdf");
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    setDragging(false);
+    const dropped = e.dataTransfer.files[0];
+    if (dropped && (dropped.name.endsWith(".csv") || dropped.name.endsWith(".pdf"))) {
+      setFile(dropped);
+      setResults(null);
+      setError(null);
+    } else {
+      setError("Seuls les fichiers CSV et PDF sont acceptés.");
+    }
+  }
+
   return (
     <>
       {correctModal && (
@@ -357,15 +380,15 @@ export function RapprochementClient({
 
       <div className="space-y-6">
         {/* Controls bar */}
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-          <div className="flex flex-wrap items-center gap-3">
+        <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-5 space-y-5">
+          <div className="flex flex-wrap items-center gap-4">
             {/* Company selector */}
             <select
               value={companyId}
               onChange={(e) =>
                 router.push(`/${lang}/comptable/rapprochement?companyId=${e.target.value}&month=${month}&year=${year}`)
               }
-              className="px-3 py-2 border border-gray-200 rounded-lg text-sm text-[#0f172a] focus:outline-none focus:ring-2 focus:ring-[#1a6fbf]/30 focus:border-[#1a6fbf] bg-white"
+              className="px-3 py-2 border border-slate-200 rounded-xl text-sm text-[#0f172a] focus:outline-none focus:ring-2 focus:ring-[#1a6fbf]/30 focus:border-[#1a6fbf] bg-white font-medium min-w-[200px]"
             >
               {companies.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -375,53 +398,86 @@ export function RapprochementClient({
             </select>
 
             {/* Month navigation */}
-            <div className="flex items-center gap-1 border border-gray-200 rounded-lg overflow-hidden">
-              <button onClick={prevMonth} className="px-2.5 py-2 hover:bg-gray-50 text-[#64748b]">
+            <div className="flex items-center gap-1 border border-slate-200 rounded-xl overflow-hidden bg-white">
+              <button onClick={prevMonth} className="px-3 py-2 hover:bg-slate-50 text-[#64748b] transition-colors">
                 <ChevronLeft size={16} />
               </button>
-              <span className="px-4 py-2 text-sm font-medium text-[#0f172a] min-w-[130px] text-center">
+              <span className="px-4 py-2 text-sm font-semibold text-[#0f172a] min-w-[140px] text-center border-x border-slate-100">
                 {MONTH_NAMES_FR[month - 1]} {year}
               </span>
-              <button onClick={nextMonth} className="px-2.5 py-2 hover:bg-gray-50 text-[#64748b]">
+              <button onClick={nextMonth} className="px-3 py-2 hover:bg-slate-50 text-[#64748b] transition-colors">
                 <ChevronRight size={16} />
               </button>
             </div>
-
-            {/* CSV import */}
-            <div className="flex items-center gap-2 ml-auto">
-              <button
-                onClick={() => inputRef.current?.click()}
-                className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-lg text-sm text-[#0f172a] hover:bg-gray-50 transition-all"
-              >
-                <Upload size={14} />
-                {file ? file.name.slice(0, 20) + (file.name.length > 20 ? "…" : "") : t.choose_csv}
-              </button>
-              <input
-                ref={inputRef}
-                type="file"
-                accept=".csv"
-                className="hidden"
-                onChange={(e) => { setFile(e.target.files?.[0] ?? null); setResults(null); }}
-              />
-              {file && (
-                <button
-                  onClick={handleReconcile}
-                  disabled={loading}
-                  className="flex items-center gap-2 px-4 py-2 bg-[#1a6fbf] hover:bg-[#185fa5] text-white rounded-lg text-sm font-medium transition-all disabled:opacity-60"
-                >
-                  {loading ? <><Loader2 size={14} className="animate-spin" /> {t.running}</> : <><RefreshCw size={14} /> {t.run}</>}
-                </button>
-              )}
-            </div>
           </div>
-          <p className="text-[11px] text-[#94a3b8] mt-2">
-            {t.format_hint} <code className="bg-gray-100 px-1 rounded">date,description,montant[,N°chèque]</code> — {t.format_detail}
-          </p>
-        </div>
 
-        {error && (
-          <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-600">{error}</div>
-        )}
+          {/* Upload Zone (Drag & Drop) */}
+          <div
+            onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={handleDrop}
+            onClick={() => inputRef.current?.click()}
+            className={`relative border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all duration-200 ${
+              dragging
+                ? "border-[#1a6fbf] bg-blue-50/40"
+                : file
+                ? "border-green-300 bg-green-50/30"
+                : "border-slate-200 hover:border-[#1a6fbf]/50 hover:bg-slate-50/50"
+            }`}
+          >
+            <input
+              ref={inputRef}
+              type="file"
+              accept=".csv,.pdf,text/csv,application/pdf"
+              className="hidden"
+              onChange={(e) => { setFile(e.target.files?.[0] ?? null); setResults(null); setError(null); }}
+            />
+
+            {file ? (
+              <div className="flex flex-col items-center gap-2">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center border ${isPdf ? "bg-red-50 border-red-100 text-red-500" : "bg-green-50 border-green-100 text-green-600"}`}>
+                  {isPdf ? "PDF" : "CSV"}
+                </div>
+                <p className="font-semibold text-[#0f172a] text-sm">{file.name}</p>
+                <button
+                  onClick={(e) => { e.stopPropagation(); setFile(null); setResults(null); }}
+                  className="absolute top-3 right-3 text-slate-400 hover:text-slate-600"
+                >
+                  <X size={16} />
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleReconcile(); }}
+                  disabled={loading}
+                  className="mt-2 flex items-center gap-2 px-5 py-2 bg-[#1a6fbf] hover:bg-[#185fa5] text-white rounded-lg text-sm font-medium transition-all disabled:opacity-60"
+                >
+                  {loading ? <><Loader2 size={14} className="animate-spin" /> {isPdf ? "Analyse OCR en cours..." : t.running}</> : <><RefreshCw size={14} /> Lancer le rapprochement {isPdf ? "(PDF)" : "(CSV)"}</>}
+                </button>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-2">
+                <div className="flex gap-2">
+                  <span className="w-8 h-8 rounded-lg bg-green-50 border border-green-100 flex items-center justify-center text-[10px] font-bold text-green-600">CSV</span>
+                  <span className="w-8 h-8 rounded-lg bg-red-50 border border-red-100 flex items-center justify-center text-[10px] font-bold text-red-500">PDF</span>
+                </div>
+                <p className="text-sm font-medium text-[#0f172a] mt-1">Importez votre relevé bancaire (CSV ou PDF)</p>
+                <p className="text-[11px] text-[#64748b]">Glissez le fichier ici ou cliquez pour parcourir</p>
+              </div>
+            )}
+          </div>
+          
+          {/* Format hint small text */}
+          {!file && (
+            <div className="text-[11px] text-[#64748b] text-center border-t border-slate-100 pt-3">
+              <strong>CSV :</strong> <code className="bg-slate-100 px-1 py-0.5 rounded text-slate-700">date,description,montant[,N°chèque]</code> — <strong>PDF :</strong> OCR Automatique des écritures
+            </div>
+          )}
+
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-600 flex items-center gap-2">
+              <AlertCircle size={15} /> {error}
+            </div>
+          )}
+        </div>
 
         {/* Summary cards — shown after reconcile */}
         {summary && (
@@ -461,6 +517,13 @@ export function RapprochementClient({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
+                  {/* Solde Initial row */}
+                  <tr className="bg-amber-50/50">
+                    <td colSpan={3} className="px-3 py-2 text-right text-[11px] text-[#64748b] italic">Solde initial</td>
+                    <td colSpan={2} className="px-3 py-2 font-bold text-[#0f172a] whitespace-nowrap text-right pr-8">
+                      {fmt(accountSummary512.soldeInitial, locale)}
+                    </td>
+                  </tr>
                   {journalEntries512.map((e) => {
                     const isDebit512 = e.debitAccount === "512";
                     const isLinked = !!e.bankTransaction;
@@ -487,6 +550,20 @@ export function RapprochementClient({
                       </tr>
                     );
                   })}
+                  {/* Totals row */}
+                  <tr className="bg-[#f8fafc] border-t border-gray-200">
+                    <td colSpan={3} className="px-3 py-2 text-right text-[11px] font-semibold text-[#1a6fbf]">Total Mouvements</td>
+                    <td className="px-3 py-2 font-mono font-bold text-red-600">{fmt(accountSummary512.totalCredit, locale)}</td>
+                    <td className="px-3 py-2 font-mono font-bold text-[#2d8f5e]">{fmt(accountSummary512.totalDebit, locale)}</td>
+                  </tr>
+                  {/* Solde Final row */}
+                  <tr className={`border-t border-gray-200 ${accountSummary512.soldeFinal >= 0 ? "bg-green-50" : "bg-red-50"}`}>
+                    <td colSpan={3} className="px-3 py-2 text-right text-xs font-bold text-[#0f172a]">Solde final du mois</td>
+                    <td colSpan={2} className={`px-3 py-2 font-bold text-sm text-right pr-8 ${accountSummary512.soldeFinal >= 0 ? "text-[#2d8f5e]" : "text-red-600"}`}>
+                      {fmt(accountSummary512.soldeFinal, locale)}
+                      {accountSummary512.soldeFinal < 0 && " (−)"}
+                    </td>
+                  </tr>
                 </tbody>
               </table>
             )}

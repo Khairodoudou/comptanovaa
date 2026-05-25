@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import { Settings, BookOpen, Bell } from "lucide-react";
 import { getDictionary } from "@/get-dictionary";
 import type { Locale } from "@/i18n-config";
+import { PlanComptableClient } from "./PlanComptableClient";
+import { db } from "@/lib/db";
 
 export default async function ComptableSettingsPage({
   params,
@@ -13,7 +15,14 @@ export default async function ComptableSettingsPage({
   const user = await getCurrentUser();
   if (!user || user.role !== "COMPTABLE") redirect(`/${lang}/login`);
 
-  const dict = await getDictionary(lang as Locale);
+  const [dict, companies] = await Promise.all([
+    getDictionary(lang as Locale),
+    db.company.findMany({
+      where: { comptableId: user.userId },
+      select: { id: true, name: true, client: { select: { name: true } } },
+      orderBy: { name: "asc" },
+    }),
+  ]);
   const c = dict.dashboard.comptable;
 
   const ACCOUNTING_RULES = [
@@ -64,6 +73,9 @@ export default async function ComptableSettingsPage({
           ))}
         </div>
       </section>
+
+      {/* Plan Comptable - Sub Accounts */}
+      <PlanComptableClient companies={companies} />
 
       {/* Notification preferences */}
       <section className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
