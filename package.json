@@ -24,6 +24,7 @@
     "next": "16.2.5",
     "next-intl": "^4.11.0",
     "pdf2pic": "^3.2.0",
+    "pdfreader": "^3.0.8",
     "prisma": "^7.8.0",
     "react": "19.2.4",
     "react-chartjs-2": "^5.3.1",
