@@ -119,7 +119,7 @@ export default async function ClientDocumentsPage({
                       documentId={doc.id}
                       documentName={doc.originalName}
                       hasValidatedEntries={doc.journalEntries.some(
-                        (e) => e.status === "VALIDATED"
+                        (e: any) => e.status === "VALIDATED"
                       )}
                     />
                   </td>
