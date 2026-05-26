@@ -7,7 +7,7 @@ export interface OcrResult {
   tesseractConfidence: number;
   needsManualReview: boolean;
   processingMs: number;
-  method: "google_vision" | "csv_skip";
+  method: "mistral_ocr" | "csv_skip";
 }
 
 function extractFromCsv(content: string): OcrResult {
@@ -36,24 +36,32 @@ export async function runOcr(
 
   const isPdf = mimeType === "application/pdf" || filename.toLowerCase().endsWith(".pdf");
   const base64 = buffer.toString("base64");
-  const apiKey = process.env.GOOGLE_VISION_API_KEY;
+  const apiKey = process.env.MISTRAL_API_KEY;
 
-  const response = await fetch(
-    `https://vision.googleapis.com/v1/images:annotate?key=${apiKey}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        requests: [{
-          image: { content: base64 },
-          features: [{ type: "DOCUMENT_TEXT_DETECTION", maxResults: 1 }],
-        }],
-      }),
-    }
-  );
+  const response = await fetch("https://api.mistral.ai/v1/ocr", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: "mistral-ocr-latest",
+      document: {
+        type: isPdf ? "document_url" : "image_url",
+        ...(isPdf
+          ? { document_url: `data:application/pdf;base64,${base64}` }
+          : { image_url: `data:${mimeType};base64,${base64}` }),
+      },
+    }),
+  });
 
   const data = await response.json();
-  const rawText = data.responses?.[0]?.fullTextAnnotation?.text ?? "";
+
+  if (!response.ok) {
+    throw new Error(`OCR_FAILED: ${data.message ?? "Mistral error"}`);
+  }
+
+  const rawText = data.pages?.map((p: any) => p.markdown).join("\n") ?? "";
 
   if (!rawText) {
     throw new Error("OCR_FAILED: Aucun texte détecté.");
@@ -67,6 +75,6 @@ export async function runOcr(
     tesseractConfidence: 95,
     needsManualReview: false,
     processingMs: Date.now() - startMs,
-    method: "google_vision",
+    method: "mistral_ocr",
   };
 }
