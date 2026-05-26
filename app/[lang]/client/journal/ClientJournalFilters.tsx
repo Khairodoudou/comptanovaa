@@ -32,7 +32,7 @@ export function ClientJournalFilters({
   );
 
   const hasFilters =
-    searchParams.get("from") || searchParams.get("to") || searchParams.get("account") || searchParams.get("status");
+    searchParams.get("from") || searchParams.get("to") || searchParams.get("status");
 
   return (
     <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
@@ -61,14 +61,6 @@ export function ClientJournalFilters({
           defaultValue={searchParams.get("to") ?? ""}
           onChange={(e) => updateFilter("to", e.target.value)}
           className="border border-gray-200 rounded-lg px-3 py-2 text-sm text-[#0f172a] focus:outline-none focus:ring-2 focus:ring-[#2d8f5e]/30"
-        />
-        <input
-          id="client-journal-filter-account"
-          type="text"
-          placeholder={filterAccountPlaceholder}
-          defaultValue={searchParams.get("account") ?? ""}
-          onChange={(e) => updateFilter("account", e.target.value)}
-          className="border border-gray-200 rounded-lg px-3 py-2 text-sm text-[#0f172a] placeholder:text-[#94a3b8] focus:outline-none focus:ring-2 focus:ring-[#2d8f5e]/30 min-w-[220px]"
         />
         {hasFilters && (
           <button
