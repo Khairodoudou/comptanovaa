@@ -171,7 +171,7 @@ export default async function ClientDetailPage({
                 </td>
               </tr>
             )}
-            {allDocs.map((doc) => (
+            {allDocs.map((doc: any) => (
               <tr key={doc.id} className="hover:bg-[#f8fafc] transition-colors">
                 <td className="px-5 py-3.5">
                   <div className="flex items-center gap-2">

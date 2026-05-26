@@ -80,7 +80,7 @@ export default async function ClientDocumentsPage({
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {documents.map((doc) => (
+              {documents.map((doc: any) => (
                 <tr key={doc.id} className="hover:bg-[#f8fafc] transition-colors">
                   <td className="px-5 py-3.5">
                     <p className="font-medium text-[#0f172a] truncate max-w-[180px]">
