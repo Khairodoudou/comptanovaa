@@ -67,7 +67,7 @@ export default async function ClientDashboardPage({
   });
 
   const monthlyCounts = months.map(({ year, month }) =>
-    monthlyDocs.filter((doc) => {
+    monthlyDocs.filter((doc: any) => {
       const date = new Date(doc.uploadedAt);
       return date.getFullYear() === year && date.getMonth() === month;
     }).length
