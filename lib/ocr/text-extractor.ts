@@ -1,14 +1,7 @@
 /**
  * Regex-based data extraction from OCR raw text.
  * Handles French, Arabic, and English invoice/document formats.
- *
- * CHANGELOG v2:
- * - Invoice number: patterns massively expanded (30+ formats)
- * - Cheque number: dedicated extractor with OCR-noise tolerance
- * - Both extractors: Arabic support, OCR misread tolerance (O/0, I/1, etc.)
  */
-
-// ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface ExtractedData {
   date: string | null;
@@ -17,7 +10,7 @@ export interface ExtractedData {
   amountTVA: number | null;
   supplier: string | null;
   invoiceNumber: string | null;
-  chequeNumber: string | null;       // ← NEW: dedicated cheque number field
+  chequeNumber: string | null;
   documentType: DocumentType;
   confidence: "high" | "medium" | "low";
   rawMatches: Record<string, string>;
@@ -32,18 +25,9 @@ export type DocumentType =
   | "CHEQUE"
   | "AUTRE";
 
-// ─── OCR noise normalization ──────────────────────────────────────────────────
-// Tesseract often misreads: O↔0, I↔1, l↔1, S↔5, B↔8, etc.
-// We normalize ONLY the candidate string, not the whole text.
-
 function normalizeOcrNoise(s: string): string {
-  return s
-    .replace(/[oO]/g, "0")   // O → 0  (for pure-numeric parts)
-    // We keep the original string AND the normalized one as candidates
-    .trim();
+  return s.replace(/[oO]/g, "0").trim();
 }
-
-// ─── Date patterns ────────────────────────────────────────────────────────────
 
 const DATE_PATTERNS: RegExp[] = [
   /\b(\d{2})[\/\-\.](\d{2})[\/\-\.](\d{4})\b/,
@@ -86,8 +70,6 @@ function parseDate(text: string): string | null {
   }
   return null;
 }
-
-// ─── Amount patterns ──────────────────────────────────────────────────────────
 
 const AMOUNT_PATTERNS: RegExp[] = [
   /([\d\s\u00a0]+(?:[,.]\d{1,2})?)[\s]*(?:DA|DZD|دج)/gi,
@@ -148,16 +130,35 @@ function parseHTAmount(text: string): number | null {
   return null;
 }
 
+// FIX 1: Enhanced amount normalization — handles 120.000,00 format
 function normalizeAmountStr(raw: string): number | null {
   let s = raw.replace(/[\s\u00a0]/g, "").replace(/[^\d.,]+$/g, "").replace(/^[^\d]+/g, "");
   if (!s || s.length === 0) return null;
-  if (s.match(/,\d{1,2}$/)) {
+
+  // European format: 120.000,00 → 120000.00
+  if (s.match(/\.\d{3}[,]\d{1,2}$/)) {
     s = s.replace(/\./g, "").replace(",", ".");
-  } else if (s.match(/\.\d{1,2}$/)) {
+  }
+  // US format: 120,000.00 → 120000.00
+  else if (s.match(/,\d{3}[.]\d{1,2}$/)) {
     s = s.replace(/,/g, "");
-  } else {
+  }
+  // Decimal comma: 120,00 → 120.00
+  else if (s.match(/,\d{1,2}$/)) {
+    s = s.replace(/\./g, "").replace(",", ".");
+  }
+  // Decimal dot: 120.00
+  else if (s.match(/\.\d{1,2}$/)) {
+    s = s.replace(/,/g, "");
+  }
+  // Thousands separator only (120.000 or 120,000)
+  else if (s.match(/[.,]\d{3}$/)) {
     s = s.replace(/[.,]/g, "");
   }
+  else {
+    s = s.replace(/[.,]/g, "");
+  }
+
   const val = parseFloat(s);
   if (!isNaN(val) && val > 0 && val < 100_000_000) return val;
   return null;
@@ -209,8 +210,6 @@ function parseAmount(text: string): number | null {
   return null;
 }
 
-// ─── Supplier / Client extraction ────────────────────────────────────────────
-
 const RECIPIENT_MARKERS = /DESTINATAIRE|CLIENT|ACHETEUR|LIVR[EÉ]\s*[AÀ]|SHIP\s*TO|BILL\s*TO/i;
 
 const SUPPLIER_PATTERNS: RegExp[] = [
@@ -220,14 +219,28 @@ const SUPPLIER_PATTERNS: RegExp[] = [
   /\b((?:S\.A\.R\.L|S\.P\.A|E\.U\.R\.L|S\.A\.S)\s+[A-ZÀ-Úa-zà-ú0-9\s\-&'.]{2,60})/,
   /(?:RAISON\s*SOCIALE|SOCIÉTÉ|ENTREPRISE|ETABLISSEMENT|GROUPE)\s*:?\s*([^\n\r,]{3,80})/i,
   /(?:الشركة|المؤسسة)\s*:?\s*([^\n\r,]{3,80})/,
+  // FIX 2: Cheque specific — "A l'ordre de"
+  /(?:A\s*L['']ORDRE\s*DE|لأمر)\s*:?\s*([^\n\r,]{3,80})/i,
 ];
+
+// FIX 2: Supplier cleanup — remove cheque-specific trailing text
+function cleanSupplierCandidate(raw: string): string {
+  return raw
+    .trim()
+    .replace(/\s+/g, ' ')
+    .replace(/\s*(Payable\s*[àa]|A\s*l['']ordre|payez|contre\s*ce\s*ch[eè]que|prière|zone\s*blanche).*/i, '')
+    .replace(/\s*(agence|bp|av\.|avenue|rue|cité|cite)\s*.*/i, '')
+    .substring(0, 80)
+    .trim();
+}
 
 function parseSupplier(text: string): string | null {
   const lines = text.split(/[\n\r]+/).map((l) => l.trim()).filter(Boolean);
+
   for (const pattern of SUPPLIER_PATTERNS) {
     const m = text.match(pattern);
     if (m?.[1]) {
-      const candidate = m[1].trim().replace(/\s+/g, ' ').substring(0, 80);
+      const candidate = cleanSupplierCandidate(m[1]);
       const matchLine = lines.find(l => l.includes(candidate.substring(0, 15)));
       if (matchLine && RECIPIENT_MARKERS.test(matchLine)) continue;
       if (candidate.length >= 3) return candidate;
@@ -238,29 +251,29 @@ function parseSupplier(text: string): string | null {
       const idx = lines.indexOf(line);
       const prevLine = idx > 0 ? lines[idx - 1] : '';
       if (!RECIPIENT_MARKERS.test(line) && !RECIPIENT_MARKERS.test(prevLine)) {
-        return line.substring(0, 80);
+        return cleanSupplierCandidate(line);
       }
     }
   }
   for (const line of lines.slice(0, 8)) {
     if (
       /^[A-ZÀ-Ü0-9\s\-&'.]{4,60}$/.test(line) &&
-      !/^(FACTURE|INVOICE|DEVIS|BON|BON DE LIVRAISON|RELEV[EÉ]|TOTAL|MONTANT|DATE|R[EÉ]F[EÉ]RENCE|HEURE|N[°O]|QUINCAILLERIE|DROGUERIE|TEL|ADRESSE|DESIGNATION|QTE|PRIX|CHIFFRE)$/i.test(line.trim()) &&
+      !/^(FACTURE|INVOICE|DEVIS|BON|BON DE LIVRAISON|RELEV[EÉ]|TOTAL|MONTANT|DATE|R[EÉ]F[EÉ]RENCE|HEURE|N[°O]|QUINCAILLERIE|DROGUERIE|TEL|ADRESSE|DESIGNATION|QTE|PRIX|CHIFFRE|PAYEZ|CHEQUE|CHÈQUE|BANQUE|PAYABLE)$/i.test(line.trim()) &&
       !RECIPIENT_MARKERS.test(line)
     ) {
-      return line.trim().substring(0, 80);
+      return cleanSupplierCandidate(line);
     }
   }
   for (let i = 0; i < lines.length - 1; i++) {
     if (/^(DE|FROM|PAR|ÉMIS PAR|EMIS PAR|VENDEUR)\s*:?$/i.test(lines[i])) {
       const next = lines[i + 1];
-      if (next && next.length >= 3 && !/^\d+$/.test(next)) return next.substring(0, 80);
+      if (next && next.length >= 3 && !/^\d+$/.test(next)) return cleanSupplierCandidate(next);
     }
   }
   for (const line of lines.slice(0, 10)) {
     if (
       /^[A-ZÀ-Ü][a-zà-ü]+(\s[A-ZÀ-Ü][a-zà-ü]+){1,3}$/.test(line) &&
-      !/facture|invoice|total|date|montant|description|bon|livraison|devis/i.test(line) &&
+      !/facture|invoice|total|date|montant|description|bon|livraison|devis|payez|cheque|chèque|banque/i.test(line) &&
       !RECIPIENT_MARKERS.test(line)
     ) {
       return line;
@@ -269,107 +282,45 @@ function parseSupplier(text: string): string | null {
   return null;
 }
 
-// ─── Invoice Number — COMPLETELY REWRITTEN ────────────────────────────────────
-//
-// FORMATS HANDLED:
-//   French:   Facture N° 2024-001 | N° 001 | Numéro: FA-2024/01 | Réf: INV-0099
-//   Arabic:   فاتورة رقم 001 | رقم الفاتورة: 2024-001 | رقم: 0099
-//   Coded:    FA-001 | FAC/2024/01 | INV-001 | F2024001 | FACT-001
-//   Slash:    2024/001 | 2025/0099 | 01/2025
-//   Dash:     2024-001 | FAC-2024-001
-//   Prefixed: #001 | N.001 | N-001
-//   OCR:      "N°" often becomes "N0" "N°" "NO" "N ° " "N. "
-//
-// STRATEGY:
-//   1. Try label-anchored patterns first (highest confidence)
-//   2. Try standalone coded patterns (FA-, INV-, etc.)
-//   3. Try reference patterns (REF:, N°:)
-//   4. Validate: min 3 chars, reject pure dates, reject amounts
-
-// Characters allowed in an invoice number value
-const INV_CHARS = "[A-Z0-9\\-\\/\\.]{2,30}";
-
 const INVOICE_LABEL_PATTERNS: RegExp[] = [
-  // ── French label anchors ────────────────────────────────────────────────
-  // "Facture N°", "Facture No.", "Fact. N°", "FACT N°"
   /(?:FACTURES?|FACT\.?)\s*[N°NnOo°\.]{1,3}[\s°.]*:?\s*([A-Z0-9][A-Z0-9\-\/\.]{1,29})/gi,
-
-  // "N°" / "N°." / "N°:" / "N ° " / "N0" (OCR misread) / "NO." / "Nº"
-  // Followed directly by the invoice number (not a date, not a big amount)
   /\bN[\s°º\.]*[°oO0]?[\s]*:?\s*([A-Z0-9][A-Z0-9\-\/\.]{1,29})/gi,
-
-  // "Numéro", "Numéro de facture", "Num.", "Numero"
   /(?:NUM[EÉ]RO|NUM\.?|NUMÉRO)\s*(?:DE\s*FACTURE)?\s*:?\s*([A-Z0-9][A-Z0-9\-\/\.]{1,29})/gi,
-
-  // "INVOICE", "INVOICE NO", "INVOICE #", "INV NO"
   /(?:INVOICE|INV\.?)\s*(?:NO\.?|N[°º]?|#|NUMBER)?\s*:?\s*([A-Z0-9][A-Z0-9\-\/\.]{1,29})/gi,
-
-  // "RÉFÉRENCE", "REF", "REF.", "Réf."
   /(?:R[EÉ]F[EÉ]RENCE|R[EÉ]F\.?)\s*(?:FACTURE)?\s*:?\s*([A-Z0-9][A-Z0-9\-\/\.]{1,29})/gi,
-
-  // ── Arabic label anchors ────────────────────────────────────────────────
-  // "رقم الفاتورة: 001" | "فاتورة رقم 001" | "رقم: 001"
   /(?:رقم\s*الفاتورة|فاتورة\s*رقم|رقم\s*الوصل|رقم)\s*:?\s*([A-Z0-9][A-Z0-9\-\/\.]{1,29})/g,
-
-  // Arabic digits version: "رقم: ٠٠١"
   /(?:رقم\s*الفاتورة|فاتورة\s*رقم|رقم)\s*:?\s*([\u0660-\u0669]{2,10})/g,
-
-  // ── Bon de Livraison (BL) anchors ───────────────────────────────────────
-  // "BL N°", "B.L.", "Bon de livraison", "B.L N°"
   /(?:B\.L\.?|BL|BON\s*DE\s*LIVRAISON|LIVRAISON)\s*[N°NnOo°\.]{0,3}[\s°.]*:?\s*([A-Z0-9][A-Z0-9\-\/\.]{1,29})/gi,
 ];
 
-// Standalone coded patterns — no label needed, format alone is distinctive
 const INVOICE_CODE_PATTERNS: RegExp[] = [
-  // FA-001, FA-2024-001, FAC-001, FACT-001 (2-4 letter prefix, dash, digits)
   /\b(FA[CT]{0,2}[-\/]\d{2,}(?:[-\/]\d+)*)\b/gi,
-
-  // INV-001, INV/2024/001
   /\b(INV[-\/]\d{2,}(?:[-\/]\d+)*)\b/gi,
-
-  // F followed by 4+ digits (F2024001)
   /\b(F\d{4,})\b/gi,
-
-  // Year/seq: 2024/001, 2025/0099 (year 20xx or 19xx, slash, 2-6 digits)
   /\b((?:19|20)\d{2}\/\d{2,6})\b/g,
-
-  // seq/year: 001/2024
   /\b(\d{2,6}\/(?:19|20)\d{2})\b/g,
-
-  // Hash-prefixed: #12345, #INV001
   /#([A-Z0-9]{3,20})\b/gi,
 ];
 
 function cleanInvoiceCandidate(raw: string): string {
   return raw
     .trim()
-    .replace(/^[^A-Z0-9٠-٩]/i, "")   // strip leading non-alphanumeric
-    .replace(/[^A-Z0-9\-\/\.٠-٩]+$/i, "") // strip trailing junk
+    .replace(/^[^A-Z0-9٠-٩]/i, "")
+    .replace(/[^A-Z0-9\-\/\.٠-٩]+$/i, "")
     .toUpperCase();
 }
 
 function isValidInvoiceNumber(candidate: string): boolean {
   if (!candidate || candidate.length < 2) return false;
-
-  // Reject pure dates (DD/MM/YYYY or YYYY-MM-DD)
   if (/^\d{2}[\/\-]\d{2}[\/\-]\d{4}$/.test(candidate)) return false;
   if (/^\d{4}[\/\-]\d{2}[\/\-]\d{2}$/.test(candidate)) return false;
-
-  // Reject amounts (pure numbers > 1000 with no letters)
   if (/^\d+$/.test(candidate) && parseInt(candidate, 10) > 9999) return false;
-
-  // Reject very short pure numbers (likely quantities, not invoice numbers)
   if (/^\d{1,2}$/.test(candidate)) return false;
-
-  // An invoice number MUST contain at least one digit.
-  // Pure letter strings like "EUF", "MBRE", "ADHAFNASSAWIL" are false positives.
   if (!/\d/.test(candidate)) return false;
-
   return true;
 }
 
 function parseInvoiceNumber(text: string): string | null {
-  // ── Pass 1: label-anchored ────────────────────────────────────────────
   for (const pattern of INVOICE_LABEL_PATTERNS) {
     const regex = new RegExp(pattern.source, pattern.flags);
     let m: RegExpExecArray | null;
@@ -383,8 +334,6 @@ function parseInvoiceNumber(text: string): string | null {
       }
     }
   }
-
-  // ── Pass 2: standalone coded formats ─────────────────────────────────
   for (const pattern of INVOICE_CODE_PATTERNS) {
     const regex = new RegExp(pattern.source, pattern.flags);
     let m: RegExpExecArray | null;
@@ -397,63 +346,22 @@ function parseInvoiceNumber(text: string): string | null {
       }
     }
   }
-
   console.log("[parseInvoiceNumber] No invoice number found.");
   return null;
 }
 
-// ─── Cheque Number — NEW DEDICATED EXTRACTOR ─────────────────────────────────
-//
-// FORMATS HANDLED:
-//   French:   Chèque N° 123456 | Chèque no 123456 | N° Chèque: 123456
-//             CHQ-001 | CHQ001 | Ch. N° 001 | Ordre de paiement N° 001
-//   Arabic:   شيك رقم 123456 | رقم الشيك: 001 | شيك: 001
-//   Bank CSV: CHQ001, CHQ-001 (already in the bank CSV format)
-//   OCR:      "Chèque" often → "Cheque" "Ch.que" "Cheaue" "Ch6que" (OCR artifact)
-//             "N°" → "N0" "NO" "N ° " as always
-
 const CHEQUE_LABEL_PATTERNS: RegExp[] = [
-  // "Chèque N° 123456" — tolerant to OCR noise on è and °
-  // Ch[any 1-2 chars]que = handles "Chèque" "Cheque" "Ch.que" "Ch6que"
   /CH[A-ZÈEÊa-zèeê\.6]{1,3}QUE\s*[N°NnOo°\.\s]*:?\s*([A-Z0-9][A-Z0-9\-\/\.]{0,19})/gi,
-
-  // "N° Chèque" / "No chèque" (label order reversed)
   /[N°NnOo°\.]{1,3}\s*[°\s]*CH[A-ZÈEÊa-zèeê\.6]{1,3}QUE\s*:?\s*([A-Z0-9][A-Z0-9\-\/\.]{0,19})/gi,
-
-  // "Numéro de chèque" / "Numéro chèque"
   /NUM[EÉ]RO\s*(?:DE\s*)?CH[A-Za-z\.6]{1,3}QUE\s*:?\s*([A-Z0-9][A-Z0-9\-\/\.]{0,19})/gi,
-
-  // "Ordre de paiement N°" (payment order = often tied to cheque)
   /ORDRE\s*(?:DE\s*)?PAIEMENT\s*[N°NnOo°\.\s]*:?\s*([A-Z0-9][A-Z0-9\-\/\.]{0,19})/gi,
-
-  // "Virement N°" / "Virement chèque N°"
   /VIREMENT\s*(?:CH[A-Za-z]{1,3}QUE\s*)?[N°NnOo°\.\s]*:?\s*([A-Z0-9][A-Z0-9\-\/\.]{0,19})/gi,
-
-  // Arabic: "شيك رقم", "رقم الشيك", "شيك:"
   /(?:شيك\s*رقم|رقم\s*الشيك|شيك)\s*:?\s*([A-Z0-9][A-Z0-9\-\/\.]{0,19})/g,
-
-  // Arabic with Arabic-Indic digits: "شيك رقم ١٢٣٤٥٦"
   /(?:شيك\s*رقم|رقم\s*الشيك)\s*:?\s*([\u0660-\u0669]{4,12})/g,
 ];
 
-// Standalone cheque code patterns
-const CHEQUE_CODE_PATTERNS: RegExp[] = [
-  // CHQ-001 | CHQ001 | CHQ/001 (common in bank CSVs and invoices)
-  /\bCHQ[-\/]?([A-Z0-9]{2,20})\b/gi,
-
-  // CQ-001 (abbreviated)
-  /\bCQ[-\/]?([A-Z0-9]{2,20})\b/gi,
-
-  // Pure digit cheque numbers: 6-12 digits in a row (bank cheque format)
-  // But only when near the word "chèque" (handled in label pass above)
-  // Standalone pure-digit: only if 7+ digits (typical bank cheque serial)
-  /\b(\d{7,12})\b/g,
-];
-
 function normalizeArabicIndic(s: string): string {
-  return s.replace(/[\u0660-\u0669]/g, (c) =>
-    String(c.charCodeAt(0) - 0x0660)
-  );
+  return s.replace(/[\u0660-\u0669]/g, (c) => String(c.charCodeAt(0) - 0x0660));
 }
 
 function cleanChequeCandidate(raw: string): string {
@@ -466,22 +374,18 @@ function cleanChequeCandidate(raw: string): string {
 
 function isValidChequeNumber(candidate: string): boolean {
   if (!candidate || candidate.length < 3) return false;
-  // Reject dates
   if (/^\d{2}[\/\-]\d{2}[\/\-]\d{4}$/.test(candidate)) return false;
   if (/^\d{4}[\/\-]\d{2}[\/\-]\d{2}$/.test(candidate)) return false;
-  // Must have at least 3 characters total
   return true;
 }
 
 function parseChequeNumber(text: string): string | null {
-  // ── Pass 1: label-anchored (highest confidence) ───────────────────────
   for (const pattern of CHEQUE_LABEL_PATTERNS) {
     const regex = new RegExp(pattern.source, pattern.flags);
     let m: RegExpExecArray | null;
     while ((m = regex.exec(text)) !== null) {
       const raw = m[1];
       if (!raw) continue;
-      // Convert Arabic-Indic digits if needed
       const normalized = normalizeArabicIndic(raw);
       const candidate = cleanChequeCandidate(normalized);
       if (isValidChequeNumber(candidate)) {
@@ -490,8 +394,6 @@ function parseChequeNumber(text: string): string | null {
       }
     }
   }
-
-  // ── Pass 2: standalone CHQ-xxx codes ─────────────────────────────────
   const chqPattern = /\bCHQ[-\/]?([A-Z0-9]{2,20})\b/gi;
   let m: RegExpExecArray | null;
   while ((m = chqPattern.exec(text)) !== null) {
@@ -501,9 +403,6 @@ function parseChequeNumber(text: string): string | null {
       return candidate;
     }
   }
-
-  // ── Pass 3: 7-12 digit pure serial ONLY if "chèque/cheque/شيك" nearby ─
-  // We search for the keyword, then look for digits within ±100 chars
   const chequeKeywordRe = /CH[A-Za-z\.6]{1,3}QUE|شيك/gi;
   let kw: RegExpExecArray | null;
   while ((kw = chequeKeywordRe.exec(text)) !== null) {
@@ -520,12 +419,9 @@ function parseChequeNumber(text: string): string | null {
       }
     }
   }
-
   console.log("[parseChequeNumber] No cheque number found.");
   return null;
 }
-
-// ─── Document type detection ──────────────────────────────────────────────────
 
 const TYPE_KEYWORDS: Array<{ type: DocumentType; keywords: string[] }> = [
   {
@@ -542,7 +438,7 @@ const TYPE_KEYWORDS: Array<{ type: DocumentType; keywords: string[] }> = [
   },
   {
     type: "CHEQUE",
-    keywords: ["chèque", "cheque", "chq", "شيك", "ordre de paiement"],
+    keywords: ["chèque", "cheque", "chq", "شيك", "ordre de paiement", "payez contre", "a l'ordre de", "à l'ordre de"],
   },
   {
     type: "FACTURE_FOURNISSEUR",
@@ -564,23 +460,18 @@ function detectDocumentType(text: string, filename: string): DocumentType {
   return "AUTRE";
 }
 
-// ─── Confidence scoring ───────────────────────────────────────────────────────
-
 function scoreConfidence(data: Omit<ExtractedData, "confidence">): "high" | "medium" | "low" {
   let score = 0;
   if (data.date) score += 25;
   if (data.amount) score += 30;
   if (data.supplier) score += 15;
-  if (data.invoiceNumber) score += 20;  // ← bumped: invoice N° is critical
+  if (data.invoiceNumber) score += 20;
   if (data.chequeNumber) score += 10;
   if (data.documentType !== "AUTRE") score += 10;
-
   if (score >= 70) return "high";
   if (score >= 40) return "medium";
   return "low";
 }
-
-// ─── Main extraction function ─────────────────────────────────────────────────
 
 export function extractDocumentData(
   rawText: string,
@@ -590,10 +481,9 @@ export function extractDocumentData(
   const amount = parseAmount(rawText);
   const supplier = parseSupplier(rawText);
   const invoiceNumber = parseInvoiceNumber(rawText);
-  const chequeNumber = parseChequeNumber(rawText);     // ← NEW
+  const chequeNumber = parseChequeNumber(rawText);
   let documentType = detectDocumentType(rawText, filename);
 
-  // Fallback heuristic: if it's AUTRE but we found a valid identifier
   if (documentType === "AUTRE") {
     if (invoiceNumber) {
       documentType = "FACTURE_CLIENT";
@@ -623,11 +513,11 @@ export function extractDocumentData(
   if (amountTVA) rawMatches.amountTVA = String(amountTVA);
   if (supplier) rawMatches.supplier = supplier;
   if (invoiceNumber) rawMatches.invoiceNumber = invoiceNumber;
-  if (chequeNumber) rawMatches.chequeNumber = chequeNumber;     // ← NEW
+  if (chequeNumber) rawMatches.chequeNumber = chequeNumber;
 
   const partial = {
     date, amount, amountHT, amountTVA,
-    supplier, invoiceNumber, chequeNumber,                       // ← NEW
+    supplier, invoiceNumber, chequeNumber,
     documentType, rawMatches,
   };
   const confidence = scoreConfidence(partial);
