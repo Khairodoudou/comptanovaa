@@ -61,7 +61,11 @@ export async function runOcr(
     throw new Error(`OCR_FAILED: ${data.message ?? "Mistral error"}`);
   }
 
-  const rawText = data.pages?.map((p: any) => p.markdown).join("\n") ?? "";
+  const rawText = (data.pages?.map((p: any) => p.markdown).join("\n") ?? "")
+    .replace(/[#*_`~>\[\]]/g, " ")
+    .replace(/\|/g, " ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
 
   if (!rawText) {
     throw new Error("OCR_FAILED: Aucun texte détecté.");
