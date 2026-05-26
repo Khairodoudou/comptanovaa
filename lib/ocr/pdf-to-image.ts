@@ -6,13 +6,15 @@ export async function pdfToImage(pdfBuffer: Buffer): Promise<Buffer> {
     format: "png",
     width: 1800,
     height: 2500,
+    saveFilename: "page",
+    savePath: "/tmp",
   });
 
-  const result = await convert(1); // الصفحة الأولى فقط
+  const result = await convert(1, { responseType: "buffer" });
 
   if (!result?.buffer) {
     throw new Error("Impossible de convertir le PDF en image.");
   }
 
-  return result.buffer;
+  return Buffer.from(result.buffer);
 }
