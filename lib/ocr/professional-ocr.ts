@@ -1,4 +1,3 @@
-import { pdfToImage } from "./pdf-to-image";
 import { isCsvMimeType } from "./image-preprocessing";
 import { extractDocumentData, type ExtractedData } from "./text-extractor";
 
@@ -36,17 +35,7 @@ export async function runOcr(
   }
 
   const isPdf = mimeType === "application/pdf" || filename.toLowerCase().endsWith(".pdf");
-  let imageBuffer = buffer;
-
-  if (isPdf) {
-    try {
-      imageBuffer = await pdfToImage(buffer);
-    } catch (err: any) {
-      throw new Error("Impossible de convertir le PDF en image.");
-    }
-  }
-
-  const base64 = imageBuffer.toString("base64");
+  const base64 = buffer.toString("base64");
   const apiKey = process.env.GOOGLE_VISION_API_KEY;
 
   const response = await fetch(
@@ -57,7 +46,7 @@ export async function runOcr(
       body: JSON.stringify({
         requests: [{
           image: { content: base64 },
-          features: [{ type: "TEXT_DETECTION", maxResults: 1 }],
+          features: [{ type: "DOCUMENT_TEXT_DETECTION", maxResults: 1 }],
         }],
       }),
     }
