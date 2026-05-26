@@ -64,7 +64,7 @@ export default async function ClientBankPage({
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {existingTransactions.map((tx) => (
+              {existingTransactions.map((tx: any) => (
                 <tr key={tx.id} className="hover:bg-[#f8fafc] transition-colors">
                   <td className="px-5 py-3 text-xs text-[#64748b] whitespace-nowrap">
                     {new Date(tx.date).toLocaleDateString(locale)}
