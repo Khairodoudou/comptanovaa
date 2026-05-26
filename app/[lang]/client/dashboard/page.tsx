@@ -182,7 +182,7 @@ export default async function ClientDashboardPage({
             {recentDocs.length === 0 && (
               <p className="text-xs text-[#64748b] text-center py-4">{d.no_docs}</p>
             )}
-            {recentDocs.map((doc) => (
+            {recentDocs.map((doc: any) => (
               <div key={doc.id} className="flex items-start gap-3">
                 <div className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center shrink-0 mt-0.5">
                   <FileText size={13} className="text-[#1a6fbf]" />
