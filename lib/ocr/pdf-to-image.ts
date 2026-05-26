@@ -1,21 +1,18 @@
-import { PDFParse } from "pdf-parse";
+import { fromBuffer } from "pdf2pic";
 
 export async function pdfToImage(pdfBuffer: Buffer): Promise<Buffer> {
-  const parser = new PDFParse({ verbosity: 0, data: new Uint8Array(pdfBuffer) });
-  
-  // Use getScreenshot which has built-in robust Node.js canvas polyfills and standard fonts
-  const screenshotResult = await parser.getScreenshot({
-    first: 1,
-    scale: 2.0,
-    imageBuffer: true,
+  const convert = fromBuffer(pdfBuffer, {
+    density: 200,
+    format: "png",
+    width: 1800,
+    height: 2500,
   });
 
-  const firstPage = screenshotResult.pages[0];
-  if (!firstPage?.data?.length) {
-    throw new Error("Impossible de générer l'image du PDF.");
+  const result = await convert(1); // الصفحة الأولى فقط
+
+  if (!result?.buffer) {
+    throw new Error("Impossible de convertir le PDF en image.");
   }
 
-  // data is the image buffer (PNG) when imageBuffer: true is used
-  const freshBytes = new Uint8Array(firstPage.data);
-  return Buffer.from(freshBytes.buffer as ArrayBuffer);
+  return result.buffer;
 }
