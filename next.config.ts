@@ -4,7 +4,7 @@ import createNextIntlPlugin from "next-intl/plugin";
 const withNextIntl = createNextIntlPlugin("./i18n/request.ts");
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ["@prisma/client", "bcryptjs", "pdf-parse", "pdfjs-dist", "tesseract.js", "sharp", "canvas"],
+  serverExternalPackages: ["@prisma/client", "bcryptjs", "sharp", "pdf2pic"],
   images: {
     remotePatterns: [],
   },
