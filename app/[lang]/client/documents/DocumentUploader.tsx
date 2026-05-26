@@ -22,12 +22,12 @@ interface UploaderT {
 
 interface OcrResult {
   date: string;
-  amount: string;       // fallback (legacy)
-  amountTTC?: string;   // TTC (from API)
-  amountHT?: string;    // HT (from API, only if extracted from PDF)
-  amountTVA?: string;   // TVA (from API, only if extracted from PDF)
-  htFromPDF?: boolean;  // true only when HT was actually read from the document
-  tvaRate?: string;     // e.g. "19%"
+  amount: string;
+  amountTTC?: string;
+  amountHT?: string;
+  amountTVA?: string;
+  htFromPDF?: boolean;
+  tvaRate?: string;
   supplier: string;
   type: string;
   entryDebit: string;
@@ -50,14 +50,12 @@ interface UploadResult {
   };
 }
 
-
-// ── OCR Progress Steps ──────────────────────────────────────────────────────
 const STEPS = [
-  { icon: Upload,  label: "Envoi du fichier...",          duration: 800  },
-  { icon: Cpu,     label: "Prétraitement de l'image...",  duration: 1500 },
-  { icon: Brain,   label: "Analyse OCR (Tesseract)...",   duration: 0    }, // variable
-  { icon: Eye,     label: "Extraction des données...",    duration: 600  },
-  { icon: Zap,     label: "Création de l'écriture...",    duration: 400  },
+  { icon: Upload, label: "Envoi du fichier...", duration: 800 },
+  { icon: Cpu, label: "Prétraitement de l'image...", duration: 1500 },
+  { icon: Brain, label: "Analyse OCR (Mistral)...", duration: 0 },
+  { icon: Eye, label: "Extraction des données...", duration: 600 },
+  { icon: Zap, label: "Création de l'écriture...", duration: 400 },
 ];
 
 const UPLOAD_TIMEOUT_MS = 90_000;
@@ -80,8 +78,7 @@ export function DocumentUploader({
   const [results, setResults] = useState<UploadResult[]>([]);
   const [batchMessage, setBatchMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  
-  // Manual override state
+
   const [manualMode, setManualMode] = useState(false);
   const [manualData, setManualData] = useState({
     date: new Date().toISOString().split("T")[0],
@@ -111,11 +108,10 @@ export function DocumentUploader({
     }
 
     const elapsedInterval = setInterval(() => setElapsed((e) => e + 0.5), 500);
-    let currentStep = 0;
     const advance = (idx: number) => {
       if (idx >= STEPS.length - 1) return;
       const step = STEPS[idx];
-      if (!step.duration) return; 
+      if (!step.duration) return;
       setTimeout(() => {
         setStepIdx(idx + 1);
         const pct = Math.min(80, ((idx + 1) / (STEPS.length - 1)) * 80);
@@ -123,7 +119,7 @@ export function DocumentUploader({
         advance(idx + 1);
       }, step.duration);
     };
-    advance(currentStep);
+    advance(0);
 
     const slowPulse = setInterval(() => {
       setProgressPct((p) => (p < 75 ? Math.min(75, p + 1) : p));
@@ -157,7 +153,7 @@ export function DocumentUploader({
       const formData = new FormData();
       formData.append("file", fileToUpload);
       formData.append("companyId", companyId);
-      
+
       if (isManualSubmit) {
         formData.append("manualOverride", "true");
         formData.append("date", manualData.date);
@@ -185,7 +181,7 @@ export function DocumentUploader({
       }
 
       const data: UploadResult = await res.json();
-      
+
       if (!isManualSubmit && data.ocrResult.confidence < 30 && data.ocrResult.method !== "manual") {
         setManualMode(true);
         setManualData({
@@ -200,7 +196,6 @@ export function DocumentUploader({
 
       setStepIdx(STEPS.length - 1);
       setProgressPct(100);
-
       setResults(prev => [data, ...prev]);
       setManualMode(false);
 
@@ -215,7 +210,7 @@ export function DocumentUploader({
       } else {
         setError(err instanceof Error ? err.message : "Erreur inconnue");
       }
-      setUploading(false); // Pause on error to let user handle it
+      setUploading(false);
     } finally {
       abortRef.current = null;
     }
@@ -225,49 +220,6 @@ export function DocumentUploader({
     setResults([]);
     setBatchMessage(null);
     setError(null);
-    
-    if (files.length === 2) {
-      setUploading(true);
-      setStepIdx(0);
-      setProgressPct(0);
-
-      try {
-        const formData = new FormData();
-        formData.append("file1", files[0]);
-        formData.append("file2", files[1]);
-        formData.append("companyId", companyId);
-
-        const res = await fetch("/api/documents/upload-batch", {
-          method: "POST",
-          body: formData,
-        });
-
-        const data = await res.json();
-
-        if (!res.ok || data.erreur) {
-          if (data.code === "AMBIGUOUS_TYPE") {
-            setError("Impossible de déterminer si la facture est une vente ou un achat. Veuillez traiter les fichiers un par un ou préciser manuellement.");
-          } else {
-            setError(data.message || `Erreur serveur (${res.status})`);
-          }
-          setUploading(false);
-          return;
-        }
-
-        setResults(data.results);
-        setBatchMessage(data.message);
-        setStepIdx(STEPS.length - 1);
-        setProgressPct(100);
-        setUploading(false);
-        setFiles([]);
-        router.refresh();
-      } catch (err: any) {
-        setError(err.message || "Erreur lors du traitement groupé.");
-        setUploading(false);
-      }
-      return;
-    }
-
     processFile(0, false);
   }
 
@@ -288,15 +240,14 @@ export function DocumentUploader({
           if (fs.length > 0) handleFiles(fs);
         }}
         onClick={() => !uploading && !manualMode && inputRef.current?.click()}
-        className={`border-2 border-dashed rounded-2xl p-10 text-center transition-all ${
-          uploading
+        className={`border-2 border-dashed rounded-2xl p-10 text-center transition-all ${uploading
             ? "border-[#2d8f5e] bg-green-50/40 cursor-not-allowed"
-            : manualMode 
-            ? "border-gray-200 bg-gray-50/50 cursor-not-allowed opacity-60"
-            : dragging
-            ? "border-[#2d8f5e] bg-green-50 cursor-pointer"
-            : "border-gray-200 hover:border-[#2d8f5e] hover:bg-green-50/30 cursor-pointer"
-        }`}
+            : manualMode
+              ? "border-gray-200 bg-gray-50/50 cursor-not-allowed opacity-60"
+              : dragging
+                ? "border-[#2d8f5e] bg-green-50 cursor-pointer"
+                : "border-gray-200 hover:border-[#2d8f5e] hover:bg-green-50/30 cursor-pointer"
+          }`}
       >
         <input
           ref={inputRef}
@@ -368,7 +319,7 @@ export function DocumentUploader({
         </div>
       )}
 
-      {/* Error / Manual Mode fallback */}
+      {/* Error */}
       {error && !manualMode && (
         <div className="flex items-start gap-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
           <AlertCircle size={16} className="shrink-0 mt-0.5" />
@@ -399,7 +350,7 @@ export function DocumentUploader({
               setFiles(files.filter((_, i) => i !== currentIdx));
               setManualMode(false);
               setError(null);
-            }} className="text-red-500 hover:bg-red-100 p-2 rounded-lg" title="Ignorer ce fichier">
+            }} className="text-red-500 hover:bg-red-100 p-2 rounded-lg">
               <X size={16} />
             </button>
           </div>
@@ -407,10 +358,10 @@ export function DocumentUploader({
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-gray-700">Type de document</label>
-                <select 
+                <select
                   className="w-full text-sm border-gray-200 rounded-lg focus:ring-[#2d8f5e] focus:border-[#2d8f5e]"
                   value={manualData.type}
-                  onChange={e => setManualData({...manualData, type: e.target.value})}
+                  onChange={e => setManualData({ ...manualData, type: e.target.value })}
                 >
                   <option value="FACTURE_FOURNISSEUR">Facture Fournisseur</option>
                   <option value="FACTURE_CLIENT">Facture Client</option>
@@ -422,42 +373,42 @@ export function DocumentUploader({
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-gray-700">Date</label>
-                <input 
-                  type="date" 
+                <input
+                  type="date"
                   className="w-full text-sm border-gray-200 rounded-lg focus:ring-[#2d8f5e] focus:border-[#2d8f5e]"
                   value={manualData.date}
-                  onChange={e => setManualData({...manualData, date: e.target.value})}
+                  onChange={e => setManualData({ ...manualData, date: e.target.value })}
                 />
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-gray-700">Montant (DA)</label>
-                <input 
-                  type="number" 
+                <input
+                  type="number"
                   step="0.01"
                   placeholder="0.00"
                   className="w-full text-sm border-gray-200 rounded-lg focus:ring-[#2d8f5e] focus:border-[#2d8f5e]"
                   value={manualData.amount}
-                  onChange={e => setManualData({...manualData, amount: e.target.value})}
+                  onChange={e => setManualData({ ...manualData, amount: e.target.value })}
                 />
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-gray-700">Fournisseur / Client</label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   placeholder="Nom de l'entreprise"
                   className="w-full text-sm border-gray-200 rounded-lg focus:ring-[#2d8f5e] focus:border-[#2d8f5e]"
                   value={manualData.supplier}
-                  onChange={e => setManualData({...manualData, supplier: e.target.value})}
+                  onChange={e => setManualData({ ...manualData, supplier: e.target.value })}
                 />
               </div>
               <div className="space-y-1.5 col-span-2">
                 <label className="text-xs font-medium text-gray-700">Numéro de facture / Réf (Optionnel)</label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   placeholder="Ex: FAC-2026-001"
                   className="w-full text-sm border-gray-200 rounded-lg focus:ring-[#2d8f5e] focus:border-[#2d8f5e]"
                   value={manualData.invoiceNumber}
-                  onChange={e => setManualData({...manualData, invoiceNumber: e.target.value})}
+                  onChange={e => setManualData({ ...manualData, invoiceNumber: e.target.value })}
                 />
               </div>
             </div>
@@ -486,15 +437,14 @@ export function DocumentUploader({
       {results.length > 0 && (
         <div className="space-y-3">
           {results.map((result, idx) => (
-            <div key={idx} className={`bg-white rounded-2xl border shadow-sm p-6 space-y-4 ${
-              result.ocrResult.method === "manual" ? "border-blue-200" :
-              result.ocrResult.confidence >= 70 ? "border-green-200" : "border-orange-200"
-            }`}>
+            <div key={idx} className={`bg-white rounded-2xl border shadow-sm p-6 space-y-4 ${result.ocrResult.method === "manual" ? "border-blue-200" :
+                result.ocrResult.confidence >= 70 ? "border-green-200" : "border-orange-200"
+              }`}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <CheckCircle size={18} className={
                     result.ocrResult.method === "manual" ? "text-blue-500" :
-                    result.ocrResult.confidence >= 70 ? "text-[#2d8f5e]" : "text-orange-500"
+                      result.ocrResult.confidence >= 70 ? "text-[#2d8f5e]" : "text-orange-500"
                   } />
                   <h3 className="font-semibold text-[#0f172a]">{result.document.originalName}</h3>
                 </div>
@@ -531,7 +481,7 @@ export function DocumentUploader({
                   </p>
                   {result.ocrResult.htFromPDF && result.ocrResult.amountHT && (
                     <p className="text-[11px] text-[#64748b] mt-0.5">
-                      HT : {parseFloat(result.ocrResult.amountHT).toLocaleString('fr-DZ', {minimumFractionDigits: 2})} DA &nbsp;·&nbsp; TVA ({result.ocrResult.tvaRate ?? "19%"}) : {result.ocrResult.amountTVA ? parseFloat(result.ocrResult.amountTVA).toLocaleString('fr-DZ', {minimumFractionDigits: 2}) : '—'} DA
+                      HT : {parseFloat(result.ocrResult.amountHT).toLocaleString('fr-DZ', { minimumFractionDigits: 2 })} DA &nbsp;·&nbsp; TVA ({result.ocrResult.tvaRate ?? "19%"}) : {result.ocrResult.amountTVA ? parseFloat(result.ocrResult.amountTVA).toLocaleString('fr-DZ', { minimumFractionDigits: 2 }) : '—'} DA
                     </p>
                   )}
                 </div>
