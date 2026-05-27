@@ -2,7 +2,7 @@
 
 import { useRef, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Upload, FileText, X, CheckCircle, AlertCircle, Zap, Brain, Eye, Cpu, Edit3, Layers, Receipt, CreditCard } from "lucide-react";
+import { Upload, FileText, X, CheckCircle, AlertCircle, Zap, Brain, Eye, Cpu, Edit3, Layers, Receipt, CreditCard, Check, Edit2, Loader2 } from "lucide-react";
 
 interface UploaderT {
   drop: string;
@@ -110,6 +110,49 @@ export function DocumentUploader({
   const [batchResult, setBatchResult] = useState<BatchResult | null>(null);
   const [batchMessage, setBatchMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const [editingSupplierId, setEditingSupplierId] = useState<string | null>(null);
+  const [editingSupplierValue, setEditingSupplierValue] = useState("");
+  const [isSavingSupplier, setIsSavingSupplier] = useState(false);
+
+  async function handleSupplierUpdate(docId: string, isBatch: boolean) {
+    if (!editingSupplierValue.trim()) return;
+    setIsSavingSupplier(true);
+    try {
+      const res = await fetch("/api/documents/supplier", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ documentId: docId, supplier: editingSupplierValue }),
+      });
+      if (!res.ok) throw new Error("Erreur");
+      
+      const updatedSupplier = editingSupplierValue.trim();
+
+      if (isBatch && batchResult) {
+        const newResults = [...batchResult.results] as [BatchUploadSubResult, BatchUploadSubResult];
+        const idx = newResults.findIndex(r => r.document.id === docId);
+        if (idx !== -1) {
+          newResults[idx] = {
+            ...newResults[idx],
+            ocrResult: { ...newResults[idx].ocrResult, supplier: updatedSupplier }
+          };
+          setBatchResult({ ...batchResult, results: newResults });
+        }
+      } else {
+        setResults(results.map(r => 
+          r.document.id === docId 
+            ? { ...r, ocrResult: { ...r.ocrResult, supplier: updatedSupplier } }
+            : r
+        ));
+      }
+      setEditingSupplierId(null);
+    } catch (err) {
+      console.error(err);
+      alert("Erreur lors de la modification.");
+    } finally {
+      setIsSavingSupplier(false);
+    }
+  }
 
   const [manualMode, setManualMode] = useState(false);
   const [manualData, setManualData] = useState({
@@ -607,9 +650,40 @@ export function DocumentUploader({
                       <p className="text-[10px] text-[#64748b] uppercase tracking-wide mb-0.5">
                         {isFacture ? (doc.sous_type === "vente" ? "Client" : "Fournisseur") : "Tiers"}
                       </p>
-                      <p className={`text-xs font-semibold ${supplier === "Inconnu" || !supplier ? "text-[#94a3b8] italic" : "text-[#0f172a]"}`}>
-                        {supplier || "Inconnu"}
-                      </p>
+                      {editingSupplierId === sub?.document?.id ? (
+                        <div className="flex items-center gap-1 mt-0.5">
+                          <input 
+                            type="text" 
+                            autoFocus
+                            value={editingSupplierValue}
+                            onChange={e => setEditingSupplierValue(e.target.value)}
+                            onKeyDown={e => e.key === "Enter" && handleSupplierUpdate(sub!.document.id, true)}
+                            className="text-xs font-semibold border rounded px-1.5 py-0.5 w-full outline-none focus:border-blue-500"
+                            disabled={isSavingSupplier}
+                          />
+                          <button onClick={() => handleSupplierUpdate(sub!.document.id, true)} disabled={isSavingSupplier} className="p-1 text-green-600 hover:bg-green-50 rounded">
+                            {isSavingSupplier ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+                          </button>
+                          <button onClick={() => setEditingSupplierId(null)} disabled={isSavingSupplier} className="p-1 text-red-500 hover:bg-red-50 rounded">
+                            <X size={12} />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1 mt-0.5 group">
+                          <p className={`text-xs font-semibold ${supplier === "Inconnu" || !supplier ? "text-[#94a3b8] italic" : "text-[#0f172a]"}`}>
+                            {supplier || "Inconnu"}
+                          </p>
+                          {sub?.document?.id && (
+                            <button 
+                              onClick={() => { setEditingSupplierId(sub.document.id); setEditingSupplierValue(supplier !== "Inconnu" ? supplier : ""); }}
+                              className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-blue-500 transition-opacity"
+                              title="Modifier"
+                            >
+                              <Edit2 size={10} />
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
                     <div>
                       <p className="text-[10px] text-[#64748b] uppercase tracking-wide mb-0.5">Référence</p>
@@ -740,9 +814,38 @@ export function DocumentUploader({
                   <p className="text-[10px] text-[#64748b] uppercase tracking-wide mb-1">
                     {result.ocrResult.type === "FACTURE_CLIENT" ? "Client" : result.ocrResult.type === "FACTURE_FOURNISSEUR" ? "Fournisseur" : "Tiers"}
                   </p>
-                  <p className={`text-sm font-medium ${!result.ocrResult.supplier || result.ocrResult.supplier === "Inconnu" ? "text-[#94a3b8] italic" : "text-[#0f172a]"}`}>
-                    {result.ocrResult.supplier || "Inconnu"}
-                  </p>
+                  {editingSupplierId === result.document.id ? (
+                    <div className="flex items-center gap-1 mt-0.5">
+                      <input 
+                        type="text" 
+                        autoFocus
+                        value={editingSupplierValue}
+                        onChange={e => setEditingSupplierValue(e.target.value)}
+                        onKeyDown={e => e.key === "Enter" && handleSupplierUpdate(result.document.id, false)}
+                        className="text-sm font-medium border rounded px-2 py-0.5 w-full outline-none focus:border-blue-500"
+                        disabled={isSavingSupplier}
+                      />
+                      <button onClick={() => handleSupplierUpdate(result.document.id, false)} disabled={isSavingSupplier} className="p-1 text-green-600 hover:bg-green-50 rounded">
+                        {isSavingSupplier ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                      </button>
+                      <button onClick={() => setEditingSupplierId(null)} disabled={isSavingSupplier} className="p-1 text-red-500 hover:bg-red-50 rounded">
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1 mt-0.5 group">
+                      <p className={`text-sm font-medium ${!result.ocrResult.supplier || result.ocrResult.supplier === "Inconnu" ? "text-[#94a3b8] italic" : "text-[#0f172a]"}`}>
+                        {result.ocrResult.supplier || "Inconnu"}
+                      </p>
+                      <button 
+                        onClick={() => { setEditingSupplierId(result.document.id); setEditingSupplierValue(result.ocrResult.supplier !== "Inconnu" ? result.ocrResult.supplier : ""); }}
+                        className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-blue-500 transition-opacity"
+                        title="Modifier"
+                      >
+                        <Edit2 size={12} />
+                      </button>
+                    </div>
+                  )}
                 </div>
                 <div>
                   <p className="text-[10px] text-[#64748b] uppercase tracking-wide mb-1">Référence</p>
