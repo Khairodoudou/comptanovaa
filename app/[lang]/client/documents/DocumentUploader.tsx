@@ -370,13 +370,13 @@ export function DocumentUploader({
 
   const docTypeLabel = (type: string) => {
     const map: Record<string, string> = {
-      FACTURE_CLIENT: "FACTURE CLIENT",
-      FACTURE_FOURNISSEUR: "FACTURE FOURNISSEUR",
-      CHEQUE: "CHÈQUE",
-      RELEVE_BANCAIRE: "RELEVÉ BANCAIRE",
-      BON_LIVRAISON: "BON DE LIVRAISON",
-      BON_RECEPTION: "BON DE RÉCEPTION",
-      AUTRE: "AUTRE",
+      FACTURE_CLIENT: "Facture Client",
+      FACTURE_FOURNISSEUR: "Facture Fournisseur",
+      CHEQUE: "Chèque",
+      RELEVE_BANCAIRE: "Relevé Bancaire",
+      BON_LIVRAISON: "Bon de Livraison",
+      BON_RECEPTION: "Bon de Réception",
+      AUTRE: "Autre",
     };
     return map[type] ?? type.replace(/_/g, " ");
   };
@@ -870,7 +870,7 @@ export function DocumentUploader({
                 </div>
                 <div>
                   <p className="text-[10px] text-[#64748b] uppercase tracking-wide mb-1">{t.detected_type}</p>
-                  <p className="text-sm font-medium text-[#0f172a]">{result.ocrResult.type.replace(/_/g, " ")}</p>
+                  <p className="text-sm font-medium text-[#0f172a]">{docTypeLabel(result.ocrResult.type)}</p>
                 </div>
               </div>
 
