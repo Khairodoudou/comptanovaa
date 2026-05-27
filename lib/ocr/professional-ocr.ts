@@ -26,7 +26,8 @@ function extractFromCsv(content: string): OcrResult {
 export async function runOcr(
   buffer: Buffer,
   filename: string,
-  mimeType: string
+  mimeType: string,
+  companyName: string = ""
 ): Promise<OcrResult> {
   const startMs = Date.now();
 
@@ -71,7 +72,7 @@ export async function runOcr(
     throw new Error("OCR_FAILED: Aucun texte détecté.");
   }
 
-  const extracted = extractDocumentData(rawText, filename);
+  const extracted = extractDocumentData(rawText, filename, companyName);
 
   return {
     rawText,

@@ -90,7 +90,7 @@ export async function POST(req: NextRequest) {
 
   if (!manualOverride) {
     try {
-      const fullResult = await runOcr(buffer, file.name, file.type);
+      const fullResult = await runOcr(buffer, file.name, file.type, company.name);
       // Separate extracted data (OCR fields) from the processing metadata
       extracted = fullResult.extracted as typeof extracted;
       ocrResult = {

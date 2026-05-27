@@ -55,7 +55,7 @@ export async function processBatch(input: BatchInput): Promise<BatchResponse> {
   const ocrResults = await Promise.all(
     input.documents.map(async (doc) => {
       try {
-        const res = await runOcr(doc.buffer, doc.filename, doc.mimeType);
+        const res = await runOcr(doc.buffer, doc.filename, doc.mimeType, input.companyName);
         return res;
       } catch (e: any) {
         throw new Error(`OCR_FAILED: ${e.message}`);

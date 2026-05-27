@@ -221,25 +221,40 @@ const SUPPLIER_PATTERNS: RegExp[] = [
   /(?:A\s*L['']ORDRE\s*DE|لأمر)\s*:?\s*([^\n\r,]{3,80})/i,
 ];
 
-// FIX 2: Supplier cleanup — remove cheque-specific trailing text
+// FIX 2: Supplier cleanup — remove cheque-specific trailing text and table headers
 function cleanSupplierCandidate(raw: string): string {
   return raw
     .trim()
     .replace(/\s+/g, ' ')
+    // Stop at table headers / column titles
+    .replace(/\s*(N[°º]\s*D[eé]signation|D[eé]signation|Quantit[eé]|Prix\s*Unit|Montant|Qt[eé]|Unit[eé]|P\.U\.|Réf\.?|Référence|Libellé|Description|Article|Code)(\s|$).*/i, '')
+    // Stop at horizontal separators
+    .replace(/\s*-{3,}.*/g, '')
+    // Stop at cheque-specific phrases
     .replace(/\s*(Payable\s*[àa]|A\s*l['']ordre|payez|contre\s*ce\s*ch[eè]que|prière|zone\s*blanche).*/i, '')
-    .replace(/\s*(agence|bp|av\.|avenue|rue|cité|cite)\s*.*/i, '')
+    // Stop at address-like words
+    .replace(/\s*(agence|bp|av\.|avenue|rue|cité|cite|wilaya|commune|BP\s*\d).*/i, '')
+    // Remove leftover punctuation at end
+    .replace(/[,;:\-–—]+$/, '')
     .substring(0, 80)
     .trim();
 }
 
-function parseSupplier(text: string): string | null {
+function parseSupplier(text: string, companyName: string = ""): string | null {
   const lines = text.split(/[\n\r]+/).map((l) => l.trim()).filter(Boolean);
+  
+  const isUserCompany = (c: string) => {
+    if (!companyName || companyName.length < 3) return false;
+    const cName = companyName.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const cand = c.toLowerCase().replace(/[^a-z0-9]/g, '');
+    return cand.includes(cName) || cName.includes(cand);
+  };
 
   for (const pattern of SUPPLIER_PATTERNS) {
     const m = text.match(pattern);
     if (m?.[1]) {
       const candidate = cleanSupplierCandidate(m[1]);
-      if (candidate.length >= 3) return candidate;
+      if (candidate.length >= 3 && !isUserCompany(candidate)) return candidate;
     }
   }
   for (const line of lines.slice(0, 15)) {
@@ -259,7 +274,10 @@ function parseSupplier(text: string): string | null {
   for (let i = 0; i < lines.length - 1; i++) {
     if (/^(DE|FROM|PAR|ÉMIS PAR|EMIS PAR|VENDEUR)\s*:?$/i.test(lines[i])) {
       const next = lines[i + 1];
-      if (next && next.length >= 3 && !/^\d+$/.test(next)) return cleanSupplierCandidate(next);
+      if (next && next.length >= 3 && !/^\d+$/.test(next)) {
+        const cand = cleanSupplierCandidate(next);
+        if (cand.length >= 3 && !isUserCompany(cand)) return cand;
+      }
     }
   }
   for (const line of lines.slice(0, 10)) {
@@ -267,7 +285,7 @@ function parseSupplier(text: string): string | null {
       /^[A-ZÀ-Ü][a-zà-ü]+(\s[A-ZÀ-Ü][a-zà-ü]+){1,3}$/.test(line) &&
       !/facture|invoice|total|date|montant|description|bon|livraison|devis|payez|cheque|chèque|banque/i.test(line)
     ) {
-      return line;
+      if (!isUserCompany(line)) return line;
     }
   }
   return null;
@@ -441,14 +459,56 @@ const TYPE_KEYWORDS: Array<{ type: DocumentType; keywords: string[] }> = [
   },
 ];
 
-function detectDocumentType(text: string, filename: string): DocumentType {
+function detectDocumentType(text: string, filename: string, companyName: string = ""): DocumentType {
   const haystack = `${text} ${filename}`.toLowerCase();
+  let baseType: DocumentType = "AUTRE";
   for (const { type, keywords } of TYPE_KEYWORDS) {
     if (keywords.some((kw) => haystack.includes(kw.toLowerCase()))) {
-      return type;
+      baseType = type;
+      break;
     }
   }
-  return "AUTRE";
+
+  // Refine ambiguous "facture" matches
+  if (baseType === "FACTURE_CLIENT" && companyName && companyName.length >= 3) {
+    const cName = companyName.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const lines = text.split(/[\n\r]+/).map(l => l.trim().toLowerCase());
+    
+    const recipientMarkers = ["doit", "client", "destinataire", "acheteur", "facturé à", "facture a"];
+    let isUserRecipient = false;
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (recipientMarkers.some(m => line.includes(m))) {
+        // Check this line and the next line
+        const combined = line + (lines[i+1] || "");
+        if (combined.replace(/[^a-z0-9]/g, '').includes(cName)) {
+          isUserRecipient = true;
+          break;
+        }
+      }
+    }
+    
+    let isUserEmitter = false;
+    for (const line of lines.slice(0, 5)) {
+      if (line.replace(/[^a-z0-9]/g, '').includes(cName)) {
+        isUserEmitter = true;
+        break;
+      }
+    }
+    
+    if (isUserRecipient) return "FACTURE_FOURNISSEUR";
+    if (isUserEmitter) return "FACTURE_CLIENT";
+    
+    // Default to purchase invoice if ambiguous (most common case for manual uploads)
+    return "FACTURE_FOURNISSEUR";
+  }
+
+  // If no company name is provided, default generic invoices to FOURNISSEUR
+  if (baseType === "FACTURE_CLIENT" && haystack.includes("facture") && !haystack.includes("facture client")) {
+    return "FACTURE_FOURNISSEUR";
+  }
+
+  return baseType;
 }
 
 function scoreConfidence(data: Omit<ExtractedData, "confidence">): "high" | "medium" | "low" {
@@ -466,14 +526,15 @@ function scoreConfidence(data: Omit<ExtractedData, "confidence">): "high" | "med
 
 export function extractDocumentData(
   rawText: string,
-  filename: string = ""
+  filename: string = "",
+  companyName: string = ""
 ): ExtractedData {
   const date = parseDate(rawText);
   const amount = parseAmount(rawText);
-  const supplier = parseSupplier(rawText);
+  const supplier = parseSupplier(rawText, companyName);
   const invoiceNumber = parseInvoiceNumber(rawText);
   const chequeNumber = parseChequeNumber(rawText);
-  let documentType = detectDocumentType(rawText, filename);
+  let documentType = detectDocumentType(rawText, filename, companyName);
 
   if (documentType === "AUTRE") {
     if (invoiceNumber) {
