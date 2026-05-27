@@ -64,6 +64,7 @@ export default async function ClientDocumentsPage({
                 {[
                   d.documents.filename,
                   d.documents.type,
+                  "Fournisseur / Réf.",
                   d.documents.size,
                   d.documents.status,
                   d.documents.date,
@@ -80,7 +81,18 @@ export default async function ClientDocumentsPage({
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {documents.map((doc: any) => (
+              {documents.map((doc: any) => {
+                let supplier = "Inconnu";
+                let ref = "";
+                try {
+                  if (doc.ocrData) {
+                    const data = JSON.parse(doc.ocrData);
+                    supplier = data?.extracted?.supplier || "Inconnu";
+                    ref = data?.extracted?.invoiceNumber || data?.extracted?.chequeNumber || "";
+                  }
+                } catch (e) {}
+
+                return (
                 <tr key={doc.id} className="hover:bg-[#f8fafc] transition-colors">
                   <td className="px-5 py-3.5">
                     <p className="font-medium text-[#0f172a] truncate max-w-[180px]">
@@ -91,6 +103,14 @@ export default async function ClientDocumentsPage({
                     <span className="text-xs text-[#64748b]">
                       {doc.type.replace(/_/g, " ")}
                     </span>
+                  </td>
+                  <td className="px-5 py-3.5">
+                    <div className="flex flex-col">
+                      <span className={`text-xs font-medium ${supplier === "Inconnu" ? "text-[#94a3b8] italic" : "text-[#0f172a]"}`}>
+                        {supplier}
+                      </span>
+                      {ref && <span className="text-[10px] text-[#64748b]">{ref}</span>}
+                    </div>
                   </td>
                   <td className="px-5 py-3.5 text-xs text-[#64748b] whitespace-nowrap">
                     {(doc.size / 1024).toFixed(0)} Ko
@@ -124,7 +144,8 @@ export default async function ClientDocumentsPage({
                     />
                   </td>
                 </tr>
-              ))}
+              );
+              })}
             </tbody>
           </table>
         )}

@@ -2,7 +2,7 @@
 
 import { useRef, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Upload, FileText, X, CheckCircle, AlertCircle, Zap, Brain, Eye, Cpu, Edit3 } from "lucide-react";
+import { Upload, FileText, X, CheckCircle, AlertCircle, Zap, Brain, Eye, Cpu, Edit3, Layers, Receipt, CreditCard } from "lucide-react";
 
 interface UploaderT {
   drop: string;
@@ -29,6 +29,7 @@ interface OcrResult {
   htFromPDF?: boolean;
   tvaRate?: string;
   supplier: string;
+  reference?: string;
   type: string;
   entryDebit: string;
   entryCredit: string;
@@ -50,15 +51,45 @@ interface UploadResult {
   };
 }
 
+// ── Batch result types ────────────────────────────────────────────────────────
+interface BatchDocDetecte {
+  nom_fichier: string;
+  type: "facture" | "cheque";
+  sous_type: "vente" | "achat" | null;
+}
+interface BatchEcritureCheque {
+  compte: string;
+  sens: "debit" | "credit";
+  montant: number;
+  libelle: string;
+}
+interface BatchUploadSubResult {
+  document: { id: string; originalName: string; type: string };
+  ocrResult: OcrResult;
+  journalEntry: { id: string; description: string; debitAccount: string; creditAccount: string; amount: number } | null;
+}
+interface BatchResult {
+  documents_detectes: BatchDocDetecte[];
+  scenario_applique: "1" | "2";
+  ecritures_cheque: BatchEcritureCheque[];
+  facture_modifiee: false;
+  message: string;
+  results: [BatchUploadSubResult, BatchUploadSubResult];
+}
+interface BatchError {
+  erreur: true;
+  message: string;
+}
+
 const STEPS = [
-  { icon: Upload, label: "Envoi du fichier...", duration: 800 },
-  { icon: Cpu, label: "Prétraitement de l'image...", duration: 1500 },
+  { icon: Upload, label: "Envoi des fichiers...", duration: 800 },
+  { icon: Cpu, label: "Prétraitement des images...", duration: 1500 },
   { icon: Brain, label: "Analyse OCR (Mistral)...", duration: 0 },
-  { icon: Eye, label: "Extraction des données...", duration: 600 },
-  { icon: Zap, label: "Création de l'écriture...", duration: 400 },
+  { icon: Eye, label: "Extraction et classification...", duration: 600 },
+  { icon: Zap, label: "Génération des écritures...", duration: 400 },
 ];
 
-const UPLOAD_TIMEOUT_MS = 90_000;
+const UPLOAD_TIMEOUT_MS = 120_000;
 
 export function DocumentUploader({
   companyId,
@@ -76,6 +107,7 @@ export function DocumentUploader({
   const [currentIdx, setCurrentIdx] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [results, setResults] = useState<UploadResult[]>([]);
+  const [batchResult, setBatchResult] = useState<BatchResult | null>(null);
   const [batchMessage, setBatchMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -92,9 +124,13 @@ export function DocumentUploader({
   const [elapsed, setElapsed] = useState(0);
   const [progressPct, setProgressPct] = useState(0);
 
+  // Detect batch mode: exactly 2 files
+  const isBatchMode = files.length === 2;
+
   function handleFiles(newFiles: File[]) {
     setFiles(prev => [...prev, ...newFiles]);
     setResults([]);
+    setBatchResult(null);
     setError(null);
     setManualMode(false);
   }
@@ -131,6 +167,58 @@ export function DocumentUploader({
     };
   }, [uploading, currentIdx]);
 
+  // ── Batch upload (exactly 2 files) ───────────────────────────────────────
+  async function processBatch() {
+    setUploading(true);
+    setError(null);
+    setBatchResult(null);
+
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const timeoutId = setTimeout(() => controller.abort(), UPLOAD_TIMEOUT_MS);
+
+    try {
+      const formData = new FormData();
+      formData.append("file1", files[0]);
+      formData.append("file2", files[1]);
+      formData.append("companyId", companyId);
+
+      const res = await fetch("/api/documents/upload-batch", {
+        method: "POST",
+        body: formData,
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      const data = await res.json();
+
+      if (!res.ok || data.erreur) {
+        throw new Error(data.message ?? `Erreur serveur (${res.status})`);
+      }
+
+      setStepIdx(STEPS.length - 1);
+      setProgressPct(100);
+      setBatchResult(data as BatchResult);
+      setFiles([]);
+
+      setTimeout(() => {
+        router.refresh();
+      }, 1500);
+    } catch (err: unknown) {
+      clearTimeout(timeoutId);
+      if (err instanceof DOMException && err.name === "AbortError") {
+        setError("Délai dépassé (120s). L'OCR prend trop de temps.");
+      } else {
+        setError(err instanceof Error ? err.message : "Erreur inconnue");
+      }
+    } finally {
+      setUploading(false);
+      abortRef.current = null;
+    }
+  }
+
+  // ── Single file upload ───────────────────────────────────────────────────
   async function processFile(idx: number, isManualSubmit = false) {
     if (idx >= files.length) {
       setUploading(false);
@@ -218,13 +306,40 @@ export function DocumentUploader({
 
   async function startUpload() {
     setResults([]);
+    setBatchResult(null);
     setBatchMessage(null);
     setError(null);
-    processFile(0, false);
+    if (isBatchMode) {
+      processBatch();
+    } else {
+      processFile(0, false);
+    }
   }
 
   const currentStep = STEPS[Math.min(stepIdx, STEPS.length - 1)];
   const StepIcon = currentStep.icon;
+
+  // ── Batch scenario label ─────────────────────────────────────────────────
+  const scenarioLabel = (scenario: "1" | "2") =>
+    scenario === "1"
+      ? "Scénario 1 — Facture de vente + Chèque"
+      : "Scénario 2 — Facture d'achat + Chèque";
+
+  const docTypeLabel = (type: string) => {
+    const map: Record<string, string> = {
+      FACTURE_CLIENT: "FACTURE CLIENT",
+      FACTURE_FOURNISSEUR: "FACTURE FOURNISSEUR",
+      CHEQUE: "CHÈQUE",
+      RELEVE_BANCAIRE: "RELEVÉ BANCAIRE",
+      BON_LIVRAISON: "BON DE LIVRAISON",
+      BON_RECEPTION: "BON DE RÉCEPTION",
+      AUTRE: "AUTRE",
+    };
+    return map[type] ?? type.replace(/_/g, " ");
+  };
+
+  const formatAmount = (n: number | string) =>
+    parseFloat(String(n)).toLocaleString("fr-DZ", { minimumFractionDigits: 2 });
 
   return (
     <div className="space-y-4">
@@ -266,11 +381,27 @@ export function DocumentUploader({
           {t.drop} <span className="text-[#2d8f5e] underline">{t.browse}</span>
         </p>
         <p className="text-xs text-[#64748b] mt-1">{t.hint}</p>
+        {files.length === 0 && (
+          <div className="mt-4 flex items-center justify-center gap-3">
+            <span className="flex items-center gap-1.5 text-[11px] text-[#64748b] bg-[#f1f5f9] px-3 py-1.5 rounded-lg">
+              <Layers size={12} /> Lot 2 fichiers → traitement automatique facture + chèque
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Selected files + upload button */}
       {files.length > 0 && !uploading && !manualMode && (
         <div className="space-y-2">
+          {/* Batch mode banner */}
+          {isBatchMode && (
+            <div className="flex items-center gap-2.5 px-4 py-2.5 bg-blue-50 border border-blue-200 rounded-xl">
+              <Layers size={16} className="text-[#1a6fbf] shrink-0" />
+              <p className="text-xs text-[#1a6fbf] font-medium">
+                Mode lot détecté — 2 fichiers : traitement automatique Facture + Chèque
+              </p>
+            </div>
+          )}
           <div className="max-h-48 overflow-y-auto space-y-2 pr-2">
             {files.map((f, i) => (
               <div key={i} className="bg-white rounded-xl border border-gray-100 shadow-sm p-3 flex items-center gap-3">
@@ -292,7 +423,8 @@ export function DocumentUploader({
               onClick={() => startUpload()}
               className="flex items-center gap-2 px-5 py-2.5 bg-[#2d8f5e] hover:bg-[#278054] text-white rounded-xl text-sm font-medium transition-all"
             >
-              <Upload size={16} /> Envoyer {files.length > 1 ? `${files.length} fichiers` : 'le fichier'}
+              <Upload size={16} />
+              {isBatchMode ? "Traiter le lot (2 fichiers)" : `Envoyer ${files.length > 1 ? `${files.length} fichiers` : "le fichier"}`}
             </button>
           </div>
         </div>
@@ -305,7 +437,10 @@ export function DocumentUploader({
             <div className="flex items-center gap-2">
               <StepIcon size={16} className="text-[#1a6fbf] animate-pulse" />
               <p className="text-sm font-medium text-[#0f172a]">
-                {files.length > 1 && <span className="text-[#64748b] mr-1">[{currentIdx + 1}/{files.length}]</span>}
+                {isBatchMode
+                  ? <span className="text-[#64748b] mr-1">[Lot 2 fichiers]</span>
+                  : files.length > 1 && <span className="text-[#64748b] mr-1">[{currentIdx + 1}/{files.length}]</span>
+                }
                 {currentStep.label}
               </p>
             </div>
@@ -315,7 +450,11 @@ export function DocumentUploader({
             <div className="absolute inset-y-0 left-0 bg-gradient-to-r from-[#1a6fbf] to-[#2d8f5e] rounded-full transition-all duration-500" style={{ width: `${progressPct}%` }} />
             <div className="absolute inset-y-0 w-16 bg-white/30 rounded-full animate-[shimmer_1.5s_ease-in-out_infinite]" style={{ left: `${Math.max(0, progressPct - 15)}%` }} />
           </div>
-          <p className="text-[11px] text-[#64748b] text-center">L'analyse OCR peut prendre 10–30 secondes par fichier</p>
+          <p className="text-[11px] text-[#64748b] text-center">
+            {isBatchMode
+              ? "Analyse OCR des 2 documents en parallèle — peut prendre 20–60 secondes"
+              : "L'analyse OCR peut prendre 10–30 secondes par fichier"}
+          </p>
         </div>
       )}
 
@@ -433,7 +572,167 @@ export function DocumentUploader({
         </div>
       )}
 
-      {/* OCR Results List */}
+      {/* ── BATCH RESULT ────────────────────────────────────────────────────── */}
+      {batchResult && (
+        <div className="space-y-3">
+          {/* Scenario Header */}
+          <div className="bg-gradient-to-r from-[#1a6fbf] to-[#1558a0] rounded-2xl p-5 text-white shadow-md">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center shrink-0">
+                  <Layers size={20} className="text-white" />
+                </div>
+                <div>
+                  <p className="text-[10px] text-blue-200 uppercase tracking-widest mb-0.5">Lot traité avec succès</p>
+                  <h3 className="text-base font-bold text-white">{scenarioLabel(batchResult.scenario_applique)}</h3>
+                  <p className="text-xs text-blue-100 mt-0.5">{batchResult.message}</p>
+                </div>
+              </div>
+              <CheckCircle size={22} className="text-green-300 shrink-0 mt-0.5" />
+            </div>
+          </div>
+
+          {/* Documents detected */}
+          <div className="grid grid-cols-2 gap-3">
+            {batchResult.documents_detectes.map((doc, i) => {
+              const sub = batchResult.results[
+                batchResult.results.findIndex(r => r.document.originalName === doc.nom_fichier) !== -1
+                  ? batchResult.results.findIndex(r => r.document.originalName === doc.nom_fichier)
+                  : i
+              ];
+              const isFacture = doc.type === "facture";
+              const confidence = sub?.ocrResult?.confidence ?? 0;
+              const supplier = sub?.ocrResult?.supplier ?? "—";
+              const reference = sub?.ocrResult?.reference ?? sub?.journalEntry?.description?.split("—")?.[0]?.trim();
+              const amountTTC = sub?.ocrResult?.amountTTC ?? sub?.ocrResult?.amount ?? "0";
+              const date = sub?.ocrResult?.date ?? "—";
+              const debitAcc = sub?.journalEntry?.debitAccount ?? "—";
+              const creditAcc = sub?.journalEntry?.creditAccount ?? "—";
+              const entryAmount = sub?.journalEntry?.amount ?? 0;
+
+              return (
+                <div key={i} className={`bg-white rounded-2xl border shadow-sm p-5 space-y-3.5 ${confidence >= 70 ? "border-green-200" : "border-orange-200"}`}>
+                  {/* Card header */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isFacture ? "bg-blue-50" : "bg-amber-50"}`}>
+                        {isFacture ? <Receipt size={16} className="text-[#1a6fbf]" /> : <CreditCard size={16} className="text-amber-600" />}
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-[#64748b] uppercase tracking-wide leading-none mb-0.5">
+                          {isFacture ? (doc.sous_type === "vente" ? "Facture de vente" : "Facture d'achat") : "Chèque"}
+                        </p>
+                        <p className="text-xs font-semibold text-[#0f172a] truncate max-w-[120px]" title={doc.nom_fichier}>
+                          {doc.nom_fichier}
+                        </p>
+                      </div>
+                    </div>
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium border ${confidence >= 70 ? "bg-green-100 text-green-700 border-green-200" : "bg-orange-100 text-orange-700 border-orange-200"}`}>
+                      {confidence >= 70 ? `Lecture réussie ${confidence}%` : `À vérifier ${confidence}%`}
+                    </span>
+                  </div>
+
+                  {/* Fields */}
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div>
+                      <p className="text-[10px] text-[#64748b] uppercase tracking-wide mb-0.5">{t.supplier}</p>
+                      <p className={`text-xs font-semibold ${supplier === "Inconnu" || !supplier ? "text-[#94a3b8] italic" : "text-[#0f172a]"}`}>
+                        {supplier || "Inconnu"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-[#64748b] uppercase tracking-wide mb-0.5">Référence</p>
+                      <p className={`text-xs font-semibold ${!reference ? "text-[#94a3b8] italic" : "text-[#0f172a]"}`}>
+                        {reference || "—"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-[#64748b] uppercase tracking-wide mb-0.5">{t.date}</p>
+                      <p className="text-xs font-semibold text-[#0f172a]">{date}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-[#64748b] uppercase tracking-wide mb-0.5">Montant TTC</p>
+                      <p className="text-sm font-bold text-[#2d8f5e]">{formatAmount(amountTTC)} DA</p>
+                    </div>
+                  </div>
+
+                  {/* Type badge */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] px-2 py-1 bg-[#f1f5f9] text-[#475569] rounded-lg font-medium">
+                      {docTypeLabel(sub?.document?.type ?? doc.type.toUpperCase())}
+                    </span>
+                    {isFacture && (
+                      <span className="text-[10px] text-[#64748b] italic">Écritures inchangées</span>
+                    )}
+                  </div>
+
+                  {/* Accounting entry */}
+                  <div className="bg-[#f8fafc] rounded-xl p-3 grid grid-cols-3 gap-3 border border-gray-100">
+                    <div>
+                      <p className="text-[10px] text-[#64748b] uppercase tracking-wide mb-0.5">{t.debit}</p>
+                      <p className="font-mono text-xs font-bold text-[#0f172a]">{debitAcc}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-[#64748b] uppercase tracking-wide mb-0.5">{t.credit}</p>
+                      <p className="font-mono text-xs font-bold text-[#0f172a]">{creditAcc}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-[#64748b] uppercase tracking-wide mb-0.5">{t.amount}</p>
+                      <p className="text-xs font-semibold text-[#0f172a]">{formatAmount(entryAmount)} DA</p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Cheque entries detail */}
+          <div className="bg-white rounded-2xl border border-amber-200 shadow-sm p-5 space-y-3">
+            <div className="flex items-center gap-2 mb-1">
+              <CreditCard size={16} className="text-amber-600" />
+              <p className="text-sm font-bold text-[#0f172a]">Écritures générées pour le chèque</p>
+              <span className="text-[10px] px-2 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-full font-medium ml-auto">
+                Scénario {batchResult.scenario_applique}
+              </span>
+            </div>
+            <div className="overflow-hidden rounded-xl border border-gray-100">
+              <table className="w-full text-xs">
+                <thead className="bg-[#f8fafc]">
+                  <tr>
+                    <th className="py-2 px-3 text-left font-semibold text-[#475569] border-r border-gray-100">Compte</th>
+                    <th className="py-2 px-3 text-center font-semibold text-[#475569] border-r border-gray-100">Sens</th>
+                    <th className="py-2 px-3 text-right font-semibold text-[#475569] border-r border-gray-100">Montant (DA)</th>
+                    <th className="py-2 px-3 text-left font-semibold text-[#475569]">Libellé</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {batchResult.ecritures_cheque.map((e, i) => (
+                    <tr key={i} className="hover:bg-[#f8fafc] transition-colors">
+                      <td className="py-2 px-3 border-r border-gray-100">
+                        <span className={`font-mono font-bold px-1.5 py-0.5 rounded text-xs ${e.sens === "debit" ? "bg-blue-50 text-[#1a6fbf]" : "bg-purple-50 text-purple-700"}`}>
+                          {e.compte}
+                        </span>
+                      </td>
+                      <td className="py-2 px-3 text-center border-r border-gray-100">
+                        <span className={`font-semibold uppercase text-[10px] px-2 py-0.5 rounded-full ${e.sens === "debit" ? "bg-blue-50 text-[#1a6fbf]" : "bg-purple-50 text-purple-700"}`}>
+                          {e.sens}
+                        </span>
+                      </td>
+                      <td className="py-2 px-3 text-right border-r border-gray-100 font-semibold text-[#0f172a] tabular-nums">
+                        {formatAmount(e.montant)}
+                      </td>
+                      <td className="py-2 px-3 text-[#475569]">{e.libelle}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="text-[11px] text-[#64748b]">✓ {t.entry_pending}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Single-file OCR Results List */}
       {results.length > 0 && (
         <div className="space-y-3">
           {results.map((result, idx) => (
@@ -468,7 +767,9 @@ export function DocumentUploader({
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-[10px] text-[#64748b] uppercase tracking-wide mb-1">{t.supplier}</p>
-                  <p className="text-sm font-medium text-[#0f172a]">{result.ocrResult.supplier}</p>
+                  <p className={`text-sm font-medium ${!result.ocrResult.supplier || result.ocrResult.supplier === "Inconnu" ? "text-[#94a3b8] italic" : "text-[#0f172a]"}`}>
+                    {result.ocrResult.supplier || "Inconnu"}
+                  </p>
                 </div>
                 <div>
                   <p className="text-[10px] text-[#64748b] uppercase tracking-wide mb-1">{t.date}</p>
