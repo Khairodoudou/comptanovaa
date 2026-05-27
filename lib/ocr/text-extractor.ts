@@ -210,23 +210,18 @@ function parseAmount(text: string): number | null {
   return null;
 }
 
-// Labels that explicitly mark the emitter/vendor
-const EMITTER_LABEL_PATTERNS: RegExp[] = [
-  /(?:FOURNISSEUR|VENDEUR|EMETTEUR|ÉMETTEUR|DE LA PART DE|ÉMIS PAR|EMIS PAR)\s*:?\s*([^\n\r,]{3,80})/i,
-  /(?:المورد|البائع|المصدر)\s*:?\s*([^\n\r,]{3,80})/,
-  /(?:RAISON\s*SOCIALE|SOCIÉTÉ|ENTREPRISE|ETABLISSEMENT)\s*:?\s*([^\n\r,]{3,80})/i,
+const SUPPLIER_PATTERNS: RegExp[] = [
+  /(?:FOURNISSEUR|VENDEUR|EMETTEUR|ÉMETTEUR|FROM|DE LA PART DE|CLIENT|DESTINATAIRE|ACHETEUR|DOIT|FACTUR[EÉ]\s*[AÀ])\s*:?\s*([^\n\r,]{3,80})/i,
+  /(?:المورد|البائع|المصدر|الزبون|المشتري|المرسل إليه)\s*:?\s*([^\n\r,]{3,80})/,
+  /\b((?:SARL|SPA|EURL|EI|SNC|EPIC|SARL-U|SAS)\s+[A-ZÀ-Úa-zà-ú0-9\s\-&'.]{2,60})/,
+  /\b((?:S\.A\.R\.L|S\.P\.A|E\.U\.R\.L|S\.A\.S)\s+[A-ZÀ-Úa-zà-ú0-9\s\-&'.]{2,60})/,
+  /(?:RAISON\s*SOCIALE|SOCIÉTÉ|ENTREPRISE|ETABLISSEMENT|GROUPE)\s*:?\s*([^\n\r,]{3,80})/i,
   /(?:الشركة|المؤسسة)\s*:?\s*([^\n\r,]{3,80})/,
+  // FIX 2: Cheque specific — "A l'ordre de"
+  /(?:A\s*L['']ORDRE\s*DE|لأمر)\s*:?\s*([^\n\r,]{3,80})/i,
 ];
 
-// Labels that mark the RECIPIENT — must be skipped when looking for supplier
-const RECIPIENT_LINE_RE = /^(DOIT|CLIENT|DESTINATAIRE|ACHETEUR|LIVRÉ\s*[AÀ]|FACTURÉ\s*[AÀ]|BILL\s*TO|SHIP\s*TO)\s*:/i;
-
-// Noise words that are NOT company names
-const NOT_A_NAME_RE = /^(FACTURE|INVOICE|DEVIS|BON|RELEV[EÉ]|TOTAL|MONTANT|DATE|R[EÉ]F[EÉ]RENCE|HEURE|N[°O]|QUINCAILLERIE|DROGUERIE|TEL|ADRESSE|DESIGNATION|QTE|PRIX|CHIFFRE|PAYEZ|CHEQUE|CHÈQUE|BANQUE|PAYABLE|RC|NIF|MF|ART|RIB|NRC|N°RC|N°MF|N°ART|ADRESSE|WILAYA|COMMUNE|TÉLÉPHONE|TELEPHONE|FAX|EMAIL|BP|PAGE|QUINCAILLERIE\s*DROGUERIE)$/i;
-
-// Cheque / l'ordre de
-const ORDRE_DE_RE = /(?:A\s*L['']ORDRE\s*DE|À\s*L['']ORDRE\s*DE|لأمر)\s*:?\s*([^\n\r,]{3,80})/i;
-
+// FIX 2: Supplier cleanup — remove cheque-specific trailing text and table headers
 function cleanSupplierCandidate(raw: string): string {
   return raw
     .trim()
@@ -247,67 +242,50 @@ function cleanSupplierCandidate(raw: string): string {
 
 function parseSupplier(text: string, companyName: string = ""): string | null {
   const lines = text.split(/[\n\r]+/).map((l) => l.trim()).filter(Boolean);
-
-  const isUserCompany = (c: string): boolean => {
+  
+  const isUserCompany = (c: string) => {
     if (!companyName || companyName.length < 3) return false;
-    const cNorm = companyName.toLowerCase().replace(/[^a-z0-9]/g, '');
-    const cand  = c.toLowerCase().replace(/[^a-z0-9]/g, '');
-    return cand.includes(cNorm) || cNorm.includes(cand);
+    const cName = companyName.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const cand = c.toLowerCase().replace(/[^a-z0-9]/g, '');
+    return cand.includes(cName) || cName.includes(cand);
   };
 
-  const isRecipientLine = (line: string): boolean => RECIPIENT_LINE_RE.test(line);
-  const isNoiseLine = (line: string): boolean => NOT_A_NAME_RE.test(line.trim());
-
-  // ── 1. Explicit cheque payee ──────────────────────────────────────────────
-  const ordreMatch = text.match(ORDRE_DE_RE);
-  if (ordreMatch?.[1]) {
-    const cand = cleanSupplierCandidate(ordreMatch[1]);
-    if (cand.length >= 3 && !isUserCompany(cand)) return cand;
-  }
-
-  // ── 2. Explicit emitter label patterns ───────────────────────────────────
-  for (const pattern of EMITTER_LABEL_PATTERNS) {
+  for (const pattern of SUPPLIER_PATTERNS) {
     const m = text.match(pattern);
     if (m?.[1]) {
-      const cand = cleanSupplierCandidate(m[1]);
-      if (cand.length >= 3 && !isUserCompany(cand)) return cand;
+      const candidate = cleanSupplierCandidate(m[1]);
+      if (candidate.length >= 3 && !isUserCompany(candidate)) return candidate;
     }
   }
-
-  // ── 3. Legal-form company name anywhere in text ───────────────────────────
-  const legalFormRe = /\b((?:SARL|SPA|EURL|EI|SNC|EPIC|SARL-U|SAS|S\.A\.R\.L|S\.P\.A|E\.U\.R\.L)\s+[A-ZÀ-Úa-zà-ú0-9\s\-&'.]{2,60})/g;
-  let lm: RegExpExecArray | null;
-  while ((lm = legalFormRe.exec(text)) !== null) {
-    const cand = cleanSupplierCandidate(lm[1]);
-    if (cand.length >= 3 && !isUserCompany(cand)) return cand;
-  }
-
-  // ── 4. First lines of document (company header) ───────────────────────────
-  // In Algerian invoices the emitter name is always in the first 1-4 lines
-  for (const line of lines.slice(0, 5)) {
-    if (isRecipientLine(line)) break; // stop if we hit a recipient marker
-    if (isNoiseLine(line)) continue;
-    if (isUserCompany(line)) continue;
-    // Must look like a proper name: all-caps, or Title Case, length 3-80
-    if (
-      /^[A-ZÀ-Ü0-9][A-ZÀ-Üa-zà-ü0-9\s\-&'.]{2,79}$/.test(line) &&
-      line.length >= 3
-    ) {
-      const cand = cleanSupplierCandidate(line);
-      if (cand.length >= 3 && !isUserCompany(cand)) return cand;
+  for (const line of lines.slice(0, 15)) {
+    if (/\b(SARL|SPA|EURL|EI|SNC|EPIC|SARL-U|SAS)\b/i.test(line)) {
+      const idx = lines.indexOf(line);
+      return cleanSupplierCandidate(line);
     }
   }
-
-  // ── 5. Mixed-case company names in first 10 lines ─────────────────────────
-  for (const line of lines.slice(0, 10)) {
-    if (isRecipientLine(line)) continue;
-    if (isNoiseLine(line)) continue;
-    if (isUserCompany(line)) continue;
+  for (const line of lines.slice(0, 8)) {
     if (
-      /^[A-ZÀ-Ü][a-zà-ü]+(\s[A-ZÀ-Üa-zà-ü'\-]+){1,5}$/.test(line) &&
-      !/facture|invoice|total|date|montant|description|bon|livraison|devis|payez|cheque|chèque|banque/i.test(line)
+      /^[A-ZÀ-Ü0-9\s\-&'.]{4,60}$/.test(line) &&
+      !/^(FACTURE|INVOICE|DEVIS|BON|BON DE LIVRAISON|RELEV[EÉ]|TOTAL|MONTANT|DATE|R[EÉ]F[EÉ]RENCE|HEURE|N[°O]|QUINCAILLERIE|DROGUERIE|TEL|ADRESSE|DESIGNATION|QTE|PRIX|CHIFFRE|PAYEZ|CHEQUE|CHÈQUE|BANQUE|PAYABLE)$/i.test(line.trim())
     ) {
       return cleanSupplierCandidate(line);
+    }
+  }
+  for (let i = 0; i < lines.length - 1; i++) {
+    if (/^(DE|FROM|PAR|ÉMIS PAR|EMIS PAR|VENDEUR)\s*:?$/i.test(lines[i])) {
+      const next = lines[i + 1];
+      if (next && next.length >= 3 && !/^\d+$/.test(next)) {
+        const cand = cleanSupplierCandidate(next);
+        if (cand.length >= 3 && !isUserCompany(cand)) return cand;
+      }
+    }
+  }
+  for (const line of lines.slice(0, 10)) {
+    if (
+      /^[A-ZÀ-Ü][a-zà-ü]+(\s[A-ZÀ-Ü][a-zà-ü]+){1,3}$/.test(line) &&
+      !/facture|invoice|total|date|montant|description|bon|livraison|devis|payez|cheque|chèque|banque/i.test(line)
+    ) {
+      if (!isUserCompany(line)) return line;
     }
   }
   return null;
