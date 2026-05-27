@@ -117,7 +117,7 @@ export function PlanComptableClient({ companies }: { companies: Company[] }) {
               setParentAccount(e.target.value);
               if (!subAccount.startsWith(e.target.value)) setSubAccount(e.target.value + ".");
             }}
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:border-[#1a6fbf] outline-none"
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-[#0f172a] bg-white focus:border-[#1a6fbf] outline-none"
           >
             <option value="380">380 - Stocks</option>
             <option value="30">30 - Marchandises</option>
@@ -133,7 +133,7 @@ export function PlanComptableClient({ companies }: { companies: Company[] }) {
             value={subAccount}
             onChange={(e) => setSubAccount(e.target.value)}
             placeholder={`ex: ${parentAccount}.1`}
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:border-[#1a6fbf] outline-none"
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-[#0f172a] bg-white focus:border-[#1a6fbf] outline-none"
             required
           />
         </div>
@@ -144,7 +144,7 @@ export function PlanComptableClient({ companies }: { companies: Company[] }) {
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Stock Bâtiment A, Fournisseur XYZ..."
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:border-[#1a6fbf] outline-none"
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-[#0f172a] bg-white focus:border-[#1a6fbf] outline-none"
             required
           />
         </div>

@@ -61,17 +61,9 @@ export default async function ClientJournalPage({
 
   return (
     <div className="p-8 max-w-6xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-[#0f172a] tracking-tight">{j.title}</h1>
-          <p className="text-sm text-[#64748b] mt-1">{entries.length} {entries.length !== 1 ? "écritures" : "écriture"}</p>
-        </div>
-        <a
-          href="/api/client/journal?export=csv"
-          className="flex items-center gap-2 px-4 py-2 bg-[#2d8f5e] hover:bg-[#27805a] text-white rounded-lg text-sm font-medium transition-all"
-        >
-          ↓ {j.export_csv}
-        </a>
+      <div>
+        <h1 className="text-2xl font-bold text-[#0f172a] tracking-tight">{j.title}</h1>
+        <p className="text-sm text-[#64748b] mt-1">{entries.length} {entries.length !== 1 ? "écritures" : "écriture"}</p>
       </div>
 
       {/* Summary */}
@@ -176,10 +168,6 @@ export default async function ClientJournalPage({
                     <p className="text-xs text-[#64748b]">{sortedOps.length} opération{sortedOps.length > 1 ? 's' : ''}</p>
                   </div>
                 </div>
-                <button className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 hover:border-[#2d8f5e]/30 hover:bg-gray-50 text-sm font-medium text-[#0f172a] rounded-lg transition-all shadow-sm">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#2d8f5e]"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
-                  Télécharger PDF
-                </button>
               </div>
               
               <div className="p-6 overflow-x-auto">

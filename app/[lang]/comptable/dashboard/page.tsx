@@ -117,7 +117,7 @@ export default async function ComptableDashboardPage({
 
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
           <h2 className="font-semibold text-[#0f172a] text-sm mb-4">{c.activity_title}</h2>
-          <div className="space-y-3">
+          <div className="space-y-3 max-h-[320px] overflow-y-auto pr-2">
             {recentDocs.map((doc: any) => (
               <div key={doc.id} className="flex items-start gap-3">
                 <div className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center shrink-0 mt-0.5">
