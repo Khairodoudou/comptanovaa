@@ -381,27 +381,13 @@ export function DocumentUploader({
           {t.drop} <span className="text-[#2d8f5e] underline">{t.browse}</span>
         </p>
         <p className="text-xs text-[#64748b] mt-1">{t.hint}</p>
-        {files.length === 0 && (
-          <div className="mt-4 flex items-center justify-center gap-3">
-            <span className="flex items-center gap-1.5 text-[11px] text-[#64748b] bg-[#f1f5f9] px-3 py-1.5 rounded-lg">
-              <Layers size={12} /> Lot 2 fichiers → traitement automatique facture + chèque
-            </span>
-          </div>
-        )}
+
       </div>
 
       {/* Selected files + upload button */}
       {files.length > 0 && !uploading && !manualMode && (
         <div className="space-y-2">
-          {/* Batch mode banner */}
-          {isBatchMode && (
-            <div className="flex items-center gap-2.5 px-4 py-2.5 bg-blue-50 border border-blue-200 rounded-xl">
-              <Layers size={16} className="text-[#1a6fbf] shrink-0" />
-              <p className="text-xs text-[#1a6fbf] font-medium">
-                Mode lot détecté — 2 fichiers : traitement automatique Facture + Chèque
-              </p>
-            </div>
-          )}
+
           <div className="max-h-48 overflow-y-auto space-y-2 pr-2">
             {files.map((f, i) => (
               <div key={i} className="bg-white rounded-xl border border-gray-100 shadow-sm p-3 flex items-center gap-3">
@@ -618,7 +604,9 @@ export function DocumentUploader({
                   {/* Fields */}
                   <div className="grid grid-cols-2 gap-2.5">
                     <div>
-                      <p className="text-[10px] text-[#64748b] uppercase tracking-wide mb-0.5">{t.supplier}</p>
+                      <p className="text-[10px] text-[#64748b] uppercase tracking-wide mb-0.5">
+                        {isFacture ? (doc.sous_type === "vente" ? "Client" : "Fournisseur") : "Tiers"}
+                      </p>
                       <p className={`text-xs font-semibold ${supplier === "Inconnu" || !supplier ? "text-[#94a3b8] italic" : "text-[#0f172a]"}`}>
                         {supplier || "Inconnu"}
                       </p>
@@ -749,7 +737,9 @@ export function DocumentUploader({
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <p className="text-[10px] text-[#64748b] uppercase tracking-wide mb-1">{t.supplier}</p>
+                  <p className="text-[10px] text-[#64748b] uppercase tracking-wide mb-1">
+                    {result.ocrResult.type === "FACTURE_CLIENT" ? "Client" : result.ocrResult.type === "FACTURE_FOURNISSEUR" ? "Fournisseur" : "Tiers"}
+                  </p>
                   <p className={`text-sm font-medium ${!result.ocrResult.supplier || result.ocrResult.supplier === "Inconnu" ? "text-[#94a3b8] italic" : "text-[#0f172a]"}`}>
                     {result.ocrResult.supplier || "Inconnu"}
                   </p>

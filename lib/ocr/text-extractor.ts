@@ -210,11 +210,9 @@ function parseAmount(text: string): number | null {
   return null;
 }
 
-const RECIPIENT_MARKERS = /DESTINATAIRE|CLIENT|ACHETEUR|LIVR[EÉ]\s*[AÀ]|SHIP\s*TO|BILL\s*TO/i;
-
 const SUPPLIER_PATTERNS: RegExp[] = [
-  /(?:FOURNISSEUR|VENDEUR|EMETTEUR|ÉMETTEUR|FROM|DE LA PART DE|EMETTEUR)\s*:?\s*([^\n\r,]{3,80})/i,
-  /(?:المورد|البائع|المصدر)\s*:?\s*([^\n\r,]{3,80})/,
+  /(?:FOURNISSEUR|VENDEUR|EMETTEUR|ÉMETTEUR|FROM|DE LA PART DE|CLIENT|DESTINATAIRE|ACHETEUR|DOIT|FACTUR[EÉ]\s*[AÀ])\s*:?\s*([^\n\r,]{3,80})/i,
+  /(?:المورد|البائع|المصدر|الزبون|المشتري|المرسل إليه)\s*:?\s*([^\n\r,]{3,80})/,
   /\b((?:SARL|SPA|EURL|EI|SNC|EPIC|SARL-U|SAS)\s+[A-ZÀ-Úa-zà-ú0-9\s\-&'.]{2,60})/,
   /\b((?:S\.A\.R\.L|S\.P\.A|E\.U\.R\.L|S\.A\.S)\s+[A-ZÀ-Úa-zà-ú0-9\s\-&'.]{2,60})/,
   /(?:RAISON\s*SOCIALE|SOCIÉTÉ|ENTREPRISE|ETABLISSEMENT|GROUPE)\s*:?\s*([^\n\r,]{3,80})/i,
@@ -241,25 +239,19 @@ function parseSupplier(text: string): string | null {
     const m = text.match(pattern);
     if (m?.[1]) {
       const candidate = cleanSupplierCandidate(m[1]);
-      const matchLine = lines.find(l => l.includes(candidate.substring(0, 15)));
-      if (matchLine && RECIPIENT_MARKERS.test(matchLine)) continue;
       if (candidate.length >= 3) return candidate;
     }
   }
   for (const line of lines.slice(0, 15)) {
     if (/\b(SARL|SPA|EURL|EI|SNC|EPIC|SARL-U|SAS)\b/i.test(line)) {
       const idx = lines.indexOf(line);
-      const prevLine = idx > 0 ? lines[idx - 1] : '';
-      if (!RECIPIENT_MARKERS.test(line) && !RECIPIENT_MARKERS.test(prevLine)) {
-        return cleanSupplierCandidate(line);
-      }
+      return cleanSupplierCandidate(line);
     }
   }
   for (const line of lines.slice(0, 8)) {
     if (
       /^[A-ZÀ-Ü0-9\s\-&'.]{4,60}$/.test(line) &&
-      !/^(FACTURE|INVOICE|DEVIS|BON|BON DE LIVRAISON|RELEV[EÉ]|TOTAL|MONTANT|DATE|R[EÉ]F[EÉ]RENCE|HEURE|N[°O]|QUINCAILLERIE|DROGUERIE|TEL|ADRESSE|DESIGNATION|QTE|PRIX|CHIFFRE|PAYEZ|CHEQUE|CHÈQUE|BANQUE|PAYABLE)$/i.test(line.trim()) &&
-      !RECIPIENT_MARKERS.test(line)
+      !/^(FACTURE|INVOICE|DEVIS|BON|BON DE LIVRAISON|RELEV[EÉ]|TOTAL|MONTANT|DATE|R[EÉ]F[EÉ]RENCE|HEURE|N[°O]|QUINCAILLERIE|DROGUERIE|TEL|ADRESSE|DESIGNATION|QTE|PRIX|CHIFFRE|PAYEZ|CHEQUE|CHÈQUE|BANQUE|PAYABLE)$/i.test(line.trim())
     ) {
       return cleanSupplierCandidate(line);
     }
@@ -273,8 +265,7 @@ function parseSupplier(text: string): string | null {
   for (const line of lines.slice(0, 10)) {
     if (
       /^[A-ZÀ-Ü][a-zà-ü]+(\s[A-ZÀ-Ü][a-zà-ü]+){1,3}$/.test(line) &&
-      !/facture|invoice|total|date|montant|description|bon|livraison|devis|payez|cheque|chèque|banque/i.test(line) &&
-      !RECIPIENT_MARKERS.test(line)
+      !/facture|invoice|total|date|montant|description|bon|livraison|devis|payez|cheque|chèque|banque/i.test(line)
     ) {
       return line;
     }
