@@ -233,6 +233,7 @@ export async function POST(req: NextRequest) {
         htFromPDF: !!(extracted.amountHT),  // true only if extracted from PDF
         tvaRate:   `${TVA_RATE * 100}%`,
         supplier,
+        reference: refNumber ?? "",
         type: docType,
         confidence: ocrResult.tesseractConfidence,
         needsManualReview: ocrResult.needsManualReview,

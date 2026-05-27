@@ -575,23 +575,6 @@ export function DocumentUploader({
       {/* ── BATCH RESULT ────────────────────────────────────────────────────── */}
       {batchResult && (
         <div className="space-y-3">
-          {/* Scenario Header */}
-          <div className="bg-gradient-to-r from-[#1a6fbf] to-[#1558a0] rounded-2xl p-5 text-white shadow-md">
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center shrink-0">
-                  <Layers size={20} className="text-white" />
-                </div>
-                <div>
-                  <p className="text-[10px] text-blue-200 uppercase tracking-widest mb-0.5">Lot traité avec succès</p>
-                  <h3 className="text-base font-bold text-white">{scenarioLabel(batchResult.scenario_applique)}</h3>
-                  <p className="text-xs text-blue-100 mt-0.5">{batchResult.message}</p>
-                </div>
-              </div>
-              <CheckCircle size={22} className="text-green-300 shrink-0 mt-0.5" />
-            </div>
-          </div>
-
           {/* Documents detected */}
           <div className="grid grid-cols-2 gap-3">
             {batchResult.documents_detectes.map((doc, i) => {
@@ -603,7 +586,7 @@ export function DocumentUploader({
               const isFacture = doc.type === "facture";
               const confidence = sub?.ocrResult?.confidence ?? 0;
               const supplier = sub?.ocrResult?.supplier ?? "—";
-              const reference = sub?.ocrResult?.reference ?? sub?.journalEntry?.description?.split("—")?.[0]?.trim();
+              const reference = sub?.ocrResult?.reference || "";
               const amountTTC = sub?.ocrResult?.amountTTC ?? sub?.ocrResult?.amount ?? "0";
               const date = sub?.ocrResult?.date ?? "—";
               const debitAcc = sub?.journalEntry?.debitAccount ?? "—";
@@ -769,6 +752,12 @@ export function DocumentUploader({
                   <p className="text-[10px] text-[#64748b] uppercase tracking-wide mb-1">{t.supplier}</p>
                   <p className={`text-sm font-medium ${!result.ocrResult.supplier || result.ocrResult.supplier === "Inconnu" ? "text-[#94a3b8] italic" : "text-[#0f172a]"}`}>
                     {result.ocrResult.supplier || "Inconnu"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-[#64748b] uppercase tracking-wide mb-1">Référence</p>
+                  <p className={`text-sm font-medium ${!result.ocrResult.reference ? "text-[#94a3b8] italic" : "text-[#0f172a]"}`}>
+                    {result.ocrResult.reference || "—"}
                   </p>
                 </div>
                 <div>
