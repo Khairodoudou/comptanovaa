@@ -73,9 +73,12 @@ export default async function ValidatePage({
         ).map((group) => {
           const doc = group.document;
           let amountTTC = 0;
+          let supplier = "Inconnu";
           if (doc?.ocrData) {
             try {
-              amountTTC = JSON.parse(doc.ocrData).extracted?.amount || 0;
+              const parsed = JSON.parse(doc.ocrData);
+              amountTTC = parsed.extracted?.amount || 0;
+              supplier = parsed.supplier || parsed.extracted?.supplier || "Inconnu";
             } catch {}
           }
 
@@ -92,14 +95,28 @@ export default async function ValidatePage({
                     <div>
                       <h3 className="text-lg font-bold text-[#0f172a] flex items-center gap-3">
                         {doc.originalName}
+                        <span className="px-2.5 py-1 bg-[#f1f5f9] text-[#475569] border border-[#e2e8f0] rounded-full text-[10px] uppercase tracking-wider font-bold">
+                          {{
+                            FACTURE_CLIENT: "Facture Client",
+                            FACTURE_FOURNISSEUR: "Facture Fournisseur",
+                            CHEQUE: "Chèque",
+                            RELEVE_BANCAIRE: "Relevé Bancaire",
+                            BON_LIVRAISON: "Bon de Livraison",
+                            BON_RECEPTION: "Bon de Réception",
+                          }[doc.type as string] ?? doc.type.replace(/_/g, " ")}
+                        </span>
                         <span className="px-2.5 py-1 bg-amber-50 text-amber-700 border border-amber-200/60 rounded-full text-[10px] uppercase tracking-wider font-bold">
                           À Valider
                         </span>
                       </h3>
-                      <p className="text-sm text-[#64748b] mt-1.5 flex items-center gap-3">
+                      <p className="text-sm text-[#64748b] mt-1.5 flex flex-wrap items-center gap-3">
                         <span className="flex items-center gap-1.5 font-medium text-slate-600">
                           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                          {doc.company.client.name}
+                          Dossier: {doc.company.client.name}
+                        </span>
+                        <span className="text-slate-300">•</span>
+                        <span className="flex items-center gap-1.5 font-medium text-[#0f172a]">
+                          {doc.type === "FACTURE_CLIENT" ? "Client:" : "Fournisseur:"} {supplier}
                         </span>
                         <span className="text-slate-300">•</span>
                         <span className="flex items-center gap-1.5">

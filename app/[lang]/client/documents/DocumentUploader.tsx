@@ -732,49 +732,7 @@ export function DocumentUploader({
             })}
           </div>
 
-          {/* Cheque entries detail */}
-          <div className="bg-white rounded-2xl border border-amber-200 shadow-sm p-5 space-y-3">
-            <div className="flex items-center gap-2 mb-1">
-              <CreditCard size={16} className="text-amber-600" />
-              <p className="text-sm font-bold text-[#0f172a]">Écritures générées pour le chèque</p>
-              <span className="text-[10px] px-2 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-full font-medium ml-auto">
-                Scénario {batchResult.scenario_applique}
-              </span>
-            </div>
-            <div className="overflow-hidden rounded-xl border border-gray-100">
-              <table className="w-full text-xs">
-                <thead className="bg-[#f8fafc]">
-                  <tr>
-                    <th className="py-2 px-3 text-left font-semibold text-[#475569] border-r border-gray-100">Compte</th>
-                    <th className="py-2 px-3 text-center font-semibold text-[#475569] border-r border-gray-100">Sens</th>
-                    <th className="py-2 px-3 text-right font-semibold text-[#475569] border-r border-gray-100">Montant (DA)</th>
-                    <th className="py-2 px-3 text-left font-semibold text-[#475569]">Libellé</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {batchResult.ecritures_cheque.map((e, i) => (
-                    <tr key={i} className="hover:bg-[#f8fafc] transition-colors">
-                      <td className="py-2 px-3 border-r border-gray-100">
-                        <span className={`font-mono font-bold px-1.5 py-0.5 rounded text-xs ${e.sens === "debit" ? "bg-blue-50 text-[#1a6fbf]" : "bg-purple-50 text-purple-700"}`}>
-                          {e.compte}
-                        </span>
-                      </td>
-                      <td className="py-2 px-3 text-center border-r border-gray-100">
-                        <span className={`font-semibold uppercase text-[10px] px-2 py-0.5 rounded-full ${e.sens === "debit" ? "bg-blue-50 text-[#1a6fbf]" : "bg-purple-50 text-purple-700"}`}>
-                          {e.sens}
-                        </span>
-                      </td>
-                      <td className="py-2 px-3 text-right border-r border-gray-100 font-semibold text-[#0f172a] tabular-nums">
-                        {formatAmount(e.montant)}
-                      </td>
-                      <td className="py-2 px-3 text-[#475569]">{e.libelle}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <p className="text-[11px] text-[#64748b]">✓ {t.entry_pending}</p>
-          </div>
+
         </div>
       )}
 

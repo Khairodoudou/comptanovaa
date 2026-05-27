@@ -46,5 +46,18 @@ export async function PATCH(req: NextRequest) {
     data: { ocrData: JSON.stringify(ocrData) },
   });
 
+  // Also update journal entry descriptions to keep them in sync
+  const entries = await db.journalEntry.findMany({ where: { documentId } });
+  for (const entry of entries) {
+    if (entry.description.includes('—')) {
+      const parts = entry.description.split('—');
+      const newDesc = `${parts[0].trim()} — ${supplier.trim()}`;
+      await db.journalEntry.update({
+        where: { id: entry.id },
+        data: { description: newDesc },
+      });
+    }
+  }
+
   return NextResponse.json({ success: true, supplier: ocrData.supplier });
 }
