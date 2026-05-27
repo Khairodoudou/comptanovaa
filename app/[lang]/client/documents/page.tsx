@@ -87,7 +87,7 @@ export default async function ClientDocumentsPage({
                 try {
                   if (doc.ocrData) {
                     const data = JSON.parse(doc.ocrData);
-                    supplier = data?.extracted?.supplier || "Inconnu";
+                    supplier = data?.supplier || data?.extracted?.supplier || "Inconnu";
                     ref = data?.extracted?.invoiceNumber || data?.extracted?.chequeNumber || "";
                   }
                 } catch (e) {}
@@ -101,7 +101,14 @@ export default async function ClientDocumentsPage({
                   </td>
                   <td className="px-5 py-3.5">
                     <span className="text-xs text-[#64748b]">
-                      {doc.type.replace(/_/g, " ")}
+                      {{
+                        FACTURE_CLIENT: "Facture Client",
+                        FACTURE_FOURNISSEUR: "Facture Fournisseur",
+                        CHEQUE: "Chèque",
+                        RELEVE_BANCAIRE: "Relevé Bancaire",
+                        BON_LIVRAISON: "Bon de Livraison",
+                        BON_RECEPTION: "Bon de Réception",
+                      }[doc.type as string] ?? doc.type.replace(/_/g, " ")}
                     </span>
                   </td>
                   <td className="px-5 py-3.5">

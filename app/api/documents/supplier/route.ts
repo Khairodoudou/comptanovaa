@@ -36,6 +36,9 @@ export async function PATCH(req: NextRequest) {
     ocrData = {};
   }
 
+  if (typeof ocrData === "object" && ocrData !== null && "extracted" in ocrData) {
+    (ocrData as any).extracted.supplier = supplier.trim();
+  }
   ocrData.supplier = supplier.trim();
 
   await db.document.update({

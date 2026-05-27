@@ -84,7 +84,7 @@ interface BatchError {
 const STEPS = [
   { icon: Upload, label: "Envoi des fichiers...", duration: 800 },
   { icon: Cpu, label: "Prétraitement des images...", duration: 1500 },
-  { icon: Brain, label: "Analyse OCR (Mistral)...", duration: 0 },
+  { icon: Brain, label: "Analyse OCR ...", duration: 0 },
   { icon: Eye, label: "Extraction et classification...", duration: 600 },
   { icon: Zap, label: "Génération des écritures...", duration: 400 },
 ];
@@ -146,6 +146,7 @@ export function DocumentUploader({
         ));
       }
       setEditingSupplierId(null);
+      router.refresh();
     } catch (err) {
       console.error(err);
       alert("Erreur lors de la modification.");
