@@ -52,6 +52,7 @@ interface BankTx {
 }
 
 interface ReconcileResult {
+  id: string;
   date: string;
   description: string;
   amount: number;
@@ -374,7 +375,11 @@ export function RapprochementClient({
           t={t}
           locale={locale}
           onClose={() => setCorrectModal(null)}
-          onCorrected={() => router.refresh()}
+          onCorrected={() => {
+            setResults(null);
+            setSummary(null);
+            router.refresh();
+          }}
         />
       )}
 
@@ -607,7 +612,7 @@ export function RapprochementClient({
                       <td className="px-3 py-2">
                         {r.matchScore === "none" && (
                           <button
-                            onClick={() => setCorrectModal({ bankTxId: "pending" })}
+                            onClick={() => setCorrectModal({ bankTxId: r.id })}
                             className="flex items-center gap-1 px-2 py-1 text-[10px] font-medium text-[#1a6fbf] border border-[#1a6fbf]/30 rounded-lg hover:bg-[#1a6fbf]/5 transition-all"
                           >
                             {t.correct_btn}

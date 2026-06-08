@@ -268,20 +268,25 @@ export async function POST(req: NextRequest) {
     return { row, matched, score };
   });
 
-  // Bulk insert bank transactions
-  await db.bankTransaction.createMany({
-    data: resultsData.map(({ row, matched }) => ({
-      date: new Date(row.date),
-      description: row.description,
-      amount: row.amount,
-      chequeNumber: row.chequeNumber ?? null,
-      matched: !!matched,
-      companyId,
-      journalEntryId: matched?.id ?? undefined,
-    })),
-  });
+  // Insert bank transactions and get IDs
+  const createdTransactions = await db.$transaction(
+    resultsData.map(({ row, matched }) =>
+      db.bankTransaction.create({
+        data: {
+          date: new Date(row.date),
+          description: row.description,
+          amount: row.amount,
+          chequeNumber: row.chequeNumber ?? null,
+          matched: !!matched,
+          companyId,
+          journalEntryId: matched?.id ?? undefined,
+        },
+      })
+    )
+  );
 
-  const results = resultsData.map(({ row, matched, score }) => ({
+  const results = resultsData.map(({ row, matched, score }, index) => ({
+    id: createdTransactions[index].id,
     date: row.date,
     description: row.description,
     amount: row.amount,
