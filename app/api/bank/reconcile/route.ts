@@ -69,24 +69,37 @@ function parsePdfBankText(
     const date = normalizeDate(dateMatch[1]);
     if (!date) continue;
 
-    // Find all numbers in the line
+    const afterDate = line.slice(dateMatch.index! + dateMatch[1].length).trim();
+    
+    // Find all numbers in the string AFTER the date
     const numbers: number[] = [];
     let m: RegExpExecArray | null;
-    const re = /(\d[\d\s]*\d(?:[.,]\d{2})?)/g;
-    while ((m = re.exec(line)) !== null) {
+    
+    // 1. Try to find numbers with decimals first (amounts usually have .00 or ,00)
+    const decimalRe = /(\d[\d\s]*[.,]\d{2})/g;
+    while ((m = decimalRe.exec(afterDate)) !== null) {
       const n = parseFloat(m[1].replace(/\s/g, "").replace(",", "."));
       if (!isNaN(n) && n > 0) numbers.push(n);
+    }
+
+    // 2. Fallback to any number if no decimals found
+    if (numbers.length === 0) {
+      const anyRe = /(\d[\d\s]*)/g;
+      while ((m = anyRe.exec(afterDate)) !== null) {
+        const n = parseFloat(m[1].replace(/\s/g, ""));
+        // Avoid treating very large numbers (like cheque 12345678) as amount if possible,
+        // but if it's the only number, we take it.
+        if (!isNaN(n) && n > 0) numbers.push(n);
+      }
     }
 
     if (numbers.length === 0) continue;
 
     // Take the largest number as the transaction amount
     const amount = Math.max(...numbers);
-    if (amount < 1) continue;
 
     // Extract description: text between date and first number
-    const afterDate = line.slice(dateMatch.index! + dateMatch[1].length).trim();
-    const description = afterDate.replace(/\d[\d\s]*[\d](?:[.,]\d{2})?/g, "").replace(/\s+/g, " ").trim() || line.trim();
+    const description = afterDate.replace(/\d[\d\s]*[.,]?\d*/g, "").replace(/\s+/g, " ").trim() || line.trim();
 
     const chequeNumber = extractChequeFromText(line) || undefined;
 
