@@ -167,8 +167,8 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  // ── Auto-create Invoice record if FACTURE_CLIENT ───────────────────────
-  if (docType === "FACTURE_CLIENT" && amountTTC > 0) {
+  // ── Auto-create Invoice record if FACTURE (CLIENT or FOURNISSEUR) ───────────────
+  if ((docType === "FACTURE_CLIENT" || docType === "FACTURE_FOURNISSEUR" || docType.includes("FACTURE")) && amountTTC > 0) {
     try {
       if ("invoice" in db) {
         await (db as any).invoice.create({
@@ -178,7 +178,7 @@ export async function POST(req: NextRequest) {
             invoiceNumber: refNumber || `FAC-${Date.now().toString().slice(-6)}`,
             amount: amountTTC,
             status: "UNPAID",
-            description: `Facture Client - ${supplier}`,
+            description: `${docType === "FACTURE_CLIENT" ? "Facture Client" : "Facture Fournisseur"} - ${supplier}`,
           },
         });
       }

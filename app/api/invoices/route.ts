@@ -33,6 +33,55 @@ export async function GET(req: NextRequest) {
       return Response.json([]);
     }
 
+    // Auto-backfill missing Invoice records for uploaded invoice documents
+    try {
+      const unlinkedDocs = await db.document.findMany({
+        where: {
+          type: { in: ["FACTURE_CLIENT", "FACTURE_FOURNISSEUR"] },
+          invoice: null,
+          ...(user.role === "CLIENT"
+            ? { company: { clientId: user.userId } }
+            : { company: { comptableId: user.userId } }),
+        },
+        include: { journalEntries: true },
+      });
+
+      for (const doc of unlinkedDocs) {
+        let amount = 0;
+        let invoiceNumber: string | null = null;
+        let supplier = "Fournisseur";
+
+        if (doc.ocrData) {
+          try {
+            const parsed = JSON.parse(doc.ocrData);
+            const ext = parsed.extracted || {};
+            amount = ext.amount || 0;
+            invoiceNumber = ext.invoiceNumber || null;
+            supplier = ext.supplier || supplier;
+          } catch {}
+        }
+
+        if (!amount && doc.journalEntries.length > 0) {
+          amount = doc.journalEntries[0].amount || 0;
+        }
+
+        if (amount > 0) {
+          await (db as any).invoice.create({
+            data: {
+              companyId: doc.companyId,
+              documentId: doc.id,
+              invoiceNumber: invoiceNumber || `FAC-${doc.id.slice(-6)}`,
+              amount,
+              status: "UNPAID",
+              description: `Facture - ${supplier}`,
+            },
+          });
+        }
+      }
+    } catch (err) {
+      console.error("Backfill invoices error:", err);
+    }
+
     const invoices = await (db as any).invoice.findMany({
       where: whereClause,
       include: {
