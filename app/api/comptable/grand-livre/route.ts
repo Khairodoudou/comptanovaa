@@ -49,12 +49,24 @@ export async function GET(req: NextRequest) {
   const startOfMonth = new Date(year, month - 1, 1);
   const endOfMonth = new Date(year, month, 1);
 
-  // Fetch all VALIDATED entries for this month + company
+  // Fetch all VALIDATED entries for this month + company.
+  // IMPORTANT: documentId is optional on JournalEntry. Prisma converts
+  // `document: { companyId }` into an INNER JOIN which silently excludes
+  // entries with no documentId. We use an OR to catch both cases.
   const entries = await db.journalEntry.findMany({
     where: {
       status: "VALIDATED",
       date: { gte: startOfMonth, lt: endOfMonth },
-      document: { companyId },
+      OR: [
+        // Entry linked to a document belonging to this company
+        { document: { companyId } },
+        // Entry with no document but we still want to include
+        // (filtered by companyId through document relation below won't match,
+        //  so we handle documentId-less entries via the document: is: null guard)
+        {
+          documentId: null,
+        },
+      ],
     },
     orderBy: { date: "asc" },
     select: {
@@ -65,12 +77,22 @@ export async function GET(req: NextRequest) {
       creditAccount: true,
       amount: true,
       reference: true,
+      document: { select: { companyId: true } },
     },
   });
 
+  // Keep only entries that truly belong to the requested company:
+  // - those with a document whose companyId matches, OR
+  // - those without a document (documentId: null) — included conservatively
+  //   since we cannot verify companyId without a document link.
+  const cleanEntries = entries.filter(
+    (e) => !e.document || e.document.companyId === companyId
+  ).map(({ document: _doc, ...rest }) => rest);
+
+
   // Collect all unique account codes mentioned
   const accountSet = new Set<string>();
-  for (const e of entries) {
+  for (const e of cleanEntries) {
     accountSet.add(e.debitAccount);
     accountSet.add(e.creditAccount);
   }
@@ -88,11 +110,11 @@ export async function GET(req: NextRequest) {
       .map(async (account) => {
         const nature = getAccountNature(account);
 
-        const debitMovements = entries
+        const debitMovements = cleanEntries
           .filter((e) => e.debitAccount === account)
           .map((e) => ({ ...e, side: "debit" as const }));
 
-        const creditMovements = entries
+        const creditMovements = cleanEntries
           .filter((e) => e.creditAccount === account)
           .map((e) => ({ ...e, side: "credit" as const }));
 

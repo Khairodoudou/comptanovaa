@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   ChevronLeft,
@@ -485,6 +485,14 @@ export function GrandLivreClient({
     fetchData(cid, m, y);
   }
 
+  // Auto-load on first render
+  useEffect(() => {
+    if (companyId) {
+      fetchData(companyId, month, year);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   function prevMonth() {
     let m = month - 1;
     let y = year;
@@ -572,7 +580,15 @@ export function GrandLivreClient({
         </div>
       )}
 
-      {/* No data yet */}
+      {/* Loading spinner (auto-load on mount) */}
+      {loading && (
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-12 flex items-center justify-center gap-3">
+          <Loader2 size={20} className="animate-spin text-[#1a6fbf]" />
+          <p className="text-sm text-[#64748b]">Chargement du grand livre…</p>
+        </div>
+      )}
+
+      {/* No data yet (only shows if not loading and no error and user deselected company) */}
       {accounts === null && !loading && !error && (
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-12 text-center">
           <p className="text-sm text-[#64748b]">Sélectionnez une entreprise et un mois, puis cliquez sur Charger.</p>
