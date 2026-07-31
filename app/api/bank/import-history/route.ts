@@ -15,21 +15,30 @@ export async function GET(req: NextRequest) {
   const companyId = req.nextUrl.searchParams.get("companyId");
   if (!companyId) return Response.json({ error: "companyId requis" }, { status: 400 });
 
-  const company = await db.company.findFirst({
-    where: { id: companyId, comptableId: user.userId },
-  });
-  if (!company) return Response.json({ error: "Entreprise introuvable" }, { status: 403 });
+  try {
+    const company = await db.company.findFirst({
+      where: { id: companyId, comptableId: user.userId },
+    });
+    if (!company) return Response.json({ error: "Entreprise introuvable" }, { status: 403 });
 
-  const imports = await db.bankStatementImport.findMany({
-    where: { companyId },
-    orderBy: { importedAt: "desc" },
-    take: 20,
-    include: {
-      transactions: {
-        select: { id: true, matched: true },
+    if (!("bankStatementImport" in db)) {
+      return Response.json([]);
+    }
+
+    const imports = await (db as any).bankStatementImport.findMany({
+      where: { companyId },
+      orderBy: { importedAt: "desc" },
+      take: 20,
+      include: {
+        transactions: {
+          select: { id: true, matched: true },
+        },
       },
-    },
-  });
+    });
 
-  return Response.json(imports);
+    return Response.json(imports);
+  } catch (e) {
+    console.error("import-history error:", e);
+    return Response.json([]);
+  }
 }

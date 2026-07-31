@@ -1,7 +1,7 @@
 import { getCurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
-import { Users, FileText, CheckSquare, TrendingUp, Clock, CreditCard, AlertCircle, PieChart, Landmark } from "lucide-react";
+import { Users, FileText, CheckSquare, TrendingUp, Clock, Landmark } from "lucide-react";
 import { ComptableDashboardCharts } from "./DashboardCharts";
 import { getDictionary } from "@/get-dictionary";
 import type { Locale } from "@/i18n-config";
@@ -27,58 +27,98 @@ export default async function ComptableDashboardPage({
   const assignedFilter = { company: { comptableId: user.userId } };
   const companyFilter = { comptableId: user.userId };
 
-  const [
-    totalClients,
-    pendingEntries,
-    docsToday,
-    validatedThisMonth,
-    recentDocs,
-    recentValidations,
-    weeklyEntries,
-    pendingPaymentsCount,
-    unmatchedTxsCount,
-    partiallyPaidCount,
-    monthEncaisse,
-  ] = await Promise.all([
-    db.user.count({
-      where: {
-        role: "CLIENT",
-        companies: { some: companyFilter },
-      },
-    }),
-    db.journalEntry.count({ where: { status: "PROPOSED", document: assignedFilter } }),
-    db.document.count({ where: { uploadedAt: { gte: startOfToday }, ...assignedFilter } }),
-    db.journalEntry.count({
-      where: { status: "VALIDATED", validatedAt: { gte: startOfMonth }, document: assignedFilter },
-    }),
-    db.document.findMany({
-      take: 5,
-      orderBy: { uploadedAt: "desc" },
-      where: assignedFilter,
-      include: { company: { include: { client: { select: { name: true } } } } },
-    }),
-    db.journalEntry.findMany({
-      take: 5,
-      where: { status: "VALIDATED", document: assignedFilter },
-      orderBy: { validatedAt: "desc" },
-      include: { validatedBy: { select: { name: true } } },
-    }),
-    db.journalEntry.findMany({
-      where: {
-        createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
-        document: assignedFilter,
-      },
-      select: { createdAt: true, status: true },
-    }),
-    // Bank & Payment KPIs
-    db.invoice.count({ where: { status: "PENDING_VERIFICATION", company: companyFilter } }),
-    db.bankTransaction.count({ where: { matched: false, company: companyFilter } }),
-    db.invoice.count({ where: { status: "PARTIALLY_PAID", company: companyFilter } }),
-    db.invoicePayment.aggregate({
-      where: { createdAt: { gte: startOfMonth }, invoice: { company: companyFilter } },
-      _sum: { amount: true },
-    }),
-  ]);
+  let totalClients = 0;
+  let pendingEntries = 0;
+  let docsToday = 0;
+  let validatedThisMonth = 0;
+  let recentDocs: any[] = [];
+  let recentValidations: any[] = [];
+  let weeklyEntries: any[] = [];
+  let pendingPaymentsCount = 0;
+  let unmatchedTxsCount = 0;
+  let partiallyPaidCount = 0;
+  let totalEncaisseVal = 0;
+
+  try {
+    const res = await Promise.all([
+      db.user.count({
+        where: {
+          role: "CLIENT",
+          companies: { some: companyFilter },
+        },
+      }),
+      db.journalEntry.count({ where: { status: "PROPOSED", document: assignedFilter } }),
+      db.document.count({ where: { uploadedAt: { gte: startOfToday }, ...assignedFilter } }),
+      db.journalEntry.count({
+        where: { status: "VALIDATED", validatedAt: { gte: startOfMonth }, document: assignedFilter },
+      }),
+      db.document.findMany({
+        take: 5,
+        orderBy: { uploadedAt: "desc" },
+        where: assignedFilter,
+        include: { company: { include: { client: { select: { name: true } } } } },
+      }),
+      db.journalEntry.findMany({
+        take: 5,
+        where: { status: "VALIDATED", document: assignedFilter },
+        orderBy: { validatedAt: "desc" },
+        include: { validatedBy: { select: { name: true } } },
+      }),
+      db.journalEntry.findMany({
+        where: {
+          createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
+          document: assignedFilter,
+        },
+        select: { createdAt: true, status: true },
+      }),
+    ]);
+
+    totalClients = res[0];
+    pendingEntries = res[1];
+    docsToday = res[2];
+    validatedThisMonth = res[3];
+    recentDocs = res[4];
+    recentValidations = res[5];
+    weeklyEntries = res[6];
+  } catch (e) {
+    console.error("Dashboard primary queries error:", e);
+  }
+
+  // Safe queries for optional new models (Invoice, InvoicePayment, BankTransaction)
+  try {
+    if ("invoice" in db && typeof (db as any).invoice?.count === "function") {
+      pendingPaymentsCount = await (db as any).invoice.count({
+        where: { status: "PENDING_VERIFICATION", company: companyFilter },
+      });
+      partiallyPaidCount = await (db as any).invoice.count({
+        where: { status: "PARTIALLY_PAID", company: companyFilter },
+      });
+    }
+  } catch (e) {
+    console.error("Invoice KPI query error:", e);
+  }
+
+  try {
+    if ("bankTransaction" in db && typeof (db as any).bankTransaction?.count === "function") {
+      unmatchedTxsCount = await (db as any).bankTransaction.count({
+        where: { matched: false, company: companyFilter },
+      });
+    }
+  } catch (e) {
+    console.error("BankTransaction KPI query error:", e);
+  }
+
+  try {
+    if ("invoicePayment" in db && typeof (db as any).invoicePayment?.aggregate === "function") {
+      const monthEncaisse = await (db as any).invoicePayment.aggregate({
+        where: { createdAt: { gte: startOfMonth }, invoice: { company: companyFilter } },
+        _sum: { amount: true },
+      });
+      totalEncaisseVal = monthEncaisse?._sum?.amount || 0;
+    }
+  } catch (e) {
+    console.error("InvoicePayment KPI query error:", e);
+  }
 
   const days = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(Date.now() - (6 - i) * 24 * 60 * 60 * 1000);
@@ -96,8 +136,6 @@ export default async function ComptableDashboardPage({
     { label: kpiT.docs_today, value: docsToday, icon: FileText, color: "bg-purple-50 text-purple-600", border: "border-purple-100" },
     { label: kpiT.validated_month, value: validatedThisMonth, icon: CheckSquare, color: "bg-green-50 text-[#2d8f5e]", border: "border-green-100" },
   ];
-
-  const totalEncaisseVal = monthEncaisse._sum.amount || 0;
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-8">
@@ -186,7 +224,7 @@ export default async function ComptableDashboardPage({
                 <div className="min-w-0">
                   <p className="text-xs font-medium text-[#0f172a] truncate">{doc.originalName}</p>
                   <p className="text-[11px] text-[#64748b]">
-                    {doc.company.client.name} · {new Date(doc.uploadedAt).toLocaleDateString(locale)}
+                    {doc.company?.client?.name || "Client"} · {new Date(doc.uploadedAt).toLocaleDateString(locale)}
                   </p>
                 </div>
               </div>

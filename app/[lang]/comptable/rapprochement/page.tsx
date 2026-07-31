@@ -17,25 +17,34 @@ export default async function RapprochementPage({
   const user = await getCurrentUser();
   if (!user || user.role !== "COMPTABLE") redirect(`/${lang}/login`);
 
-  const [dict, companies] = await Promise.all([
-    getDictionary(lang as Locale),
-    db.company.findMany({
-      where: { comptableId: user.userId },
-      select: {
-        id: true,
-        name: true,
-        bankName: true,
-        rib: true,
-        iban: true,
-        ccp: true,
-        beneficiaryName: true,
-        client: { select: { name: true, email: true } },
-      },
-      orderBy: { name: "asc" },
-    }),
-  ]);
+  let dict: any = {};
+  let companies: any[] = [];
 
-  const t = dict.dashboard.rapprochement;
+  try {
+    const res = await Promise.all([
+      getDictionary(lang as Locale),
+      db.company.findMany({
+        where: { comptableId: user.userId },
+        select: {
+          id: true,
+          name: true,
+          bankName: true,
+          rib: true,
+          iban: true,
+          ccp: true,
+          beneficiaryName: true,
+          client: { select: { name: true, email: true } },
+        },
+        orderBy: { name: "asc" },
+      }),
+    ]);
+    dict = res[0];
+    companies = res[1];
+  } catch (e) {
+    console.error("RapprochementPage setup error:", e);
+  }
+
+  const t = dict?.dashboard?.rapprochement || {};
   const locale = lang === "ar" ? "ar-DZ" : lang === "en" ? "en-US" : "fr-FR";
 
   const now = new Date();
@@ -52,47 +61,58 @@ export default async function RapprochementPage({
   let totalCredit512 = 0;
   let soldeFinal512 = 0;
 
-  const [
-    bankTransactions,
-    journalEntries512,
-    pendingDeclarations,
-    unmatchedBankTxs,
-    importHistory,
-    companyInvoices,
-  ] = selectedCompanyId
-    ? await Promise.all([
-        db.bankTransaction.findMany({
-          where: {
-            companyId: selectedCompanyId,
-            date: { gte: startOfMonth, lt: endOfMonth },
+  let bankTransactions: any[] = [];
+  let journalEntries512: any[] = [];
+  let pendingDeclarations: any[] = [];
+  let unmatchedBankTxs: any[] = [];
+  let importHistory: any[] = [];
+  let companyInvoices: any[] = [];
+
+  if (selectedCompanyId) {
+    try {
+      bankTransactions = await db.bankTransaction.findMany({
+        where: {
+          companyId: selectedCompanyId,
+          date: { gte: startOfMonth, lt: endOfMonth },
+        },
+        include: {
+          journalEntry: {
+            select: { id: true, description: true, amount: true, reference: true, debitAccount: true, creditAccount: true },
           },
-          include: {
-            journalEntry: {
-              select: { id: true, description: true, amount: true, reference: true, debitAccount: true, creditAccount: true },
-            },
-          },
-          orderBy: { date: "asc" },
-        }),
-        db.journalEntry.findMany({
-          where: {
-            status: "VALIDATED",
-            date: { gte: startOfMonth, lt: endOfMonth },
-            OR: [{ debitAccount: "512" }, { creditAccount: "512" }],
-            document: { companyId: selectedCompanyId },
-          },
-          orderBy: { date: "asc" },
-          select: {
-            id: true,
-            date: true,
-            description: true,
-            debitAccount: true,
-            creditAccount: true,
-            amount: true,
-            reference: true,
-            bankTransaction: { select: { id: true } },
-          },
-        }),
-        db.paymentDeclaration.findMany({
+        },
+        orderBy: { date: "asc" },
+      });
+    } catch (e) {
+      console.error("bankTransactions error:", e);
+    }
+
+    try {
+      journalEntries512 = await db.journalEntry.findMany({
+        where: {
+          status: "VALIDATED",
+          date: { gte: startOfMonth, lt: endOfMonth },
+          OR: [{ debitAccount: "512" }, { creditAccount: "512" }],
+          document: { companyId: selectedCompanyId },
+        },
+        orderBy: { date: "asc" },
+        select: {
+          id: true,
+          date: true,
+          description: true,
+          debitAccount: true,
+          creditAccount: true,
+          amount: true,
+          reference: true,
+          bankTransaction: { select: { id: true } },
+        },
+      });
+    } catch (e) {
+      console.error("journalEntries512 error:", e);
+    }
+
+    try {
+      if ("paymentDeclaration" in db && typeof (db as any).paymentDeclaration?.findMany === "function") {
+        pendingDeclarations = await (db as any).paymentDeclaration.findMany({
           where: {
             invoice: { companyId: selectedCompanyId },
             status: "PENDING",
@@ -105,33 +125,57 @@ export default async function RapprochementPage({
             },
           },
           orderBy: { createdAt: "desc" },
-        }),
-        db.bankTransaction.findMany({
-          where: {
-            companyId: selectedCompanyId,
-            matched: false,
-          },
-          orderBy: { date: "desc" },
-          take: 50,
-        }),
-        db.bankStatementImport.findMany({
+        });
+      }
+    } catch (e) {
+      console.error("pendingDeclarations error:", e);
+    }
+
+    try {
+      unmatchedBankTxs = await db.bankTransaction.findMany({
+        where: {
+          companyId: selectedCompanyId,
+          matched: false,
+        },
+        orderBy: { date: "desc" },
+        take: 50,
+      });
+    } catch (e) {
+      console.error("unmatchedBankTxs error:", e);
+    }
+
+    try {
+      if ("bankStatementImport" in db && typeof (db as any).bankStatementImport?.findMany === "function") {
+        importHistory = await (db as any).bankStatementImport.findMany({
           where: { companyId: selectedCompanyId },
           orderBy: { importedAt: "desc" },
           take: 10,
-        }),
-        db.invoice.findMany({
+        });
+      }
+    } catch (e) {
+      console.error("importHistory error:", e);
+    }
+
+    try {
+      if ("invoice" in db && typeof (db as any).invoice?.findMany === "function") {
+        companyInvoices = await (db as any).invoice.findMany({
           where: { companyId: selectedCompanyId, status: { in: ["UNPAID", "PARTIALLY_PAID"] } },
           select: { id: true, invoiceNumber: true, amount: true, description: true },
-        }),
-      ])
-    : [[], [], [], [], [], []];
+        });
+      }
+    } catch (e) {
+      console.error("companyInvoices error:", e);
+    }
 
-  if (selectedCompanyId) {
-    const { computeOpeningBalance, computeSoldeFinal, getAccountNature } = await import("@/lib/accounting");
-    soldeInitial512 = await computeOpeningBalance("512", selectedMonth, selectedYear, selectedCompanyId);
-    totalDebit512 = journalEntries512.filter((e) => e.debitAccount === "512").reduce((sum, e) => sum + e.amount, 0);
-    totalCredit512 = journalEntries512.filter((e) => e.creditAccount === "512").reduce((sum, e) => sum + e.amount, 0);
-    soldeFinal512 = computeSoldeFinal(getAccountNature("512"), soldeInitial512, totalDebit512, totalCredit512);
+    try {
+      const { computeOpeningBalance, computeSoldeFinal, getAccountNature } = await import("@/lib/accounting");
+      soldeInitial512 = await computeOpeningBalance("512", selectedMonth, selectedYear, selectedCompanyId);
+      totalDebit512 = journalEntries512.filter((e) => e.debitAccount === "512").reduce((sum, e) => sum + e.amount, 0);
+      totalCredit512 = journalEntries512.filter((e) => e.creditAccount === "512").reduce((sum, e) => sum + e.amount, 0);
+      soldeFinal512 = computeSoldeFinal(getAccountNature("512"), soldeInitial512, totalDebit512, totalCredit512);
+    } catch (e) {
+      console.error("solde calculation error:", e);
+    }
   }
 
   const accountSummary512 = {
@@ -146,8 +190,8 @@ export default async function RapprochementPage({
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-[#0f172a] tracking-tight">{t.title}</h1>
-        <p className="text-sm text-[#64748b] mt-1">{t.subtitle}</p>
+        <h1 className="text-2xl font-bold text-[#0f172a] tracking-tight">{t.title || "Rapprochement Bancaire"}</h1>
+        <p className="text-sm text-[#64748b] mt-1">{t.subtitle || "Gestion et rapprochement bancaire"}</p>
       </div>
 
       <RapprochementClient

@@ -14,25 +14,51 @@ export default async function ClientBankPage({
   const user = await getCurrentUser();
   if (!user || user.role !== "CLIENT") redirect(`/${lang}/login`);
 
-  const [dict, company] = await Promise.all([
-    getDictionary(lang as Locale),
-    db.company.findFirst({
-      where: { clientId: user.userId },
-      select: { id: true },
-    }),
-  ]);
+  let dict: any = {};
+  let company: { id: string } | null = null;
+  let existingTransactions: any[] = [];
 
-  const b = dict.dashboard.bank;
+  try {
+    const res = await Promise.all([
+      getDictionary(lang as Locale),
+      db.company.findFirst({
+        where: { clientId: user.userId },
+        select: { id: true },
+      }),
+    ]);
+    dict = res[0];
+    company = res[1];
+  } catch (e) {
+    console.error("ClientBankPage setup error:", e);
+  }
+
+  const b = dict?.dashboard?.bank || {
+    title: "Rapprochement bancaire",
+    subtitle: "Importez votre relevé CSV et lancez le rapprochement automatique",
+    history: "Historique des transactions",
+    col_date: "Date",
+    col_description: "Description",
+    col_amount: "Montant",
+    col_reconciled: "Rapprochement",
+    col_entry: "Écriture liée",
+    matched_label: "✓ Rapproché",
+    unmatched_label: "○ Non rapproché",
+  };
+
   const locale = lang === "ar" ? "ar-DZ" : lang === "en" ? "en-US" : "fr-FR";
 
-  const existingTransactions = company
-    ? await db.bankTransaction.findMany({
+  if (company) {
+    try {
+      existingTransactions = await db.bankTransaction.findMany({
         where: { companyId: company.id },
         include: { journalEntry: { select: { description: true, amount: true } } },
         orderBy: { date: "desc" },
         take: 50,
-      })
-    : [];
+      });
+    } catch (e) {
+      console.error("ClientBankPage transactions query error:", e);
+    }
+  }
 
   return (
     <div className="p-8 max-w-5xl mx-auto space-y-8">
