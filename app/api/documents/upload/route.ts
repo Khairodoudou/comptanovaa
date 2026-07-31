@@ -167,6 +167,26 @@ export async function POST(req: NextRequest) {
     },
   });
 
+  // ── Auto-create Invoice record if FACTURE_CLIENT ───────────────────────
+  if (docType === "FACTURE_CLIENT" && amountTTC > 0) {
+    try {
+      if ("invoice" in db) {
+        await (db as any).invoice.create({
+          data: {
+            companyId,
+            documentId: document.id,
+            invoiceNumber: refNumber || `FAC-${Date.now().toString().slice(-6)}`,
+            amount: amountTTC,
+            status: "UNPAID",
+            description: `Facture Client - ${supplier}`,
+          },
+        });
+      }
+    } catch (e) {
+      console.error("Auto invoice creation error:", e);
+    }
+  }
+
   // ── Auto-generate PROPOSED journal entries (multi-line, with TVA) ───────────
   // Pass raw OCR text as rawDesc so charge/payment-mode keywords are detected
   const rawDesc = ocrResult.rawText !== "MANUAL_ENTRY" ? ocrResult.rawText : supplier;
