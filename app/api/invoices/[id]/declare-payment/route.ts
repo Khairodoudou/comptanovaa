@@ -70,13 +70,19 @@ export async function POST(
 
     let justificatifPath: string | null = null;
     if (justificatifFile && justificatifFile.size > 0) {
-      const uploadDir = path.join(process.cwd(), "public", "uploads", "justificatifs");
-      await mkdir(uploadDir, { recursive: true });
-      const ext = justificatifFile.name.split(".").pop() ?? "pdf";
-      const filename = `justif_${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-      const buffer = Buffer.from(await justificatifFile.arrayBuffer());
-      await writeFile(path.join(uploadDir, filename), buffer);
-      justificatifPath = `/uploads/justificatifs/${filename}`;
+      try {
+        const isProd = process.env.NODE_ENV === "production" || process.env.VERCEL;
+        const uploadDir = isProd ? "/tmp" : path.join(process.cwd(), "public", "uploads", "justificatifs");
+        await mkdir(uploadDir, { recursive: true });
+        const ext = justificatifFile.name.split(".").pop() ?? "pdf";
+        const filename = `justif_${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+        const buffer = Buffer.from(await justificatifFile.arrayBuffer());
+        await writeFile(path.join(uploadDir, filename), buffer);
+        justificatifPath = `/uploads/justificatifs/${filename}`;
+      } catch (fsErr) {
+        console.warn("FS write skipped on serverless:", fsErr);
+        justificatifPath = `justif_${Date.now()}_${justificatifFile.name}`;
+      }
     }
 
     const declaration = await (db as any).paymentDeclaration.create({
