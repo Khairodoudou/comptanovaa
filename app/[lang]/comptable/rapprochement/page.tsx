@@ -10,7 +10,7 @@ export default async function RapprochementPage({
   searchParams,
 }: {
   params: Promise<{ lang: string }>;
-  searchParams: Promise<{ companyId?: string; month?: string; year?: string }>;
+  searchParams: Promise<{ companyId?: string; month?: string; year?: string; tab?: string }>;
 }) {
   const { lang } = await params;
   const sp = await searchParams;
@@ -21,7 +21,16 @@ export default async function RapprochementPage({
     getDictionary(lang as Locale),
     db.company.findMany({
       where: { comptableId: user.userId },
-      select: { id: true, name: true, client: { select: { name: true } } },
+      select: {
+        id: true,
+        name: true,
+        bankName: true,
+        rib: true,
+        iban: true,
+        ccp: true,
+        beneficiaryName: true,
+        client: { select: { name: true, email: true } },
+      },
       orderBy: { name: "asc" },
     }),
   ]);
@@ -33,8 +42,8 @@ export default async function RapprochementPage({
   const selectedCompanyId = sp.companyId ?? companies[0]?.id ?? "";
   const selectedMonth = parseInt(sp.month ?? String(now.getMonth() + 1), 10);
   const selectedYear = parseInt(sp.year ?? String(now.getFullYear()), 10);
+  const activeTab = sp.tab ?? "pending";
 
-  // Load pre-existing bank transactions for this company/month
   const startOfMonth = new Date(selectedYear, selectedMonth - 1, 1);
   const endOfMonth = new Date(selectedYear, selectedMonth, 1);
 
@@ -43,7 +52,14 @@ export default async function RapprochementPage({
   let totalCredit512 = 0;
   let soldeFinal512 = 0;
 
-  const [bankTransactions, journalEntries512] = selectedCompanyId
+  const [
+    bankTransactions,
+    journalEntries512,
+    pendingDeclarations,
+    unmatchedBankTxs,
+    importHistory,
+    companyInvoices,
+  ] = selectedCompanyId
     ? await Promise.all([
         db.bankTransaction.findMany({
           where: {
@@ -76,15 +92,45 @@ export default async function RapprochementPage({
             bankTransaction: { select: { id: true } },
           },
         }),
+        db.paymentDeclaration.findMany({
+          where: {
+            invoice: { companyId: selectedCompanyId },
+            status: "PENDING",
+          },
+          include: {
+            invoice: {
+              include: {
+                company: { select: { name: true, client: { select: { name: true } } } },
+              },
+            },
+          },
+          orderBy: { createdAt: "desc" },
+        }),
+        db.bankTransaction.findMany({
+          where: {
+            companyId: selectedCompanyId,
+            matched: false,
+          },
+          orderBy: { date: "desc" },
+          take: 50,
+        }),
+        db.bankStatementImport.findMany({
+          where: { companyId: selectedCompanyId },
+          orderBy: { importedAt: "desc" },
+          take: 10,
+        }),
+        db.invoice.findMany({
+          where: { companyId: selectedCompanyId, status: { in: ["UNPAID", "PARTIALLY_PAID"] } },
+          select: { id: true, invoiceNumber: true, amount: true, description: true },
+        }),
       ])
-    : [[], []];
+    : [[], [], [], [], [], []];
 
   if (selectedCompanyId) {
     const { computeOpeningBalance, computeSoldeFinal, getAccountNature } = await import("@/lib/accounting");
     soldeInitial512 = await computeOpeningBalance("512", selectedMonth, selectedYear, selectedCompanyId);
-    
-    totalDebit512 = journalEntries512.filter(e => e.debitAccount === "512").reduce((sum, e) => sum + e.amount, 0);
-    totalCredit512 = journalEntries512.filter(e => e.creditAccount === "512").reduce((sum, e) => sum + e.amount, 0);
+    totalDebit512 = journalEntries512.filter((e) => e.debitAccount === "512").reduce((sum, e) => sum + e.amount, 0);
+    totalCredit512 = journalEntries512.filter((e) => e.creditAccount === "512").reduce((sum, e) => sum + e.amount, 0);
     soldeFinal512 = computeSoldeFinal(getAccountNature("512"), soldeInitial512, totalDebit512, totalCredit512);
   }
 
@@ -95,6 +141,8 @@ export default async function RapprochementPage({
     soldeFinal: soldeFinal512,
   };
 
+  const selectedCompany = companies.find((c) => c.id === selectedCompanyId) || null;
+
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-6">
       <div>
@@ -104,11 +152,17 @@ export default async function RapprochementPage({
 
       <RapprochementClient
         companies={companies}
+        selectedCompany={selectedCompany ? JSON.parse(JSON.stringify(selectedCompany)) : null}
         selectedCompanyId={selectedCompanyId}
         selectedMonth={selectedMonth}
         selectedYear={selectedYear}
+        activeTab={activeTab}
         bankTransactions={JSON.parse(JSON.stringify(bankTransactions))}
         journalEntries512={JSON.parse(JSON.stringify(journalEntries512))}
+        pendingDeclarations={JSON.parse(JSON.stringify(pendingDeclarations))}
+        unmatchedBankTxs={JSON.parse(JSON.stringify(unmatchedBankTxs))}
+        importHistory={JSON.parse(JSON.stringify(importHistory))}
+        companyInvoices={JSON.parse(JSON.stringify(companyInvoices))}
         accountSummary512={accountSummary512}
         lang={lang}
         locale={locale}

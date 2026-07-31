@@ -1,7 +1,7 @@
 import { getCurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
-import { Users, FileText, CheckSquare, TrendingUp, Clock } from "lucide-react";
+import { Users, FileText, CheckSquare, TrendingUp, Clock, CreditCard, AlertCircle, PieChart, Landmark } from "lucide-react";
 import { ComptableDashboardCharts } from "./DashboardCharts";
 import { getDictionary } from "@/get-dictionary";
 import type { Locale } from "@/i18n-config";
@@ -25,41 +25,60 @@ export default async function ComptableDashboardPage({
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
   const assignedFilter = { company: { comptableId: user.userId } };
+  const companyFilter = { comptableId: user.userId };
 
-  const [totalClients, pendingEntries, docsToday, validatedThisMonth, recentDocs, recentValidations, weeklyEntries] =
-    await Promise.all([
-      // Clients assigned to this comptable
-      db.user.count({
-        where: {
-          role: "CLIENT",
-          companies: { some: { comptableId: user.userId } },
-        },
-      }),
-      db.journalEntry.count({ where: { status: "PROPOSED", document: assignedFilter } }),
-      db.document.count({ where: { uploadedAt: { gte: startOfToday }, ...assignedFilter } }),
-      db.journalEntry.count({
-        where: { status: "VALIDATED", validatedAt: { gte: startOfMonth }, document: assignedFilter },
-      }),
-      db.document.findMany({
-        take: 5,
-        orderBy: { uploadedAt: "desc" },
-        where: assignedFilter,
-        include: { company: { include: { client: { select: { name: true } } } } },
-      }),
-      db.journalEntry.findMany({
-        take: 5,
-        where: { status: "VALIDATED", document: assignedFilter },
-        orderBy: { validatedAt: "desc" },
-        include: { validatedBy: { select: { name: true } } },
-      }),
-      db.journalEntry.findMany({
-        where: {
-          createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
-          document: assignedFilter,
-        },
-        select: { createdAt: true, status: true },
-      }),
-    ]);
+  const [
+    totalClients,
+    pendingEntries,
+    docsToday,
+    validatedThisMonth,
+    recentDocs,
+    recentValidations,
+    weeklyEntries,
+    pendingPaymentsCount,
+    unmatchedTxsCount,
+    partiallyPaidCount,
+    monthEncaisse,
+  ] = await Promise.all([
+    db.user.count({
+      where: {
+        role: "CLIENT",
+        companies: { some: companyFilter },
+      },
+    }),
+    db.journalEntry.count({ where: { status: "PROPOSED", document: assignedFilter } }),
+    db.document.count({ where: { uploadedAt: { gte: startOfToday }, ...assignedFilter } }),
+    db.journalEntry.count({
+      where: { status: "VALIDATED", validatedAt: { gte: startOfMonth }, document: assignedFilter },
+    }),
+    db.document.findMany({
+      take: 5,
+      orderBy: { uploadedAt: "desc" },
+      where: assignedFilter,
+      include: { company: { include: { client: { select: { name: true } } } } },
+    }),
+    db.journalEntry.findMany({
+      take: 5,
+      where: { status: "VALIDATED", document: assignedFilter },
+      orderBy: { validatedAt: "desc" },
+      include: { validatedBy: { select: { name: true } } },
+    }),
+    db.journalEntry.findMany({
+      where: {
+        createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
+        document: assignedFilter,
+      },
+      select: { createdAt: true, status: true },
+    }),
+    // Bank & Payment KPIs
+    db.invoice.count({ where: { status: "PENDING_VERIFICATION", company: companyFilter } }),
+    db.bankTransaction.count({ where: { matched: false, company: companyFilter } }),
+    db.invoice.count({ where: { status: "PARTIALLY_PAID", company: companyFilter } }),
+    db.invoicePayment.aggregate({
+      where: { createdAt: { gte: startOfMonth }, invoice: { company: companyFilter } },
+      _sum: { amount: true },
+    }),
+  ]);
 
   const days = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(Date.now() - (6 - i) * 24 * 60 * 60 * 1000);
@@ -78,6 +97,8 @@ export default async function ComptableDashboardPage({
     { label: kpiT.validated_month, value: validatedThisMonth, icon: CheckSquare, color: "bg-green-50 text-[#2d8f5e]", border: "border-green-100" },
   ];
 
+  const totalEncaisseVal = monthEncaisse._sum.amount || 0;
+
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-8">
       <div>
@@ -87,6 +108,7 @@ export default async function ComptableDashboardPage({
         </p>
       </div>
 
+      {/* Primary KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         {kpis.map((kpi) => {
           const Icon = kpi.icon;
@@ -104,6 +126,44 @@ export default async function ComptableDashboardPage({
             </div>
           );
         })}
+      </div>
+
+      {/* Bank & Payment Rapprochement Statistics */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="font-bold text-[#0f172a] text-sm flex items-center gap-2">
+            <Landmark size={18} className="text-[#1a6fbf]" />
+            Statistiques & Rapprochement Bancaire
+          </h2>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="bg-amber-50/60 border border-amber-200/70 rounded-xl p-4">
+            <p className="text-xs text-amber-800 font-semibold mb-1">Paiements à vérifier</p>
+            <p className="text-2xl font-bold text-amber-900">{pendingPaymentsCount}</p>
+            <p className="text-[10px] text-amber-700 mt-1">Déclarations client en attente</p>
+          </div>
+
+          <div className="bg-[#f0f7ff] border border-blue-200/70 rounded-xl p-4">
+            <p className="text-xs text-[#1a6fbf] font-semibold mb-1">Paiements partiels</p>
+            <p className="text-2xl font-bold text-[#0f172a]">{partiallyPaidCount}</p>
+            <p className="text-[10px] text-slate-500 mt-1">Factures en cours de règlement</p>
+          </div>
+
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+            <p className="text-xs text-slate-600 font-semibold mb-1">Virements non rapprochés</p>
+            <p className="text-2xl font-bold text-slate-800">{unmatchedTxsCount}</p>
+            <p className="text-[10px] text-slate-500 mt-1">Lignes sans facture affectée</p>
+          </div>
+
+          <div className="bg-green-50/60 border border-green-200/70 rounded-xl p-4">
+            <p className="text-xs text-green-800 font-semibold mb-1">Total Encaissé Ce Mois</p>
+            <p className="text-xl font-bold text-green-900">
+              {totalEncaisseVal.toLocaleString(locale, { minimumFractionDigits: 2 })} DA
+            </p>
+            <p className="text-[10px] text-green-700 mt-1">Règlements bancaires validés</p>
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

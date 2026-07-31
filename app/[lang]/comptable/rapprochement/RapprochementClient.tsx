@@ -13,97 +13,85 @@ import {
   ChevronRight,
   X,
   Link2,
+  Eye,
+  Building2,
+  FileCheck,
+  FileSpreadsheet,
+  HelpCircle,
+  ArrowRight,
+  PlusCircle,
+  Save,
+  Check,
 } from "lucide-react";
 
-// ─── Types ─────────────────────────────────────────────────────────────────────
+// ─── Interfaces ────────────────────────────────────────────────────────────────
 
 interface Company {
   id: string;
   name: string;
-  client: { name: string };
+  bankName?: string | null;
+  rib?: string | null;
+  iban?: string | null;
+  ccp?: string | null;
+  beneficiaryName?: string | null;
+  client: { name: string; email: string };
 }
 
-interface JournalEntry512 {
+interface PendingDeclaration {
   id: string;
-  date: string;
-  description: string;
-  debitAccount: string;
-  creditAccount: string;
+  invoiceId: string;
+  reference?: string | null;
+  paymentDate?: string | null;
   amount: number;
-  reference: string | null;
-  bankTransaction: { id: string } | null;
-}
-
-interface BankTx {
-  id: string;
-  date: string;
-  description: string;
-  amount: number;
-  chequeNumber: string | null;
-  matched: boolean;
-  journalEntry: {
+  justificatif?: string | null;
+  createdAt: string;
+  invoice: {
     id: string;
-    description: string;
+    invoiceNumber?: string | null;
     amount: number;
-    reference: string | null;
-    debitAccount: string;
-    creditAccount: string;
-  } | null;
+    description?: string | null;
+    company: { name: string; client: { name: string } };
+  };
 }
 
-interface ReconcileResult {
+interface UnmatchedBankTx {
   id: string;
   date: string;
   description: string;
   amount: number;
-  chequeNumber: string | null;
-  matchScore: "exact" | "cheque" | "partial" | "none";
-  matched: boolean;
-  matchedEntry?: { description: string; amount: number; reference: string | null };
+  chequeNumber?: string | null;
+  reference?: string | null;
 }
 
-interface RapprochementT {
-  filter_client: string;
-  filter_all_clients: string;
-  filter_month: string;
-  import_title: string;
-  format_hint: string;
-  format_detail: string;
-  choose_csv: string;
-  run: string;
-  running: string;
-  col_compte512: string;
-  col_releve: string;
-  col_date: string;
-  col_description: string;
-  col_cheque: string;
-  col_debit: string;
-  col_credit: string;
-  col_amount: string;
-  col_statut: string;
-  matched_exact: string;
-  matched_partial: string;
-  unmatched: string;
-  summary_matched: string;
-  summary_unmatched: string;
-  summary_ecart: string;
-  summary_total: string;
-  correct_btn: string;
-  correct_modal_title: string;
-  correct_select_entry: string;
-  correct_save: string;
-  correct_cancel: string;
-  no_data: string;
-  empty_512: string;
+interface ImportHistoryItem {
+  id: string;
+  filename: string;
+  format: string;
+  rowCount: number;
+  matchedCount: number;
+  importedAt: string;
+}
+
+interface CompanyInvoice {
+  id: string;
+  invoiceNumber?: string | null;
+  amount: number;
+  description?: string | null;
 }
 
 interface Props {
   companies: Company[];
+  selectedCompany: Company | null;
   selectedCompanyId: string;
   selectedMonth: number;
   selectedYear: number;
-  bankTransactions: BankTx[];
-  journalEntries512: JournalEntry512[];
+  activeTab: string;
+  bankTransactions: any[];
+  journalEntries512: any[];
+  pendingDeclarations: PendingDeclaration[];
+  unmatchedBankTxs: UnmatchedBankTx[];
+  importHistory: ImportHistoryItem[];
+  companyInvoices: CompanyInvoice[];
   accountSummary512: {
     soldeInitial: number;
     totalDebit: number;
@@ -112,172 +100,35 @@ interface Props {
   };
   lang: string;
   locale: string;
-  t: RapprochementT;
+  t: any;
 }
 
-const MONTH_NAMES_FR = [
-  "Janvier","Février","Mars","Avril","Mai","Juin",
-  "Juillet","Août","Septembre","Octobre","Novembre","Décembre",
+const REFUSAL_REASONS = [
+  { key: "PAYMENT_NOT_FOUND", label: "Paiement introuvable dans le relevé bancaire" },
+  { key: "INCORRECT_AMOUNT", label: "Montant incorrect" },
+  { key: "WRONG_REFERENCE", label: "Mauvaise référence de virement" },
+  { key: "CANCELLED_TRANSFER", label: "Virement annulé" },
+  { key: "INVALID_JUSTIFICATION", label: "Justificatif invalide ou illisible" },
+  { key: "OTHER", label: "Autre motif" },
 ];
 
 function fmt(n: number, locale: string) {
   return Math.abs(n).toLocaleString(locale, { minimumFractionDigits: 2 });
 }
 
-// ─── Status badge ─────────────────────────────────────────────────────────────
-
-function StatusBadge({
-  score,
-  t,
-}: {
-  score: "exact" | "cheque" | "partial" | "none";
-  t: RapprochementT;
-}) {
-  if (score === "exact" || score === "cheque") {
-    return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700 border border-green-200">
-        <CheckCircle2 size={11} />
-        {score === "cheque" ? "✓ Chèque" : t.matched_exact}
-      </span>
-    );
-  }
-  if (score === "partial") {
-    return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">
-        <AlertCircle size={11} />
-        {t.matched_partial}
-      </span>
-    );
-  }
-  return (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700 border border-red-200">
-      <XCircle size={11} />
-      {t.unmatched}
-    </span>
-  );
-}
-
-// ─── Correct Modal ────────────────────────────────────────────────────────────
-
-function CorrectModal({
-  bankTxId,
-  companyId,
-  availableEntries,
-  t,
-  locale,
-  onClose,
-  onCorrected,
-}: {
-  bankTxId: string;
-  companyId: string;
-  availableEntries: JournalEntry512[];
-  t: RapprochementT;
-  locale: string;
-  onClose: () => void;
-  onCorrected: () => void;
-}) {
-  const [selectedEntryId, setSelectedEntryId] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function handleSave() {
-    if (!selectedEntryId) return;
-    setSaving(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/bank/correct", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          bankTransactionId: bankTxId,
-          journalEntryId: selectedEntryId,
-        }),
-      });
-      if (!res.ok) {
-        const d = await res.json();
-        throw new Error(d.error ?? "Erreur serveur");
-      }
-      onCorrected();
-      onClose();
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Erreur inconnue");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 space-y-5">
-        <div className="flex items-center justify-between">
-          <h2 className="text-base font-bold text-[#0f172a]">{t.correct_modal_title}</h2>
-          <button onClick={onClose} className="text-[#94a3b8] hover:text-[#0f172a]">
-            <X size={18} />
-          </button>
-        </div>
-
-        <div className="space-y-3">
-          <label className="block text-xs font-medium text-[#64748b]">
-            {t.correct_select_entry}
-          </label>
-          <select
-            value={selectedEntryId}
-            onChange={(e) => setSelectedEntryId(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-[#0f172a] focus:outline-none focus:ring-2 focus:ring-[#1a6fbf]/30 focus:border-[#1a6fbf]"
-          >
-            <option value="">— {t.correct_select_entry} —</option>
-            {availableEntries.map((e) => (
-              <option key={e.id} value={e.id}>
-                {new Date(e.date).toLocaleDateString(locale, { day: "2-digit", month: "2-digit" })}
-                {" · "}
-                {e.description.slice(0, 40)}
-                {" · "}
-                {fmt(e.amount, locale)} DA
-                {e.reference && ` [${e.reference}]`}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {error && (
-          <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-            {error}
-          </p>
-        )}
-
-        <div className="flex items-center gap-3">
-          <button
-            onClick={handleSave}
-            disabled={saving || !selectedEntryId}
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-[#1a6fbf] hover:bg-[#185fa5] text-white rounded-lg text-sm font-medium transition-all disabled:opacity-60"
-          >
-            {saving ? (
-              <><Loader2 size={14} className="animate-spin" /> {t.correct_cancel}...</>
-            ) : (
-              <><Link2 size={14} /> {t.correct_save}</>
-            )}
-          </button>
-          <button
-            onClick={onClose}
-            className="flex-1 px-4 py-2 border border-gray-200 rounded-lg text-sm text-[#64748b] hover:bg-gray-50"
-          >
-            {t.correct_cancel}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Main Client Component ─────────────────────────────────────────────────────
-
 export function RapprochementClient({
   companies,
+  selectedCompany,
   selectedCompanyId,
   selectedMonth,
   selectedYear,
-  bankTransactions: initialBankTxs,
+  activeTab: initialTab,
+  bankTransactions,
   journalEntries512,
+  pendingDeclarations,
+  unmatchedBankTxs,
+  importHistory,
+  companyInvoices,
   accountSummary512,
   lang,
   locale,
@@ -286,395 +137,952 @@ export function RapprochementClient({
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const [companyId] = useState(selectedCompanyId);
-  const [month, setMonth] = useState(selectedMonth);
-  const [year, setYear] = useState(selectedYear);
+  const [activeTab, setActiveTab] = useState<string>(initialTab);
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
-  const [results, setResults] = useState<ReconcileResult[] | null>(null);
-  const [summary, setSummary] = useState<{
-    total: number;
-    matched: number;
-    unmatched: number;
-    totalEcart: number;
-  } | null>(null);
+  const [results, setResults] = useState<any[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [correctModal, setCorrectModal] = useState<{ bankTxId: string } | null>(null);
+
+  // Modals state
+  const [justifModal, setJustifModal] = useState<string | null>(null);
+  const [validateModal, setValidateModal] = useState<PendingDeclaration | null>(null);
+  const [refuseModal, setRefuseModal] = useState<PendingDeclaration | null>(null);
+  const [attachModal, setAttachModal] = useState<UnmatchedBankTx | null>(null);
+  const [showBankInfoModal, setShowBankInfoModal] = useState(false);
+
+  // Validation form state
+  const [selectedTxId, setSelectedTxId] = useState("");
+  const [allocAmount, setAllocAmount] = useState("");
+  const [validating, setValidating] = useState(false);
+
+  // Refusal form state
+  const [refusalReason, setRefusalReason] = useState("PAYMENT_NOT_FOUND");
+  const [refusalNotes, setRefusalNotes] = useState("");
+  const [refusing, setRefusing] = useState(false);
+
+  // Attachment form state
+  const [selectedInvoiceId, setSelectedInvoiceId] = useState("");
+  const [attachAmount, setAttachAmount] = useState("");
+  const [attaching, setAttaching] = useState(false);
+
+  // Bank Info form state
+  const [bankForm, setBankForm] = useState({
+    bankName: selectedCompany?.bankName || "",
+    rib: selectedCompany?.rib || "",
+    iban: selectedCompany?.iban || "",
+    ccp: selectedCompany?.ccp || "",
+    beneficiaryName: selectedCompany?.beneficiaryName || "",
+  });
+  const [savingBank, setSavingBank] = useState(false);
 
   function prevMonth() {
-    let m = month - 1; let y = year;
+    let m = selectedMonth - 1;
+    let y = selectedYear;
     if (m === 0) { m = 12; y--; }
-    setMonth(m); setYear(y);
-    router.push(`/${lang}/comptable/rapprochement?companyId=${companyId}&month=${m}&year=${y}`);
+    router.push(`/${lang}/comptable/rapprochement?companyId=${selectedCompanyId}&month=${m}&year=${y}&tab=${activeTab}`);
   }
 
   function nextMonth() {
-    let m = month + 1; let y = year;
+    let m = selectedMonth + 1;
+    let y = selectedYear;
     if (m === 13) { m = 1; y++; }
-    setMonth(m); setYear(y);
-    router.push(`/${lang}/comptable/rapprochement?companyId=${companyId}&month=${m}&year=${y}`);
+    router.push(`/${lang}/comptable/rapprochement?companyId=${selectedCompanyId}&month=${m}&year=${y}&tab=${activeTab}`);
   }
 
   async function handleReconcile() {
-    if (!file || !companyId) return;
+    if (!file || !selectedCompanyId) return;
     setLoading(true);
     setError(null);
-    setResults(null);
-    setSummary(null);
     try {
       const formData = new FormData();
       formData.append("file", file);
-      formData.append("companyId", companyId);
+      formData.append("companyId", selectedCompanyId);
       const res = await fetch("/api/bank/reconcile", { method: "POST", body: formData });
       if (!res.ok) {
         const d = await res.json();
-        throw new Error(d.error ?? "Reconciliation error");
+        throw new Error(d.error ?? "Erreur de rapprochement");
       }
       const data = await res.json();
       setResults(data.results);
-      setSummary({
-        total: data.total,
-        matched: data.matched,
-        unmatched: data.unmatched,
-        totalEcart: data.totalEcart,
-      });
       router.refresh();
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Unknown error");
+    } catch (err: any) {
+      setError(err.message || "Erreur inconnue");
     } finally {
       setLoading(false);
     }
   }
 
-  // Entries not yet linked to a bank tx (for the correction modal)
-  const unlinkEntries = journalEntries512.filter((e) => !e.bankTransaction);
+  async function handleValidatePayment() {
+    if (!validateModal || !selectedTxId || !allocAmount) return;
+    setValidating(true);
+    try {
+      const res = await fetch(`/api/invoices/${validateModal.invoiceId}/validate-payment`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          declarationId: validateModal.id,
+          bankTransactionId: selectedTxId,
+          allocatedAmount: parseFloat(allocAmount),
+        }),
+      });
 
-  const [dragging, setDragging] = useState(false);
-  const isPdf = file?.name.toLowerCase().endsWith(".pdf");
+      if (!res.ok) {
+        const d = await res.json();
+        throw new Error(d.error ?? "Erreur de validation");
+      }
 
-  function handleDrop(e: React.DragEvent) {
-    e.preventDefault();
-    setDragging(false);
-    const dropped = e.dataTransfer.files[0];
-    if (dropped && (dropped.name.endsWith(".csv") || dropped.name.endsWith(".pdf"))) {
-      setFile(dropped);
-      setResults(null);
-      setError(null);
-    } else {
-      setError("Seuls les fichiers CSV et PDF sont acceptés.");
+      setValidateModal(null);
+      router.refresh();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setValidating(false);
     }
   }
 
+  async function handleRefusePayment() {
+    if (!refuseModal) return;
+    setRefusing(true);
+    try {
+      const res = await fetch(`/api/invoices/${refuseModal.invoiceId}/refuse-payment`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          declarationId: refuseModal.id,
+          reason: refusalReason,
+          notes: refusalNotes,
+        }),
+      });
+
+      if (!res.ok) {
+        const d = await res.json();
+        throw new Error(d.error ?? "Erreur de refus");
+      }
+
+      setRefuseModal(null);
+      router.refresh();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setRefusing(false);
+    }
+  }
+
+  async function handleAttachTransaction() {
+    if (!attachModal || !selectedInvoiceId || !attachAmount) return;
+    setAttaching(true);
+    try {
+      const res = await fetch("/api/bank/attach", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          bankTransactionId: attachModal.id,
+          invoiceId: selectedInvoiceId,
+          amount: parseFloat(attachAmount),
+        }),
+      });
+
+      if (!res.ok) {
+        const d = await res.json();
+        throw new Error(d.error ?? "Erreur lors du rattachement");
+      }
+
+      setAttachModal(null);
+      router.refresh();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setAttaching(false);
+    }
+  }
+
+  async function handleSaveBankInfo() {
+    if (!selectedCompanyId) return;
+    setSavingBank(true);
+    try {
+      const res = await fetch("/api/company/bank-info", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          companyId: selectedCompanyId,
+          ...bankForm,
+        }),
+      });
+
+      if (!res.ok) throw new Error("Erreur de mise à jour");
+      setShowBankInfoModal(false);
+      router.refresh();
+    } catch (e) {
+      alert("Erreur lors de la sauvegarde des coordonnées bancaires");
+    } finally {
+      setSavingBank(false);
+    }
+  }
+
+  function renderScoreBadge(score: number) {
+    if (score === 100) {
+      return (
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-green-100 text-green-800 border border-green-200">
+          <CheckCircle2 size={12} /> 100 % Exact
+        </span>
+      );
+    }
+    if (score >= 90) {
+      return (
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+          <CheckCircle2 size={12} /> {score} % Très probable
+        </span>
+      );
+    }
+    if (score >= 80) {
+      return (
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+          <AlertCircle size={12} /> {score} % À vérifier
+        </span>
+      );
+    }
+    return (
+      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-50 text-red-700 border border-red-200">
+        <XCircle size={12} /> 0 % Aucune correspondance
+      </span>
+    );
+  }
+
   return (
-    <>
-      {correctModal && (
-        <CorrectModal
-          bankTxId={correctModal.bankTxId}
-          companyId={companyId}
-          availableEntries={unlinkEntries}
-          t={t}
-          locale={locale}
-          onClose={() => setCorrectModal(null)}
-          onCorrected={() => {
-            setResults(null);
-            setSummary(null);
-            router.refresh();
-          }}
-        />
-      )}
-
-      <div className="space-y-6">
-        {/* Controls bar */}
-        <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-5 space-y-5">
-          <div className="flex flex-wrap items-center gap-4">
-            {/* Company selector */}
-            <select
-              value={companyId}
-              onChange={(e) =>
-                router.push(`/${lang}/comptable/rapprochement?companyId=${e.target.value}&month=${month}&year=${year}`)
-              }
-              className="px-3 py-2 border border-slate-200 rounded-xl text-sm text-[#0f172a] focus:outline-none focus:ring-2 focus:ring-[#1a6fbf]/30 focus:border-[#1a6fbf] bg-white font-medium min-w-[200px]"
-            >
-              {companies.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name} ({c.client.name})
-                </option>
-              ))}
-            </select>
-
-            {/* Month navigation */}
-            <div className="flex items-center gap-1 border border-slate-200 rounded-xl overflow-hidden bg-white">
-              <button onClick={prevMonth} className="px-3 py-2 hover:bg-slate-50 text-[#64748b] transition-colors">
-                <ChevronLeft size={16} />
-              </button>
-              <span className="px-4 py-2 text-sm font-semibold text-[#0f172a] min-w-[140px] text-center border-x border-slate-100">
-                {MONTH_NAMES_FR[month - 1]} {year}
-              </span>
-              <button onClick={nextMonth} className="px-3 py-2 hover:bg-slate-50 text-[#64748b] transition-colors">
-                <ChevronRight size={16} />
-              </button>
-            </div>
-          </div>
-
-          {/* Upload Zone (Drag & Drop) */}
-          <div
-            onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
-            onDragLeave={() => setDragging(false)}
-            onDrop={handleDrop}
-            onClick={() => inputRef.current?.click()}
-            className={`relative border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all duration-200 ${
-              dragging
-                ? "border-[#1a6fbf] bg-blue-50/40"
-                : file
-                ? "border-green-300 bg-green-50/30"
-                : "border-slate-200 hover:border-[#1a6fbf]/50 hover:bg-slate-50/50"
-            }`}
+    <div className="space-y-6">
+      {/* Top Header Controls Bar */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-4 flex flex-wrap items-center justify-between gap-4">
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Company Selector */}
+          <select
+            value={selectedCompanyId}
+            onChange={(e) =>
+              router.push(
+                `/${lang}/comptable/rapprochement?companyId=${e.target.value}&month=${selectedMonth}&year=${selectedYear}&tab=${activeTab}`
+              )
+            }
+            className="px-3.5 py-2 border border-slate-300 rounded-xl text-sm font-semibold text-[#0f172a] focus:ring-2 focus:ring-[#1a6fbf] bg-white"
           >
-            <input
-              ref={inputRef}
-              type="file"
-              accept=".csv,.pdf,text/csv,application/pdf"
-              className="hidden"
-              onChange={(e) => { setFile(e.target.files?.[0] ?? null); setResults(null); setError(null); }}
-            />
+            {companies.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name} ({c.client.name})
+              </option>
+            ))}
+          </select>
 
-            {file ? (
-              <div className="flex flex-col items-center gap-2">
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center border ${isPdf ? "bg-red-50 border-red-100 text-red-500" : "bg-green-50 border-green-100 text-green-600"}`}>
-                  {isPdf ? "PDF" : "CSV"}
-                </div>
-                <p className="font-semibold text-[#0f172a] text-sm">{file.name}</p>
-                <button
-                  onClick={(e) => { e.stopPropagation(); setFile(null); setResults(null); }}
-                  className="absolute top-3 right-3 text-slate-400 hover:text-slate-600"
-                >
-                  <X size={16} />
-                </button>
-                <button
-                  onClick={(e) => { e.stopPropagation(); handleReconcile(); }}
-                  disabled={loading}
-                  className="mt-2 flex items-center gap-2 px-5 py-2 bg-[#1a6fbf] hover:bg-[#185fa5] text-white rounded-lg text-sm font-medium transition-all disabled:opacity-60"
-                >
-                  {loading ? <><Loader2 size={14} className="animate-spin" /> {isPdf ? "Analyse OCR en cours..." : t.running}</> : <><RefreshCw size={14} /> Lancer le rapprochement {isPdf ? "(PDF)" : "(CSV)"}</>}
-                </button>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center gap-2">
-                <div className="flex gap-2">
-                  <span className="w-8 h-8 rounded-lg bg-green-50 border border-green-100 flex items-center justify-center text-[10px] font-bold text-green-600">CSV</span>
-                  <span className="w-8 h-8 rounded-lg bg-red-50 border border-red-100 flex items-center justify-center text-[10px] font-bold text-red-500">PDF</span>
-                </div>
-                <p className="text-sm font-medium text-[#0f172a] mt-1">Importez votre relevé bancaire (CSV ou PDF)</p>
-                <p className="text-[11px] text-[#64748b]">Glissez le fichier ici ou cliquez pour parcourir</p>
-              </div>
-            )}
+          {/* Month Navigator */}
+          <div className="flex items-center border border-slate-200 rounded-xl overflow-hidden bg-white">
+            <button onClick={prevMonth} className="px-3 py-2 hover:bg-slate-50 text-slate-600 transition-colors">
+              <ChevronLeft size={16} />
+            </button>
+            <span className="px-4 py-2 text-xs font-bold text-[#0f172a] min-w-[130px] text-center border-x border-slate-100">
+              Mois {selectedMonth} / {selectedYear}
+            </span>
+            <button onClick={nextMonth} className="px-3 py-2 hover:bg-slate-50 text-slate-600 transition-colors">
+              <ChevronRight size={16} />
+            </button>
           </div>
-          
-          {/* Format hint small text */}
-          {!file && (
-            <div className="text-[11px] text-[#64748b] text-center border-t border-slate-100 pt-3">
-              <strong>CSV :</strong> <code className="bg-slate-100 px-1 py-0.5 rounded text-slate-700">date,description,montant[,N°chèque]</code> — <strong>PDF :</strong> OCR Automatique des écritures
-            </div>
-          )}
-
-          {error && (
-            <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-600 flex items-center gap-2">
-              <AlertCircle size={15} /> {error}
-            </div>
-          )}
         </div>
 
-        {/* Summary cards — shown after reconcile */}
-        {summary && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            {[
-              { label: t.summary_total, value: summary.total, cls: "text-[#0f172a]", bg: "bg-white" },
-              { label: t.summary_matched, value: summary.matched, cls: "text-[#2d8f5e]", bg: "bg-green-50" },
-              { label: t.summary_unmatched, value: summary.unmatched, cls: "text-red-600", bg: "bg-red-50" },
-              { label: t.summary_ecart, value: `${fmt(summary.totalEcart, locale)} DA`, cls: "text-amber-600", bg: "bg-amber-50" },
-            ].map((card) => (
-              <div key={card.label} className={`${card.bg} rounded-xl border border-gray-100 shadow-sm p-4 text-center`}>
-                <p className={`text-2xl font-bold ${card.cls}`}>{card.value}</p>
-                <p className="text-xs text-[#64748b] mt-1">{card.label}</p>
-              </div>
-            ))}
-          </div>
-        )}
+        {/* Bank Details button */}
+        <button
+          onClick={() => setShowBankInfoModal(true)}
+          className="inline-flex items-center gap-2 px-4 py-2 border border-slate-200 hover:border-[#1a6fbf] rounded-xl text-xs font-semibold text-[#0f172a] bg-slate-50 hover:bg-white transition-all shadow-sm"
+        >
+          <Building2 size={15} className="text-[#1a6fbf]" />
+          Coordonnées Bancaires Entreprise
+        </button>
+      </div>
 
-        {/* Dual-column view */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* LEFT — Account 512 entries */}
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-            <div className="px-5 py-3 bg-[#f0f7ff] border-b border-[#1a6fbf]/20">
-              <p className="font-semibold text-sm text-[#1a6fbf]">{t.col_compte512}</p>
-            </div>
-            {journalEntries512.length === 0 ? (
-              <p className="px-5 py-8 text-sm text-center text-[#64748b]">{t.empty_512}</p>
-            ) : (
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b border-gray-50 bg-[#f8fafc]">
-                    {[t.col_date, t.col_description, t.col_cheque, t.col_debit, t.col_credit].map((h) => (
-                      <th key={h} className="text-left px-3 py-2 text-[#94a3b8] font-medium whitespace-nowrap">
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {/* Solde Initial row */}
-                  <tr className="bg-amber-50/50">
-                    <td colSpan={3} className="px-3 py-2 text-right text-[11px] text-[#64748b] italic">Solde initial</td>
-                    <td colSpan={2} className="px-3 py-2 font-bold text-[#0f172a] whitespace-nowrap text-right pr-8">
-                      {fmt(accountSummary512.soldeInitial, locale)}
-                    </td>
-                  </tr>
-                  {journalEntries512.map((e) => {
-                    const isDebit512 = e.debitAccount === "512";
-                    const isLinked = !!e.bankTransaction;
-                    return (
-                      <tr
-                        key={e.id}
-                        className={`hover:bg-[#f8fafc] transition-colors ${isLinked ? "opacity-60" : ""}`}
-                      >
-                        <td className="px-3 py-2 text-[#64748b] whitespace-nowrap">
-                          {new Date(e.date).toLocaleDateString(locale, { day: "2-digit", month: "2-digit" })}
-                        </td>
-                        <td className="px-3 py-2 text-[#0f172a] max-w-[120px] truncate">
-                          {e.description}
-                        </td>
-                        <td className="px-3 py-2 font-mono text-[#94a3b8]">
-                          {e.reference ?? "—"}
-                        </td>
-                        <td className="px-3 py-2 text-red-600 font-semibold">
-                          {!isDebit512 ? fmt(e.amount, locale) : "—"}
-                        </td>
-                        <td className="px-3 py-2 text-[#2d8f5e] font-semibold">
-                          {isDebit512 ? fmt(e.amount, locale) : "—"}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  {/* Totals row */}
-                  <tr className="bg-[#f8fafc] border-t border-gray-200">
-                    <td colSpan={3} className="px-3 py-2 text-right text-[11px] font-semibold text-[#1a6fbf]">Total Mouvements</td>
-                    <td className="px-3 py-2 font-mono font-bold text-red-600">{fmt(accountSummary512.totalCredit, locale)}</td>
-                    <td className="px-3 py-2 font-mono font-bold text-[#2d8f5e]">{fmt(accountSummary512.totalDebit, locale)}</td>
-                  </tr>
-                  {/* Solde Final row */}
-                  <tr className={`border-t border-gray-200 ${accountSummary512.soldeFinal >= 0 ? "bg-green-50" : "bg-red-50"}`}>
-                    <td colSpan={3} className="px-3 py-2 text-right text-xs font-bold text-[#0f172a]">Solde final du mois</td>
-                    <td colSpan={2} className={`px-3 py-2 font-bold text-sm text-right pr-8 ${accountSummary512.soldeFinal >= 0 ? "text-[#2d8f5e]" : "text-red-600"}`}>
-                      {fmt(accountSummary512.soldeFinal, locale)}
-                      {accountSummary512.soldeFinal < 0 && " (−)"}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            )}
+      {/* Main Tabs Navigation */}
+      <div className="border-b border-slate-200 flex items-center gap-6 overflow-x-auto">
+        <button
+          onClick={() => setActiveTab("pending")}
+          className={`pb-3 text-sm font-semibold border-b-2 flex items-center gap-2 transition-colors whitespace-nowrap ${
+            activeTab === "pending"
+              ? "border-[#1a6fbf] text-[#1a6fbf]"
+              : "border-transparent text-slate-500 hover:text-slate-700"
+          }`}
+        >
+          <FileCheck size={18} />
+          Paiements en attente
+          {pendingDeclarations.length > 0 && (
+            <span className="bg-amber-500 text-white text-xs px-2 py-0.5 rounded-full font-bold">
+              {pendingDeclarations.length}
+            </span>
+          )}
+        </button>
+
+        <button
+          onClick={() => setActiveTab("import")}
+          className={`pb-3 text-sm font-semibold border-b-2 flex items-center gap-2 transition-colors whitespace-nowrap ${
+            activeTab === "import"
+              ? "border-[#1a6fbf] text-[#1a6fbf]"
+              : "border-transparent text-slate-500 hover:text-slate-700"
+          }`}
+        >
+          <Upload size={18} />
+          Import Relevé & Historique
+        </button>
+
+        <button
+          onClick={() => setActiveTab("matching")}
+          className={`pb-3 text-sm font-semibold border-b-2 flex items-center gap-2 transition-colors whitespace-nowrap ${
+            activeTab === "matching"
+              ? "border-[#1a6fbf] text-[#1a6fbf]"
+              : "border-transparent text-slate-500 hover:text-slate-700"
+          }`}
+        >
+          <RefreshCw size={18} />
+          Rapprochement Compte 512
+        </button>
+
+        <button
+          onClick={() => setActiveTab("unmatched")}
+          className={`pb-3 text-sm font-semibold border-b-2 flex items-center gap-2 transition-colors whitespace-nowrap ${
+            activeTab === "unmatched"
+              ? "border-[#1a6fbf] text-[#1a6fbf]"
+              : "border-transparent text-slate-500 hover:text-slate-700"
+          }`}
+        >
+          <HelpCircle size={18} />
+          Paiements non affectés
+          {unmatchedBankTxs.length > 0 && (
+            <span className="bg-slate-200 text-slate-700 text-xs px-2 py-0.5 rounded-full font-bold">
+              {unmatchedBankTxs.length}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {/* TAB 1 — PAIEMENTS EN ATTENTE */}
+      {activeTab === "pending" && (
+        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden space-y-4">
+          <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+            <h2 className="font-bold text-[#0f172a] text-sm">
+              Déclarations de paiements clients à vérifier ({pendingDeclarations.length})
+            </h2>
           </div>
 
-          {/* RIGHT — Bank statement / results */}
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-            <div className="px-5 py-3 bg-[#f5f0ff] border-b border-purple-100">
-              <p className="font-semibold text-sm text-purple-600">{t.col_releve}</p>
+          {pendingDeclarations.length === 0 ? (
+            <div className="p-12 text-center text-slate-400 text-sm space-y-2">
+              <CheckCircle2 size={36} className="mx-auto text-green-500" />
+              <p className="font-semibold text-slate-700">Aucun paiement en attente de vérification.</p>
+              <p className="text-xs">Toutes les déclarations clients ont été traitées.</p>
             </div>
-
-            {/* After CSV import: show results */}
-            {results ? (
-              <table className="w-full text-xs">
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-gray-50 bg-[#f8fafc]">
-                    {[t.col_date, t.col_description, t.col_cheque, t.col_amount, t.col_statut, ""].map((h, i) => (
-                      <th key={i} className="text-left px-3 py-2 text-[#94a3b8] font-medium whitespace-nowrap">
-                        {h}
-                      </th>
-                    ))}
+                  <tr className="border-b border-slate-100 bg-[#f8fafc] text-xs text-slate-500 font-semibold uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left">Facture</th>
+                    <th className="px-6 py-3 text-left">Client</th>
+                    <th className="px-6 py-3 text-left">Référence Virement</th>
+                    <th className="px-6 py-3 text-left">Montant</th>
+                    <th className="px-6 py-3 text-left">Date Déclaration</th>
+                    <th className="px-6 py-3 text-left">Justificatif</th>
+                    <th className="px-6 py-3 text-right">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {results.map((r, i) => (
-                    <tr
-                      key={i}
-                      className={`hover:bg-[#f8fafc] transition-colors ${
-                        r.matchScore === "none" ? "bg-red-50/30" : r.matchScore === "partial" ? "bg-amber-50/30" : ""
-                      }`}
-                    >
-                      <td className="px-3 py-2 text-[#64748b] whitespace-nowrap">{r.date}</td>
-                      <td className="px-3 py-2 text-[#0f172a] max-w-[100px] truncate">{r.description}</td>
-                      <td className="px-3 py-2 font-mono text-[#94a3b8]">{r.chequeNumber ?? "—"}</td>
-                      <td className="px-3 py-2 font-semibold text-[#0f172a] whitespace-nowrap">
-                        {fmt(r.amount, locale)}
+                <tbody className="divide-y divide-slate-100">
+                  {pendingDeclarations.map((decl) => (
+                    <tr key={decl.id} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="px-6 py-4 font-bold text-[#0f172a]">
+                        {decl.invoice.invoiceNumber
+                          ? `Facture N° ${decl.invoice.invoiceNumber}`
+                          : `Facture Réf ${decl.invoiceId.slice(-6)}`}
                       </td>
-                      <td className="px-3 py-2">
-                        <StatusBadge score={r.matchScore} t={t} />
+                      <td className="px-6 py-4 text-slate-700 font-medium">
+                        {decl.invoice.company.client.name}
                       </td>
-                      <td className="px-3 py-2">
-                        {r.matchScore === "none" && (
+                      <td className="px-6 py-4 font-mono text-xs text-slate-600">
+                        {decl.reference || "Non spécifiée"}
+                      </td>
+                      <td className="px-6 py-4 font-bold text-[#1a6fbf]">
+                        {decl.amount.toLocaleString(locale, { minimumFractionDigits: 2 })} DA
+                      </td>
+                      <td className="px-6 py-4 text-xs text-slate-500">
+                        {new Date(decl.createdAt).toLocaleDateString(locale)}
+                      </td>
+                      <td className="px-6 py-4">
+                        {decl.justificatif ? (
                           <button
-                            onClick={() => setCorrectModal({ bankTxId: r.id })}
-                            className="flex items-center gap-1 px-2 py-1 text-[10px] font-medium text-[#1a6fbf] border border-[#1a6fbf]/30 rounded-lg hover:bg-[#1a6fbf]/5 transition-all"
+                            onClick={() => setJustifModal(decl.justificatif!)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-blue-50 text-[#1a6fbf] hover:bg-blue-100 transition-colors"
                           >
-                            {t.correct_btn}
+                            <Eye size={13} /> Voir
                           </button>
+                        ) : (
+                          <span className="text-xs text-slate-400">Aucun</span>
                         )}
+                      </td>
+                      <td className="px-6 py-4 text-right space-x-2 whitespace-nowrap">
+                        <button
+                          onClick={() => {
+                            setValidateModal(decl);
+                            setAllocAmount(decl.amount.toString());
+                          }}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold bg-[#2d8f5e] hover:bg-[#24754d] text-white transition-all shadow-sm"
+                        >
+                          <CheckCircle2 size={13} /> Valider
+                        </button>
+
+                        <button
+                          onClick={() => setRefuseModal(decl)}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 transition-all"
+                        >
+                          <XCircle size={13} /> Refuser
+                        </button>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            ) : initialBankTxs.length > 0 ? (
-              /* Show pre-existing bank transactions */
-              <table className="w-full text-xs">
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* TAB 2 — IMPORT RELEVÉ & HISTORIQUE */}
+      {activeTab === "import" && (
+        <div className="space-y-6">
+          {/* File Upload Box */}
+          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6 space-y-4">
+            <h2 className="font-bold text-[#0f172a] text-base">Importer un relevé bancaire</h2>
+            <p className="text-xs text-slate-500">
+              Formats acceptés : <strong>CSV</strong> (date, description, montant) ou <strong>PDF</strong> (extraction OCR automatique des opérations).
+            </p>
+
+            <div
+              onClick={() => inputRef.current?.click()}
+              className="border-2 border-dashed border-slate-200 hover:border-[#1a6fbf] rounded-2xl p-8 text-center cursor-pointer bg-slate-50/50 hover:bg-blue-50/20 transition-all space-y-3"
+            >
+              <input
+                ref={inputRef}
+                type="file"
+                accept=".csv,.pdf"
+                className="hidden"
+                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+              />
+              <Upload size={32} className="mx-auto text-[#1a6fbf]" />
+              <div>
+                <p className="text-sm font-semibold text-[#0f172a]">
+                  {file ? file.name : "Cliquez ou glissez un fichier de relevé bancaire"}
+                </p>
+                <p className="text-xs text-slate-400 mt-1">Fichier CSV ou PDF de votre banque</p>
+              </div>
+            </div>
+
+            {error && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-600 flex items-center gap-2">
+                <AlertCircle size={15} /> {error}
+              </div>
+            )}
+
+            {file && (
+              <button
+                onClick={handleReconcile}
+                disabled={loading}
+                className="w-full py-3 bg-[#1a6fbf] hover:bg-[#185fa5] text-white font-bold text-sm rounded-xl transition-all disabled:opacity-60 flex items-center justify-center gap-2 shadow-sm"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 size={18} className="animate-spin" /> Analyse et rapprochement en cours...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw size={18} /> Lancer l&apos;import et le rapprochement intelligent
+                  </>
+                )}
+              </button>
+            )}
+          </div>
+
+          {/* Import History Table */}
+          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-100">
+              <h3 className="font-bold text-[#0f172a] text-sm">Historique des imports de relevés</h3>
+            </div>
+
+            {importHistory.length === 0 ? (
+              <div className="p-8 text-center text-slate-400 text-xs">
+                Aucun relevé n&apos;a encore été importé pour cette entreprise.
+              </div>
+            ) : (
+              <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-gray-50 bg-[#f8fafc]">
-                    {[t.col_date, t.col_description, t.col_cheque, t.col_amount, t.col_statut, ""].map((h, i) => (
-                      <th key={i} className="text-left px-3 py-2 text-[#94a3b8] font-medium whitespace-nowrap">
-                        {h}
-                      </th>
-                    ))}
+                  <tr className="border-b border-slate-100 bg-[#f8fafc] text-xs text-slate-500 font-semibold uppercase">
+                    <th className="px-6 py-3 text-left">Fichier</th>
+                    <th className="px-6 py-3 text-left">Format</th>
+                    <th className="px-6 py-3 text-left">Lignes</th>
+                    <th className="px-6 py-3 text-left">Rapprochées</th>
+                    <th className="px-6 py-3 text-left">Date Import</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {initialBankTxs.map((tx) => {
-                    const score: "exact" | "none" = tx.matched ? "exact" : "none";
+                <tbody className="divide-y divide-slate-100 text-xs">
+                  {importHistory.map((item) => (
+                    <tr key={item.id} className="hover:bg-slate-50">
+                      <td className="px-6 py-3.5 font-bold text-[#0f172a]">{item.filename}</td>
+                      <td className="px-6 py-3.5 font-mono uppercase text-slate-600">{item.format}</td>
+                      <td className="px-6 py-3.5 font-semibold text-slate-700">{item.rowCount}</td>
+                      <td className="px-6 py-3.5 text-green-700 font-bold">{item.matchedCount}</td>
+                      <td className="px-6 py-3.5 text-slate-500">
+                        {new Date(item.importedAt).toLocaleDateString(locale)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* TAB 3 — RAPPROCHEMENT COMPTE 512 */}
+      {activeTab === "matching" && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Left: Compte 512 Journal Entries */}
+          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+            <div className="px-5 py-3.5 bg-blue-50/70 border-b border-blue-100 flex items-center justify-between">
+              <h3 className="font-bold text-sm text-[#1a6fbf]">Compte 512 (Écritures Comptables)</h3>
+              <span className="text-xs font-semibold text-slate-500">
+                {journalEntries512.length} écritures
+              </span>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-slate-100 bg-[#f8fafc] text-slate-500 font-semibold uppercase">
+                    <th className="px-3 py-2 text-left">Date</th>
+                    <th className="px-3 py-2 text-left">Description</th>
+                    <th className="px-3 py-2 text-right">Débit</th>
+                    <th className="px-3 py-2 text-right">Crédit</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {journalEntries512.map((e) => {
+                    const isDebit = e.debitAccount === "512";
                     return (
-                      <tr
-                        key={tx.id}
-                        className={`hover:bg-[#f8fafc] transition-colors ${!tx.matched ? "bg-red-50/30" : ""}`}
-                      >
-                        <td className="px-3 py-2 text-[#64748b] whitespace-nowrap">
-                          {new Date(tx.date).toLocaleDateString(locale, { day: "2-digit", month: "2-digit" })}
+                      <tr key={e.id} className="hover:bg-slate-50">
+                        <td className="px-3 py-2 text-slate-500">
+                          {new Date(e.date).toLocaleDateString(locale, { day: "2-digit", month: "2-digit" })}
                         </td>
-                        <td className="px-3 py-2 text-[#0f172a] max-w-[100px] truncate">{tx.description}</td>
-                        <td className="px-3 py-2 font-mono text-[#94a3b8]">{tx.chequeNumber ?? "—"}</td>
-                        <td className="px-3 py-2 font-semibold text-[#0f172a] whitespace-nowrap">
-                          {fmt(tx.amount, locale)}
+                        <td className="px-3 py-2 font-medium text-[#0f172a] max-w-[130px] truncate">
+                          {e.description}
                         </td>
-                        <td className="px-3 py-2">
-                          <StatusBadge score={score} t={t} />
+                        <td className="px-3 py-2 text-right font-semibold text-red-600">
+                          {!isDebit ? fmt(e.amount, locale) : "—"}
                         </td>
-                        <td className="px-3 py-2">
-                          {!tx.matched && unlinkEntries.length > 0 && (
-                            <button
-                              onClick={() => setCorrectModal({ bankTxId: tx.id })}
-                              className="flex items-center gap-1 px-2 py-1 text-[10px] font-medium text-[#1a6fbf] border border-[#1a6fbf]/30 rounded-lg hover:bg-[#1a6fbf]/5 transition-all"
-                            >
-                              {t.correct_btn}
-                            </button>
-                          )}
+                        <td className="px-3 py-2 text-right font-semibold text-green-700">
+                          {isDebit ? fmt(e.amount, locale) : "—"}
                         </td>
                       </tr>
                     );
                   })}
                 </tbody>
               </table>
-            ) : (
-              <p className="px-5 py-8 text-sm text-center text-[#64748b]">{t.no_data}</p>
-            )}
+            </div>
+          </div>
+
+          {/* Right: Bank Transactions & Scores */}
+          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+            <div className="px-5 py-3.5 bg-purple-50/70 border-b border-purple-100 flex items-center justify-between">
+              <h3 className="font-bold text-sm text-purple-700">Relevé Bancaire & Scores</h3>
+              <span className="text-xs font-semibold text-slate-500">
+                {bankTransactions.length} lignes
+              </span>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-slate-100 bg-[#f8fafc] text-slate-500 font-semibold uppercase">
+                    <th className="px-3 py-2 text-left">Date</th>
+                    <th className="px-3 py-2 text-left">Libellé</th>
+                    <th className="px-3 py-2 text-right">Montant</th>
+                    <th className="px-3 py-2 text-center">Score Match</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {bankTransactions.map((tx) => (
+                    <tr key={tx.id} className="hover:bg-slate-50">
+                      <td className="px-3 py-2 text-slate-500">
+                        {new Date(tx.date).toLocaleDateString(locale, { day: "2-digit", month: "2-digit" })}
+                      </td>
+                      <td className="px-3 py-2 font-medium text-[#0f172a] max-w-[130px] truncate">
+                        {tx.description}
+                      </td>
+                      <td className="px-3 py-2 text-right font-bold text-[#0f172a]">
+                        {fmt(tx.amount, locale)} DA
+                      </td>
+                      <td className="px-3 py-2 text-center">
+                        {renderScoreBadge(tx.matchScore ?? (tx.matched ? 100 : 0))}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
-      </div>
-    </>
+      )}
+
+      {/* TAB 4 — PAIEMENTS NON AFFECTÉS */}
+      {activeTab === "unmatched" && (
+        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden space-y-4">
+          <div className="px-6 py-4 border-b border-slate-100">
+            <h2 className="font-bold text-[#0f172a] text-sm">
+              Virements bancaires reçus sans facture attribuée ({unmatchedBankTxs.length})
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Rattachez manuellement un virement entrant à une facture client en attente de paiement.
+            </p>
+          </div>
+
+          {unmatchedBankTxs.length === 0 ? (
+            <div className="p-12 text-center text-slate-400 text-sm space-y-2">
+              <CheckCircle2 size={36} className="mx-auto text-green-500" />
+              <p className="font-semibold text-slate-700">Aucun virement non affecté.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-100 bg-[#f8fafc] text-xs text-slate-500 font-semibold uppercase">
+                    <th className="px-6 py-3 text-left">Date</th>
+                    <th className="px-6 py-3 text-left">Description Relevé</th>
+                    <th className="px-6 py-3 text-left">Référence / Chèque</th>
+                    <th className="px-6 py-3 text-left">Montant</th>
+                    <th className="px-6 py-3 text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {unmatchedBankTxs.map((tx) => (
+                    <tr key={tx.id} className="hover:bg-slate-50">
+                      <td className="px-6 py-4 text-xs text-slate-500 whitespace-nowrap">
+                        {new Date(tx.date).toLocaleDateString(locale)}
+                      </td>
+                      <td className="px-6 py-4 font-semibold text-[#0f172a]">{tx.description}</td>
+                      <td className="px-6 py-4 font-mono text-xs text-slate-600">
+                        {tx.chequeNumber || tx.reference || "—"}
+                      </td>
+                      <td className="px-6 py-4 font-bold text-[#1a6fbf]">
+                        {tx.amount.toLocaleString(locale, { minimumFractionDigits: 2 })} DA
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <button
+                          onClick={() => {
+                            setAttachModal(tx);
+                            setAttachAmount(tx.amount.toString());
+                          }}
+                          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-[#1a6fbf] hover:bg-[#185fa5] text-white transition-all shadow-sm"
+                        >
+                          <Link2 size={13} /> Rattacher à une facture
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* MODAL 1: PREVIEW JUSTIFICATIF */}
+      {justifModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl p-4 max-w-2xl w-full max-h-[85vh] overflow-hidden flex flex-col space-y-4">
+            <div className="flex items-center justify-between border-b pb-3">
+              <h3 className="font-bold text-sm text-[#0f172a]">Justificatif de Paiement</h3>
+              <button onClick={() => setJustifModal(null)} className="text-slate-400 hover:text-slate-600">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="flex-1 overflow-auto bg-slate-100 rounded-xl p-2 flex items-center justify-center min-h-[300px]">
+              {justifModal.endsWith(".pdf") ? (
+                <iframe src={justifModal} className="w-full h-[450px] rounded-lg" />
+              ) : (
+                <img src={justifModal} alt="Justificatif" className="max-h-[450px] object-contain rounded-lg" />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 2: VALIDATE PAYMENT */}
+      {validateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-lg w-full space-y-5 shadow-2xl">
+            <div className="flex items-center justify-between border-b pb-3">
+              <h3 className="font-bold text-base text-[#0f172a]">Valider le paiement</h3>
+              <button onClick={() => setValidateModal(null)} className="text-slate-400 hover:text-slate-600">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs space-y-1 text-blue-900">
+              <p><strong>Client :</strong> {validateModal.invoice.company.client.name}</p>
+              <p><strong>Déclaration :</strong> {validateModal.amount.toLocaleString(locale)} DA (Réf: {validateModal.reference || "N/A"})</p>
+            </div>
+
+            <div className="space-y-3">
+              <label className="block text-xs font-semibold text-slate-700">
+                Sélectionner la transaction bancaire correspondante
+              </label>
+              <select
+                value={selectedTxId}
+                onChange={(e) => setSelectedTxId(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs text-[#0f172a] focus:ring-2 focus:ring-[#1a6fbf] bg-white"
+              >
+                <option value="">— Choisir une transaction du relevé —</option>
+                {bankTransactions.map((tx) => (
+                  <option key={tx.id} value={tx.id}>
+                    {new Date(tx.date).toLocaleDateString(locale)} · {tx.description} · {fmt(tx.amount, locale)} DA
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-1">
+              <label className="block text-xs font-semibold text-slate-700">Montant alloué (DA)</label>
+              <input
+                type="number"
+                step="0.01"
+                value={allocAmount}
+                onChange={(e) => setAllocAmount(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-bold text-[#0f172a]"
+              />
+            </div>
+
+            <div className="pt-2 flex items-center gap-3">
+              <button
+                onClick={() => setValidateModal(null)}
+                className="flex-1 py-2.5 border border-slate-300 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-50"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleValidatePayment}
+                disabled={validating || !selectedTxId}
+                className="flex-1 py-2.5 bg-[#2d8f5e] hover:bg-[#24754d] text-white text-xs font-bold rounded-xl transition-all disabled:opacity-60 flex items-center justify-center gap-2"
+              >
+                {validating ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />}
+                Confirmer la validation
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 3: REFUSE PAYMENT */}
+      {refuseModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b pb-3">
+              <h3 className="font-bold text-base text-rose-700">Refuser la déclaration de paiement</h3>
+              <button onClick={() => setRefuseModal(null)} className="text-slate-400 hover:text-slate-600">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <label className="block text-xs font-semibold text-slate-700">Motif du refus</label>
+              <select
+                value={refusalReason}
+                onChange={(e) => setRefusalReason(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs text-[#0f172a]"
+              >
+                {REFUSAL_REASONS.map((r) => (
+                  <option key={r.key} value={r.key}>
+                    {r.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-1">
+              <label className="block text-xs font-semibold text-slate-700">Commentaire explicatif pour le client</label>
+              <textarea
+                rows={3}
+                placeholder="Expliquez la raison au client (ex: virement introuvable sur le relevé du 15/07)..."
+                value={refusalNotes}
+                onChange={(e) => setRefusalNotes(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs text-[#0f172a]"
+              />
+            </div>
+
+            <div className="pt-2 flex items-center gap-3">
+              <button
+                onClick={() => setRefuseModal(null)}
+                className="flex-1 py-2.5 border border-slate-300 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-50"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleRefusePayment}
+                disabled={refusing}
+                className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl transition-all disabled:opacity-60 flex items-center justify-center gap-2"
+              >
+                {refusing ? <Loader2 size={15} className="animate-spin" /> : <XCircle size={15} />}
+                Confirmer le refus
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 4: ATTACH UNMATCHED TRANSACTION */}
+      {attachModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b pb-3">
+              <h3 className="font-bold text-base text-[#0f172a]">Rattacher à une facture client</h3>
+              <button onClick={() => setAttachModal(null)} className="text-slate-400 hover:text-slate-600">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="bg-purple-50 border border-purple-200 rounded-xl p-3 text-xs text-purple-900 space-y-1">
+              <p><strong>Virement :</strong> {attachModal.description}</p>
+              <p><strong>Montant :</strong> {attachModal.amount.toLocaleString(locale)} DA</p>
+            </div>
+
+            <div className="space-y-3">
+              <label className="block text-xs font-semibold text-slate-700">Facture de l&apos;entreprise</label>
+              <select
+                value={selectedInvoiceId}
+                onChange={(e) => setSelectedInvoiceId(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs text-[#0f172a]"
+              >
+                <option value="">— Choisir une facture —</option>
+                {companyInvoices.map((inv) => (
+                  <option key={inv.id} value={inv.id}>
+                    {inv.invoiceNumber ? `N° ${inv.invoiceNumber}` : `Facture ${inv.id.slice(-6)}`} · {inv.amount.toLocaleString(locale)} DA
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-1">
+              <label className="block text-xs font-semibold text-slate-700">Montant à affecter (DA)</label>
+              <input
+                type="number"
+                step="0.01"
+                value={attachAmount}
+                onChange={(e) => setAttachAmount(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-bold text-[#0f172a]"
+              />
+            </div>
+
+            <div className="pt-2 flex items-center gap-3">
+              <button
+                onClick={() => setAttachModal(null)}
+                className="flex-1 py-2.5 border border-slate-300 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-50"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleAttachTransaction}
+                disabled={attaching || !selectedInvoiceId}
+                className="flex-1 py-2.5 bg-[#1a6fbf] hover:bg-[#185fa5] text-white text-xs font-bold rounded-xl transition-all disabled:opacity-60 flex items-center justify-center gap-2"
+              >
+                {attaching ? <Loader2 size={15} className="animate-spin" /> : <Link2 size={15} />}
+                Rattacher
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 5: COMPANY BANK COORDINATES */}
+      {showBankInfoModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-lg w-full space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b pb-3">
+              <h3 className="font-bold text-base text-[#0f172a]">Coordonnées Bancaires de l&apos;Entreprise</h3>
+              <button onClick={() => setShowBankInfoModal(false)} className="text-slate-400 hover:text-slate-600">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Nom de la Banque</label>
+                <input
+                  type="text"
+                  placeholder="Ex: BEA, BNA, CPA, SGA..."
+                  value={bankForm.bankName}
+                  onChange={(e) => setBankForm({ ...bankForm, bankName: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-xl"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">RIB (Relevé d&apos;Identité Bancaire)</label>
+                <input
+                  type="text"
+                  placeholder="Ex: 002 00005 0000000000 45"
+                  value={bankForm.rib}
+                  onChange={(e) => setBankForm({ ...bankForm, rib: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-xl font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">IBAN (Optionnel)</label>
+                <input
+                  type="text"
+                  placeholder="Ex: DZ13 0020 0005 0000 0000 0045"
+                  value={bankForm.iban}
+                  onChange={(e) => setBankForm({ ...bankForm, iban: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-xl font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">CCP (Optionnel)</label>
+                <input
+                  type="text"
+                  placeholder="Ex: 00234567 Cle 89"
+                  value={bankForm.ccp}
+                  onChange={(e) => setBankForm({ ...bankForm, ccp: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-xl font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Nom du Bénéficiaire</label>
+                <input
+                  type="text"
+                  placeholder="Ex: SARL COMPTANOVA DZ"
+                  value={bankForm.beneficiaryName}
+                  onChange={(e) => setBankForm({ ...bankForm, beneficiaryName: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-xl"
+                />
+              </div>
+            </div>
+
+            <div className="pt-3 flex items-center gap-3">
+              <button
+                onClick={() => setShowBankInfoModal(false)}
+                className="flex-1 py-2.5 border border-slate-300 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-50"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleSaveBankInfo}
+                disabled={savingBank}
+                className="flex-1 py-2.5 bg-[#1a6fbf] hover:bg-[#185fa5] text-white text-xs font-bold rounded-xl transition-all disabled:opacity-60 flex items-center justify-center gap-2"
+              >
+                {savingBank ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
+                Enregistrer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

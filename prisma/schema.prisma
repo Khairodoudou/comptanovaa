@@ -31,40 +31,65 @@ enum EntryStatus {
   REJECTED
 }
 
+enum InvoiceStatus {
+  UNPAID
+  PENDING_VERIFICATION
+  PARTIALLY_PAID
+  PAID
+  REFUSED
+}
+
+enum PaymentDeclarationStatus {
+  PENDING
+  VALIDATED
+  REFUSED
+}
+
 // ─── Models ───────────────────────────────────────────────
 
 model User {
-  id               String         @id @default(cuid())
+  id               String              @id @default(cuid())
   name             String
-  email            String         @unique
+  email            String              @unique
   passwordHash     String
   phone            String?
-  preferredLang    String         @default("fr")
+  preferredLang    String              @default("fr")
   role             String
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
   // Client owns companies
-  companies        Company[]      @relation("ClientCompanies")
+  companies        Company[]           @relation("ClientCompanies")
   // Comptable is assigned to companies
-  assignedClients  Company[]      @relation("AssignedComptable")
-  validatedEntries JournalEntry[] @relation("ValidatedEntries")
+  assignedClients  Company[]           @relation("AssignedComptable")
+  validatedEntries JournalEntry[]      @relation("ValidatedEntries")
   notifications    Notification[]
+  auditLogs        AuditLog[]
 }
 
 model Company {
-  id               String            @id @default(cuid())
+  id               String              @id @default(cuid())
   name             String
   clientId         String
-  client           User              @relation("ClientCompanies", fields: [clientId], references: [id])
+  client           User                @relation("ClientCompanies", fields: [clientId], references: [id])
   // Optional: assigned comptable for this company
   comptableId      String?
-  comptable        User?             @relation("AssignedComptable", fields: [comptableId], references: [id])
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
+  comptable        User?               @relation("AssignedComptable", fields: [comptableId], references: [id])
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  // Bank coordinates (filled by comptable)
+  bankName         String?
+  rib              String?
+  iban             String?
+  ccp              String?
+  beneficiaryName  String?
+  // Relations
   documents        Document[]
   bankTransactions BankTransaction[]
   accountBalances  AccountBalance[]
   subAccounts      SubAccount[]
+  invoices         Invoice[]
+  bankImports      BankStatementImport[]
+  auditLogs        AuditLog[]
 }
 
 model Document {
@@ -81,6 +106,7 @@ model Document {
   companyId      String
   company        Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
   journalEntries JournalEntry[]
+  invoice        Invoice?
 }
 
 model JournalEntry {
@@ -104,17 +130,25 @@ model JournalEntry {
 }
 
 model BankTransaction {
-  id             String        @id @default(cuid())
+  id             String               @id @default(cuid())
   date           DateTime
   description    String
   amount         Float
   chequeNumber   String?
-  matched        Boolean       @default(false)
-  createdAt      DateTime      @default(now())
+  reference      String?
+  senderName     String?
+  label          String?
+  balance        Float?
+  matched        Boolean              @default(false)
+  matchScore     Int?                 // 0–100 %
+  createdAt      DateTime             @default(now())
   companyId      String
-  company        Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  journalEntryId String?       @unique
-  journalEntry   JournalEntry? @relation(fields: [journalEntryId], references: [id])
+  company        Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  journalEntryId String?              @unique
+  journalEntry   JournalEntry?        @relation(fields: [journalEntryId], references: [id])
+  importId       String?
+  import         BankStatementImport? @relation(fields: [importId], references: [id])
+  invoicePayments InvoicePayment[]
 }
 
 model AccountBalance {
@@ -154,4 +188,87 @@ model SubAccount {
   updatedAt     DateTime @updatedAt
 
   @@unique([subAccount, companyId])
+}
+
+// ─── Invoice (Facture Client) ──────────────────────────────
+
+model Invoice {
+  id              String            @id @default(cuid())
+  invoiceNumber   String?
+  amount          Float
+  status          InvoiceStatus     @default(UNPAID)
+  dueDate         DateTime?
+  description     String?
+  companyId       String
+  company         Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  documentId      String?           @unique
+  document        Document?         @relation(fields: [documentId], references: [id])
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  declarations    PaymentDeclaration[]
+  payments        InvoicePayment[]
+}
+
+// ─── PaymentDeclaration (Déclaration paiement client) ────
+
+model PaymentDeclaration {
+  id              String                   @id @default(cuid())
+  invoiceId       String
+  invoice         Invoice                  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  reference       String?                  // Référence virement saisie par le client
+  paymentDate     DateTime?                // Date paiement déclarée par le client
+  amount          Float
+  justificatif    String?                  // URL/filename du justificatif uploadé
+  status          PaymentDeclarationStatus @default(PENDING)
+  refusalReason   String?                  // Motif de refus (si refusé)
+  notes           String?                  // Notes internes comptable
+  createdAt       DateTime                 @default(now())
+  updatedAt       DateTime                 @updatedAt
+  invoicePayments InvoicePayment[]
+}
+
+// ─── InvoicePayment (Liaison Invoice ↔ BankTransaction) ──
+
+model InvoicePayment {
+  id                    String             @id @default(cuid())
+  invoiceId             String
+  invoice               Invoice            @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  bankTransactionId     String
+  bankTransaction       BankTransaction    @relation(fields: [bankTransactionId], references: [id])
+  declarationId         String?
+  declaration           PaymentDeclaration? @relation(fields: [declarationId], references: [id])
+  amount                Float              // Montant alloué à cette facture
+  createdAt             DateTime           @default(now())
+}
+
+// ─── BankStatementImport (Historique import relevés) ──────
+
+model BankStatementImport {
+  id            String            @id @default(cuid())
+  filename      String
+  format        String            // "csv" | "pdf" | "excel" | "ofx"
+  rowCount      Int               @default(0)
+  matchedCount  Int               @default(0)
+  companyId     String
+  company       Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  importedAt    DateTime          @default(now())
+  transactions  BankTransaction[]
+}
+
+// ─── AuditLog ────────────────────────────────────────────
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  action      String   // "PAYMENT_DECLARED" | "PAYMENT_VALIDATED" | "PAYMENT_REFUSED" | "STATUS_CHANGED" etc.
+  entityType  String   // "Invoice" | "PaymentDeclaration" | "BankTransaction"
+  entityId    String
+  oldValue    String?  // JSON string
+  newValue    String?  // JSON string
+  comment     String?
+  ipAddress   String?
+  companyId   String?
+  company     Company? @relation(fields: [companyId], references: [id])
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  createdAt   DateTime @default(now())
 }

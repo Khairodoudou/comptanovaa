@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   FileText,
+  Receipt,
   BookOpen,
   CreditCard,
   User,
@@ -19,6 +20,7 @@ interface SidebarT {
   client_space: string;
   dashboard: string;
   documents: string;
+  invoices?: string;
   journal: string;
   bank: string;
   profile: string;
@@ -49,6 +51,7 @@ export function ClientSidebar({
 
   const NAV_ITEMS = [
     { label: t.dashboard, href: "dashboard", icon: LayoutDashboard },
+    { label: t.invoices ?? "Factures", href: "factures", icon: Receipt },
     { label: t.documents, href: "documents", icon: FileText },
     { label: t.journal, href: "journal", icon: BookOpen },
     { label: t.bank, href: "bank", icon: CreditCard },
