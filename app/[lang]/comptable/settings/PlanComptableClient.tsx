@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { FolderTree, Plus, Trash2, Loader2 } from "lucide-react";
+import { FolderTree, Plus, Trash2, Loader2, Info } from "lucide-react";
 
 interface SubAccount {
   id: string;
@@ -102,9 +102,14 @@ export function PlanComptableClient({ companies }: { companies: Company[] }) {
         </select>
       </div>
 
-      <p className="text-sm text-[#64748b] mb-5">
-        Créez et gérez des sous-comptes pour les comptes principaux (ex: 380.0, 401.A) pour une meilleure organisation.
-      </p>
+      {/* Commentaire / Remarque Explicative */}
+      <div className="bg-gradient-to-r from-[#f0f7ff] to-[#f8fafc] border border-[#1a6fbf]/20 rounded-xl p-4 mb-5 flex items-start gap-3">
+        <Info size={18} className="text-[#1a6fbf] shrink-0 mt-0.5" />
+        <div className="text-xs leading-relaxed text-[#334155]">
+          <span className="font-semibold text-[#1a6fbf] block mb-0.5">Commentaire :</span>
+          Créez et gérez des sous-comptes pour les comptes principaux (ex: 380.0, 401.A) pour une meilleure organisation.
+        </div>
+      </div>
 
       {error && <div className="mb-4 text-xs text-red-600 bg-red-50 p-3 rounded-lg">{error}</div>}
 
