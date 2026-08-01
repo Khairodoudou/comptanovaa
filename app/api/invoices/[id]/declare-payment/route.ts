@@ -71,17 +71,13 @@ export async function POST(
     let justificatifPath: string | null = null;
     if (justificatifFile && justificatifFile.size > 0) {
       try {
-        const isProd = process.env.NODE_ENV === "production" || process.env.VERCEL;
-        const uploadDir = isProd ? "/tmp" : path.join(process.cwd(), "public", "uploads", "justificatifs");
-        await mkdir(uploadDir, { recursive: true });
-        const ext = justificatifFile.name.split(".").pop() ?? "pdf";
-        const filename = `justif_${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
         const buffer = Buffer.from(await justificatifFile.arrayBuffer());
-        await writeFile(path.join(uploadDir, filename), buffer);
-        justificatifPath = `/uploads/justificatifs/${filename}`;
+        const mime = justificatifFile.type || (justificatifFile.name.endsWith(".pdf") ? "application/pdf" : "image/jpeg");
+        // Store as Data URI for 100% serverless static rendering without 404
+        justificatifPath = `data:${mime};base64,${buffer.toString("base64")}`;
       } catch (fsErr) {
-        console.warn("FS write skipped on serverless:", fsErr);
-        justificatifPath = `justif_${Date.now()}_${justificatifFile.name}`;
+        console.warn("Base64 conversion failed:", fsErr);
+        justificatifPath = justificatifFile.name;
       }
     }
 
