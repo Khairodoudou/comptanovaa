@@ -814,10 +814,10 @@ export function RapprochementClient({
               </div>
             </div>
             <div className="flex-1 overflow-auto bg-slate-100 rounded-xl p-2 flex items-center justify-center min-h-[300px]">
-              {justifModal.startsWith("data:application/pdf") ? (
-                <iframe src={justifModal} className="w-full h-[450px] rounded-lg border-0" />
-              ) : justifModal.startsWith("data:image") || (justifModal.startsWith("http") && !justifModal.includes("localhost")) ? (
+              {justifModal.startsWith("data:image") || (justifModal.startsWith("http") && justifModal.match(/\.(png|jpg|jpeg|webp)$/i)) ? (
                 <img src={justifModal} alt="Justificatif" className="max-h-[450px] object-contain rounded-lg" />
+              ) : justifModal.startsWith("data:") || (justifModal.startsWith("http") && !justifModal.includes("localhost")) ? (
+                <iframe src={justifModal} className="w-full h-[450px] rounded-lg border-0" />
               ) : (
                 <div className="text-center p-8 space-y-3 bg-white rounded-xl shadow-sm border border-slate-200">
                   <FileText size={48} className="mx-auto text-[#1a6fbf]" />
