@@ -796,10 +796,22 @@ export function RapprochementClient({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="bg-white rounded-2xl p-4 max-w-2xl w-full max-h-[85vh] overflow-hidden flex flex-col space-y-4">
             <div className="flex items-center justify-between border-b pb-3">
-              <h3 className="font-bold text-sm text-[#0f172a]">Justificatif de Paiement</h3>
-              <button onClick={() => setJustifModal(null)} className="text-slate-400 hover:text-slate-600">
-                <X size={18} />
-              </button>
+              <h3 className="font-bold text-base text-[#0f172a]">Justificatif de Paiement</h3>
+              <div className="flex items-center gap-2">
+                {(justifModal.startsWith("data:") || justifModal.startsWith("http")) && (
+                  <a
+                    href={justifModal}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-xs font-semibold text-[#1a6fbf] hover:underline flex items-center gap-1 bg-blue-50 px-2.5 py-1 rounded-lg"
+                  >
+                    <Eye size={14} /> Ouvrir plein écran
+                  </a>
+                )}
+                <button onClick={() => setJustifModal(null)} className="text-slate-400 hover:text-slate-600">
+                  <X size={18} />
+                </button>
+              </div>
             </div>
             <div className="flex-1 overflow-auto bg-slate-100 rounded-xl p-2 flex items-center justify-center min-h-[300px]">
               {justifModal.startsWith("data:application/pdf") ? (
