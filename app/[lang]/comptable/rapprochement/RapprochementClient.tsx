@@ -802,18 +802,18 @@ export function RapprochementClient({
               </button>
             </div>
             <div className="flex-1 overflow-auto bg-slate-100 rounded-xl p-2 flex items-center justify-center min-h-[300px]">
-              {justifModal.startsWith("data:application/pdf") || (justifModal.startsWith("/") && justifModal.endsWith(".pdf")) ? (
+              {justifModal.startsWith("data:application/pdf") ? (
                 <iframe src={justifModal} className="w-full h-[450px] rounded-lg border-0" />
-              ) : justifModal.startsWith("data:image") || justifModal.startsWith("http") || justifModal.match(/\.(png|jpg|jpeg|webp)$/i) ? (
+              ) : justifModal.startsWith("data:image") || (justifModal.startsWith("http") && !justifModal.includes("localhost")) ? (
                 <img src={justifModal} alt="Justificatif" className="max-h-[450px] object-contain rounded-lg" />
               ) : (
                 <div className="text-center p-8 space-y-3 bg-white rounded-xl shadow-sm border border-slate-200">
                   <FileText size={48} className="mx-auto text-[#1a6fbf]" />
                   <div>
                     <p className="text-sm font-bold text-slate-800">Justificatif de paiement transmis</p>
-                    <p className="text-xs text-slate-500 font-mono mt-1">{justifModal}</p>
+                    <p className="text-xs text-slate-500 font-mono mt-1">{justifModal.split("/").pop()}</p>
                   </div>
-                  <p className="text-xs text-slate-400">Le document a bien été enregistré avec la déclaration.</p>
+                  <p className="text-xs text-slate-400">Fichier enregistré avec la déclaration de paiement.</p>
                 </div>
               )}
             </div>
