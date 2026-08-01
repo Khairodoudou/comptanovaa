@@ -9,6 +9,7 @@ import {
   BookOpen,
   BookMarked,
   GitMerge,
+  Building2,
   Settings,
   Bell,
   LogOut,
@@ -56,6 +57,7 @@ export function ComptableSidebar({
     { label: t.journal, href: "journal", icon: BookOpen },
     { label: t.grand_livre, href: "grand-livre", icon: BookMarked },
     { label: t.rapprochement, href: "rapprochement", icon: GitMerge },
+    { label: lang === "ar" ? "الحسابات البنكية" : lang === "en" ? "Bank Accounts" : "Coordonnées Bancaires", href: "bank", icon: Building2 },
     { label: t.settings, href: "settings", icon: Settings },
   ];
 
