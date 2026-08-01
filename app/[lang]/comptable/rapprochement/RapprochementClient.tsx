@@ -17,6 +17,7 @@ import {
   Building2,
   FileCheck,
   FileSpreadsheet,
+  FileText,
   HelpCircle,
   ArrowRight,
   PlusCircle,
