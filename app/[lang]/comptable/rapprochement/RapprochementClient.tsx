@@ -522,6 +522,7 @@ export function RapprochementClient({
                           onClick={() => {
                             setValidateModal(decl);
                             setAllocAmount(decl.amount.toString());
+                            setSelectedTxId(bankTransactions.length > 0 ? bankTransactions[0].id : "direct");
                           }}
                           className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold bg-[#2d8f5e] hover:bg-[#24754d] text-white transition-all shadow-sm"
                         >
@@ -856,14 +857,18 @@ export function RapprochementClient({
               <select
                 value={selectedTxId}
                 onChange={(e) => setSelectedTxId(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs text-[#0f172a] focus:ring-2 focus:ring-[#1a6fbf] bg-white"
+                className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs text-[#0f172a] focus:ring-2 focus:ring-[#1a6fbf] bg-white font-medium"
               >
-                <option value="">— Choisir une transaction du relevé —</option>
-                {bankTransactions.map((tx) => (
-                  <option key={tx.id} value={tx.id}>
-                    {new Date(tx.date).toLocaleDateString(locale)} · {tx.description} · {fmt(tx.amount, locale)} DA
-                  </option>
-                ))}
+                <option value="direct">✨ Validation directe (Créer automatiquement la transaction bancaire)</option>
+                {bankTransactions.length > 0 && (
+                  <optgroup label="Transactions du relevé bancaire">
+                    {bankTransactions.map((tx) => (
+                      <option key={tx.id} value={tx.id}>
+                        {new Date(tx.date).toLocaleDateString(locale)} · {tx.description} · {fmt(tx.amount, locale)} DA
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
               </select>
             </div>
 

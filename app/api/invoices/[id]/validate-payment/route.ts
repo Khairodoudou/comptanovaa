@@ -43,11 +43,27 @@ export async function POST(
       return Response.json({ error: "Déclaration introuvable ou déjà traitée" }, { status: 404 });
     }
 
-    const bankTx = await db.bankTransaction.findFirst({
-      where: { id: bankTransactionId, company: { comptableId: user.userId } },
-    });
-    if (!bankTx) {
-      return Response.json({ error: "Transaction bancaire introuvable" }, { status: 404 });
+    let finalTxId = bankTransactionId;
+    if (bankTransactionId === "direct" || bankTransactionId === "auto") {
+      const newTx = await db.bankTransaction.create({
+        data: {
+          companyId: invoice.companyId,
+          date: declaration.paymentDate || new Date(),
+          description: `Virement VNC - ${declaration.reference || invoice.invoiceNumber || id.slice(-6)} (${declaration.amount.toLocaleString()} DA)`,
+          amount: declaration.amount,
+          reference: declaration.reference || null,
+          matched: true,
+          matchScore: 100,
+        },
+      });
+      finalTxId = newTx.id;
+    } else {
+      const bankTx = await db.bankTransaction.findFirst({
+        where: { id: bankTransactionId, company: { comptableId: user.userId } },
+      });
+      if (!bankTx) {
+        return Response.json({ error: "Transaction bancaire introuvable" }, { status: 404 });
+      }
     }
 
     const allocated = parseFloat(String(allocatedAmount));
@@ -66,7 +82,7 @@ export async function POST(
       (db as any).invoicePayment.create({
         data: {
           invoiceId: id,
-          bankTransactionId,
+          bankTransactionId: finalTxId,
           declarationId,
           amount: allocated,
         },
@@ -76,7 +92,7 @@ export async function POST(
         data: { status: "VALIDATED", notes: notes || null },
       }),
       db.bankTransaction.update({
-        where: { id: bankTransactionId },
+        where: { id: finalTxId },
         data: { matched: true },
       }),
       (db as any).invoice.update({
