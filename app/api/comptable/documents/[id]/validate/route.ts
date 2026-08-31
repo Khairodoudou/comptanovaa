@@ -16,6 +16,7 @@ const DocumentValidationSchema = z.object({
   action: z.enum(["VALIDATE", "SAVE", "REJECT"]),
   entries: z.array(EntryItemSchema).min(1, "Au moins une ligne d'écriture requise"),
   reference: z.string().optional().nullable(),
+  supplier: z.string().optional().nullable(),
   comment: z.string().optional(),
   sentToClient: z.boolean().optional().default(true),
 });
@@ -43,7 +44,7 @@ export async function POST(
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 422 });
   }
 
-  const { action, entries: submittedEntries, reference, comment, sentToClient } = parsed.data;
+  const { action, entries: submittedEntries, reference, supplier, comment, sentToClient } = parsed.data;
 
   // Retrieve document & its current journal entries
   const document = await db.document.findUnique({
@@ -83,6 +84,32 @@ export async function POST(
 
   const result = await db.$transaction(async (tx) => {
     const now = new Date();
+
+    // ── Update Supplier Name in Document OCR Data if changed ────────────────
+    if (supplier !== undefined && supplier !== null) {
+      let currentOcr: any = {};
+      try {
+        currentOcr = document.ocrData ? JSON.parse(document.ocrData) : {};
+      } catch {}
+      currentOcr.supplier = supplier;
+      if (!currentOcr.extracted) currentOcr.extracted = {};
+      currentOcr.extracted.supplier = supplier;
+
+      await tx.document.update({
+        where: { id: document.id },
+        data: {
+          ocrData: JSON.stringify(currentOcr),
+        },
+      });
+
+      // Also update linked Invoice record if exists
+      await tx.invoice.updateMany({
+        where: { documentId: document.id },
+        data: {
+          description: `${document.type === "FACTURE_CLIENT" ? "Facture Client" : "Facture Fournisseur"} - ${supplier}`,
+        },
+      });
+    }
 
     if (action === "REJECT") {
       // Mark entries as REJECTED

@@ -105,6 +105,17 @@ export function DocumentValidationCard({
     } catch {}
   }
 
+  // Fallback: check if initial entries already contain the supplier in their description
+  if ((!extractedSupplier || extractedSupplier === "Inconnu") && initialEntries.length > 0) {
+    for (const e of initialEntries) {
+      const parts = (e.description || "").split("—");
+      if (parts.length > 1 && parts[1].trim() && parts[1].trim() !== "Inconnu") {
+        extractedSupplier = parts[1].trim();
+        break;
+      }
+    }
+  }
+
   // Editable Supplier / Tiers state
   const [supplierName, setSupplierName] = useState(extractedSupplier);
 
@@ -329,6 +340,7 @@ export function DocumentValidationCard({
           action,
           entries: payloadEntries,
           reference,
+          supplier: supplierName,
           comment: action === "REJECT" ? rejectReason : undefined,
           sentToClient: true,
         }),
