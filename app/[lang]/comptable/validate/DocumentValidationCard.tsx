@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useMemo } from "react";
@@ -23,6 +22,7 @@ import {
   Download,
   ExternalLink,
   X,
+  Pencil,
 } from "lucide-react";
 import { getAccountTitle } from "@/lib/accounting";
 
@@ -94,16 +94,19 @@ export function DocumentValidationCard({
 
   // Extract OCR metadata
   let ocrAmountTTC = 0;
-  let supplierName = "Inconnu";
+  let extractedSupplier = "Inconnu";
   let ocrInvoiceNumber = "";
   if (document.ocrData) {
     try {
       const parsed = JSON.parse(document.ocrData);
       ocrAmountTTC = parsed.extracted?.amount || 0;
-      supplierName = parsed.supplier || parsed.extracted?.supplier || "Inconnu";
+      extractedSupplier = parsed.supplier || parsed.extracted?.supplier || "Inconnu";
       ocrInvoiceNumber = parsed.extracted?.invoiceNumber || "";
     } catch {}
   }
+
+  // Editable Supplier / Tiers state
+  const [supplierName, setSupplierName] = useState(extractedSupplier);
 
   // Reference state
   const [reference, setReference] = useState(
@@ -113,7 +116,7 @@ export function DocumentValidationCard({
   // Initialize editable lines
   const [lines, setLines] = useState<DisplayLine[]>(() => {
     const list: DisplayLine[] = [];
-    const entityName = supplierName !== "Inconnu" ? supplierName : "";
+    const entityName = extractedSupplier !== "Inconnu" ? extractedSupplier : "";
 
     const debitsMap: Record<string, { amount: number; entryId: string; label?: string }> = {};
     const creditsMap: Record<string, { amount: number; entryId: string; label?: string }> = {};
@@ -204,6 +207,22 @@ export function DocumentValidationCard({
     });
     return origs;
   }, [initialEntries]);
+
+  // Handle Supplier Name Change and sync with 401/411 lines
+  const handleSupplierChange = (newName: string) => {
+    setSupplierName(newName);
+    setLines((prev) =>
+      prev.map((line) => {
+        if (line.account.startsWith("401") || line.account.startsWith("411")) {
+          return {
+            ...line,
+            label: getAccountTitle(line.account, newName !== "Inconnu" && newName.trim() !== "" ? newName : ""),
+          };
+        }
+        return line;
+      })
+    );
+  };
 
   // Line modification helpers
   const handleAccountChange = (idx: number, newAcc: string) => {
@@ -400,9 +419,29 @@ export function DocumentValidationCard({
                 <Building2 size={13} className="text-teal-600" />
                 Dossier: {document.company.client.name}
               </span>
+              
               <span className="text-slate-300">•</span>
-              <span>Fournisseur: <strong className="text-slate-900">{supplierName}</strong></span>
+              
+              {/* Editable Supplier / Tiers input in Header */}
+              <span className="flex items-center gap-1">
+                <span className="text-slate-500">
+                  {document.type === "FACTURE_CLIENT" ? "Client:" : "Fournisseur:"}
+                </span>
+                <span className="relative inline-flex items-center group">
+                  <input
+                    type="text"
+                    value={supplierName}
+                    onChange={(e) => handleSupplierChange(e.target.value)}
+                    placeholder="Nom du tiers..."
+                    className="font-extrabold text-slate-900 bg-slate-50 hover:bg-slate-100 focus:bg-white border-b border-dashed border-slate-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 rounded px-1.5 py-0.5 text-xs transition-all max-w-[200px]"
+                    title="Cliquer pour corriger le nom du fournisseur / client"
+                  />
+                  <Pencil size={11} className="text-slate-400 group-hover:text-blue-600 transition-colors ml-1 shrink-0 pointer-events-none" />
+                </span>
+              </span>
+
               <span className="text-slate-300">•</span>
+              
               <span className="flex items-center gap-1 text-slate-400">
                 <Calendar size={13} />
                 {new Date(document.uploadedAt).toLocaleDateString(locale, { day: "numeric", month: "long", year: "numeric" })}
@@ -440,7 +479,7 @@ export function DocumentValidationCard({
             <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">
               MONTANT TOTAL TTC
             </span>
-            <span className="text-lg font-black text-slate-900">
+            <span className="text-base font-black text-slate-900">
               {ocrAmountTTC.toLocaleString(locale, { minimumFractionDigits: 2 })} <span className="text-xs font-bold text-slate-400">DA</span>
             </span>
           </div>
