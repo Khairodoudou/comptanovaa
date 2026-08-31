@@ -73,13 +73,19 @@ interface DocumentValidationCardProps {
   lang: string;
 }
 
-interface DisplayLine {
-  id?: string;
-  type: "DEBIT" | "CREDIT";
+interface DebitLine {
+  id: string;
   account: string;
   label: string;
-  debit: number;
-  credit: number;
+  amount: number;
+  originalEntryId?: string;
+}
+
+interface CreditLine {
+  id: string;
+  account: string;
+  label: string;
+  amount: number;
   originalEntryId?: string;
 }
 
@@ -93,29 +99,30 @@ export function DocumentValidationCard({
 
   // Extract OCR metadata
   let ocrAmountTTC = 0;
-  let supplierName = "Tiers inconnu";
+  let supplierName = "Inconnu";
   let ocrInvoiceNumber = "";
   if (document.ocrData) {
     try {
       const parsed = JSON.parse(document.ocrData);
       ocrAmountTTC = parsed.extracted?.amount || 0;
-      supplierName = parsed.supplier || parsed.extracted?.supplier || "Tiers inconnu";
+      supplierName = parsed.supplier || parsed.extracted?.supplier || "Inconnu";
       ocrInvoiceNumber = parsed.extracted?.invoiceNumber || "";
     } catch {}
   }
 
   // Reference state
   const [reference, setReference] = useState(
-    initialEntries.find((e) => e.reference)?.reference || ocrInvoiceNumber || ""
+    initialEntries.find((e) => e.reference)?.reference || ocrInvoiceNumber || "19/2026"
   );
 
-  // Initialize editable lines
-  const [lines, setLines] = useState<DisplayLine[]>(() => {
-    const list: DisplayLine[] = [];
-    const entityName = supplierName !== "Tiers inconnu" ? supplierName : "";
+  // Initialize Debits and Credits
+  const initialData = useMemo(() => {
+    const debits: DebitLine[] = [];
+    const credits: CreditLine[] = [];
+    const entityName = supplierName !== "Inconnu" ? supplierName : "";
 
-    const debitsMap: Record<string, { amount: number; entryId: string }> = {};
-    const creditsMap: Record<string, { amount: number; entryId: string }> = {};
+    const debitsMap: Record<string, { amount: number; entryId: string; label?: string }> = {};
+    const creditsMap: Record<string, { amount: number; entryId: string; label?: string }> = {};
 
     initialEntries.forEach((e) => {
       const cleanDebit = e.debitAccount.replace(/\.0$/, "");
@@ -129,36 +136,47 @@ export function DocumentValidationCard({
     });
 
     Object.entries(debitsMap).forEach(([acc, data]) => {
-      list.push({
+      let lbl = getAccountTitle(acc);
+      if (acc.startsWith("380") || acc.startsWith("607")) lbl = "Achat de marchandise";
+      else if (acc.startsWith("4456")) lbl = "TVA déductible";
+      else if (acc.startsWith("70")) lbl = "Vente de marchandise";
+      else if (acc.startsWith("4457")) lbl = "TVA collectée";
+
+      debits.push({
         id: `deb-${acc}`,
-        type: "DEBIT",
         account: acc,
-        label: getAccountTitle(acc, entityName),
-        debit: data.amount,
-        credit: 0,
+        label: lbl,
+        amount: data.amount,
         originalEntryId: data.entryId,
       });
     });
 
     Object.entries(creditsMap).forEach(([acc, data]) => {
-      list.push({
+      let lbl = getAccountTitle(acc, entityName);
+      if (acc.startsWith("401")) lbl = `Fournisseur (${supplierName})`;
+      else if (acc.startsWith("411")) lbl = `Client (${supplierName})`;
+      else if (acc.startsWith("512")) lbl = "Banque";
+      else if (acc.startsWith("53")) lbl = "Caisse";
+
+      credits.push({
         id: `cred-${acc}`,
-        type: "CREDIT",
         account: acc,
-        label: getAccountTitle(acc, entityName),
-        debit: 0,
-        credit: data.amount,
+        label: lbl,
+        amount: data.amount,
         originalEntryId: data.entryId,
       });
     });
 
-    return list.length > 0
-      ? list
-      : [
-          { id: "1", type: "DEBIT", account: "380", label: "Achats de marchandises", debit: ocrAmountTTC, credit: 0 },
-          { id: "2", type: "CREDIT", account: "401", label: `Fournisseurs (${entityName})`, debit: 0, credit: ocrAmountTTC },
-        ];
-  });
+    if (debits.length === 0 && credits.length === 0) {
+      debits.push({ id: "d1", account: "380", label: "Achat de marchandise", amount: ocrAmountTTC });
+      credits.push({ id: "c1", account: "401", label: `Fournisseur (${supplierName})`, amount: ocrAmountTTC });
+    }
+
+    return { debits, credits };
+  }, [initialEntries, supplierName, ocrAmountTTC]);
+
+  const [debitLines, setDebitLines] = useState<DebitLine[]>(initialData.debits);
+  const [creditLines, setCreditLines] = useState<CreditLine[]>(initialData.credits);
 
   const [showAiOriginal, setShowAiOriginal] = useState(false);
   const [showDocPreview, setShowDocPreview] = useState(false);
@@ -174,8 +192,8 @@ export function DocumentValidationCard({
   const correctedDate = initialEntries.find((e) => e.correctedAt)?.correctedAt;
 
   // Calculate Totals & Balance
-  const totalDebit = useMemo(() => lines.reduce((s, l) => s + (Number(l.debit) || 0), 0), [lines]);
-  const totalCredit = useMemo(() => lines.reduce((s, l) => s + (Number(l.credit) || 0), 0), [lines]);
+  const totalDebit = useMemo(() => debitLines.reduce((s, l) => s + (Number(l.amount) || 0), 0), [debitLines]);
+  const totalCredit = useMemo(() => creditLines.reduce((s, l) => s + (Number(l.amount) || 0), 0), [creditLines]);
   const difference = Math.abs(totalDebit - totalCredit);
   const isBalanced = difference < 0.01 && totalDebit > 0;
 
@@ -192,49 +210,88 @@ export function DocumentValidationCard({
   }, [initialEntries]);
 
   // Line modification helpers
-  const handleAccountChange = (idx: number, newAcc: string) => {
-    setLines((prev) => {
+  const handleDebitAccountChange = (idx: number, newAcc: string) => {
+    setDebitLines((prev) => {
       const copy = [...prev];
-      const line = copy[idx];
-      line.account = newAcc;
-      line.label = getAccountTitle(newAcc, supplierName !== "Tiers inconnu" ? supplierName : "");
+      copy[idx].account = newAcc;
+      copy[idx].label = getAccountTitle(newAcc);
       return copy;
     });
   };
 
-  const handleDebitChange = (idx: number, val: number) => {
-    setLines((prev) => {
+  const handleDebitAmountChange = (idx: number, val: number) => {
+    setDebitLines((prev) => {
       const copy = [...prev];
-      copy[idx].debit = isNaN(val) ? 0 : val;
+      copy[idx].amount = isNaN(val) ? 0 : val;
       return copy;
     });
   };
 
-  const handleCreditChange = (idx: number, val: number) => {
-    setLines((prev) => {
+  const handleDebitLabelChange = (idx: number, lbl: string) => {
+    setDebitLines((prev) => {
       const copy = [...prev];
-      copy[idx].credit = isNaN(val) ? 0 : val;
+      copy[idx].label = lbl;
       return copy;
     });
   };
 
-  const handleAddLine = () => {
-    setLines((prev) => [
+  const handleCreditAccountChange = (idx: number, newAcc: string) => {
+    setCreditLines((prev) => {
+      const copy = [...prev];
+      copy[idx].account = newAcc;
+      copy[idx].label = getAccountTitle(newAcc, supplierName);
+      return copy;
+    });
+  };
+
+  const handleCreditAmountChange = (idx: number, val: number) => {
+    setCreditLines((prev) => {
+      const copy = [...prev];
+      copy[idx].amount = isNaN(val) ? 0 : val;
+      return copy;
+    });
+  };
+
+  const handleCreditLabelChange = (idx: number, lbl: string) => {
+    setCreditLines((prev) => {
+      const copy = [...prev];
+      copy[idx].label = lbl;
+      return copy;
+    });
+  };
+
+  const handleAddDebitLine = () => {
+    setDebitLines((prev) => [
       ...prev,
       {
-        id: `new-${Date.now()}`,
-        type: "DEBIT",
+        id: `d-${Date.now()}`,
         account: "607",
-        label: getAccountTitle("607"),
-        debit: 0,
-        credit: 0,
+        label: "Achat non stocké",
+        amount: 0,
       },
     ]);
   };
 
-  const handleRemoveLine = (idx: number) => {
-    if (lines.length <= 1) return;
-    setLines((prev) => prev.filter((_, i) => i !== idx));
+  const handleAddCreditLine = () => {
+    setCreditLines((prev) => [
+      ...prev,
+      {
+        id: `c-${Date.now()}`,
+        account: "401",
+        label: `Fournisseur (${supplierName})`,
+        amount: 0,
+      },
+    ]);
+  };
+
+  const handleRemoveDebitLine = (idx: number) => {
+    if (debitLines.length <= 1) return;
+    setDebitLines((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const handleRemoveCreditLine = (idx: number) => {
+    if (creditLines.length <= 1) return;
+    setCreditLines((prev) => prev.filter((_, i) => i !== idx));
   };
 
   // Submit Handler
@@ -244,9 +301,6 @@ export function DocumentValidationCard({
     setSuccessMessage(null);
 
     try {
-      const debits = lines.filter((l) => Number(l.debit) > 0);
-      const credits = lines.filter((l) => Number(l.credit) > 0);
-
       const payloadEntries: Array<{
         id?: string;
         debitAccount: string;
@@ -256,30 +310,18 @@ export function DocumentValidationCard({
         reference?: string;
       }> = [];
 
-      const creditAcc = credits[0]?.account || "401";
+      const mainCreditAcc = creditLines[0]?.account || "401";
 
-      debits.forEach((d, i) => {
+      debitLines.forEach((d, i) => {
         payloadEntries.push({
           id: d.originalEntryId || initialEntries[i]?.id,
           debitAccount: d.account,
-          creditAccount: creditAcc,
-          amount: Number(d.debit),
+          creditAccount: mainCreditAcc,
+          amount: Number(d.amount),
           description: `${d.label} — ${supplierName}`,
           reference,
         });
       });
-
-      if (payloadEntries.length === 0 && credits.length > 0) {
-        credits.forEach((c) => {
-          payloadEntries.push({
-            debitAccount: "512",
-            creditAccount: c.account,
-            amount: Number(c.credit),
-            description: `${c.label} — ${supplierName}`,
-            reference,
-          });
-        });
-      }
 
       const res = await fetch(`/api/comptable/documents/${document.id}/validate`, {
         method: "POST",
@@ -319,19 +361,22 @@ export function DocumentValidationCard({
 
   const locale = lang === "ar" ? "ar-DZ" : lang === "en" ? "en-US" : "fr-FR";
   const docDate = initialEntries[0]?.date
-    ? new Date(initialEntries[0].date).toLocaleDateString(locale, { day: "2-digit", month: "2-digit", year: "numeric" })
-    : new Date().toLocaleDateString(locale);
+    ? new Date(initialEntries[0].date).toLocaleDateString("fr-FR")
+    : new Date().toLocaleDateString("fr-FR");
+
+  const formatAmount = (val: number) =>
+    val > 0 ? val.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "";
 
   const viewUrl = `/api/documents/${document.id}/view`;
   const downloadUrl = `/api/documents/${document.id}/download`;
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md transition-all duration-200 p-6 sm:p-7 space-y-6">
+    <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md transition-all duration-200 p-6 sm:p-8 space-y-6">
       {/* ── Document Top Header ────────────────────────────────────────────── */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-100 pb-5">
         <div className="flex items-start gap-3.5">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500/10 to-teal-500/10 text-teal-700 flex items-center justify-center shrink-0 border border-teal-200/60 shadow-sm">
-            <FileText size={22} className="text-teal-700" />
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-50 text-[#1a6fbf] flex items-center justify-center shrink-0 border border-blue-100 shadow-sm">
+            <FileText size={22} className="text-[#1a6fbf]" />
           </div>
           <div>
             <div className="flex flex-wrap items-center gap-2.5">
@@ -351,7 +396,11 @@ export function DocumentValidationCard({
                 }[document.type] || document.type.replace(/_/g, " ")}
               </span>
 
-              {/* Origin & Traceability Badge */}
+              {/* Status & Origin Badge */}
+              <span className="px-2.5 py-0.5 bg-amber-50 text-amber-700 border border-amber-200/60 rounded-full text-[10px] uppercase tracking-wider font-extrabold">
+                À Valider
+              </span>
+
               {isCorrected ? (
                 <span className="px-2.5 py-0.5 bg-amber-50 text-amber-800 border border-amber-200 rounded-full text-[10px] font-bold flex items-center gap-1">
                   <UserCheck size={11} className="text-amber-600" />
@@ -371,14 +420,14 @@ export function DocumentValidationCard({
             <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 mt-1.5 font-medium">
               <span className="flex items-center gap-1.5 text-slate-700 font-bold">
                 <Building2 size={13} className="text-teal-600" />
-                Dossier : {document.company.name} ({document.company.client.name})
+                Dossier : {document.company.client.name}
               </span>
               <span className="text-slate-300">•</span>
-              <span>Tiers : <strong className="text-slate-900">{supplierName}</strong></span>
+              <span>Fournisseur : <strong className="text-slate-900">{supplierName}</strong></span>
               <span className="text-slate-300">•</span>
               <span className="flex items-center gap-1 text-slate-400">
                 <Calendar size={13} />
-                Dépôt : {new Date(document.uploadedAt).toLocaleDateString(locale)}
+                {new Date(document.uploadedAt).toLocaleDateString(locale, { day: "numeric", month: "long", year: "numeric" })}
               </span>
             </div>
           </div>
@@ -386,22 +435,22 @@ export function DocumentValidationCard({
 
         {/* Action Buttons & Montant TTC */}
         <div className="flex flex-wrap items-center gap-3 self-end lg:self-center">
-          {/* Document Preview Button */}
+          {/* Aperçu PDF Button */}
           <button
             type="button"
             onClick={() => setShowDocPreview(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl text-xs font-bold transition-all shadow-xs active:scale-95"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl text-xs font-bold transition-all shadow-xs active:scale-95 cursor-pointer"
             title="Visualiser le PDF original"
           >
             <Eye size={14} className="text-blue-600" />
             <span>Aperçu PDF</span>
           </button>
 
-          {/* Download Original File Button */}
+          {/* Télécharger Button */}
           <a
             href={downloadUrl}
             download={document.originalName}
-            className="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition-all shadow-xs active:scale-95"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition-all shadow-xs active:scale-95"
             title="Télécharger la pièce originale"
           >
             <Download size={14} className="text-slate-600" />
@@ -413,7 +462,7 @@ export function DocumentValidationCard({
             <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">
               Montant Total TTC
             </span>
-            <span className="text-base font-black text-slate-900">
+            <span className="text-xl font-black text-slate-900">
               {ocrAmountTTC.toLocaleString(locale, { minimumFractionDigits: 2 })} <span className="text-xs font-bold text-slate-400">DA</span>
             </span>
           </div>
@@ -435,30 +484,182 @@ export function DocumentValidationCard({
         </div>
       )}
 
-      {/* ── Accounting Voucher Header ──────────────────────────────────────── */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50/80 rounded-xl p-3 border border-slate-200/60 text-xs">
-        <div className="flex items-center gap-3">
-          <span className="font-bold text-slate-700">Date :</span>
-          <span className="font-mono font-bold text-slate-900 bg-white px-2.5 py-1 rounded border border-slate-200">
-            {docDate}
-          </span>
-        </div>
+      {/* ── Table Comptable Standard Exact Match (5 Colonnes avec bordures nettes) ── */}
+      <div className="bg-white overflow-hidden shadow-xs mt-4">
+        <table className="w-full text-base border-collapse border border-black">
+          <thead>
+            <tr>
+              <th className="py-2.5 px-4 text-center font-bold text-black border border-black w-24">
+                <u>Débit</u>
+              </th>
+              <th className="py-2.5 px-4 text-center font-bold text-black border border-black w-24">
+                <u>Crédit</u>
+              </th>
+              <th className="py-2.5 px-4 text-center font-bold text-black border border-black">
+                <div className="border-b border-black pb-1 mb-1 font-bold"><u>Libellé</u></div>
+                <div className="font-bold text-sm"><u>Date :</u> {docDate}</div>
+              </th>
+              <th className="py-2.5 px-4 text-center font-bold text-black border border-black w-36">
+                <u>Débit</u>
+              </th>
+              <th className="py-2.5 px-4 text-center font-bold text-black border border-black w-36">
+                <u>Crédit</u>
+              </th>
+            </tr>
+          </thead>
+          <tbody className="text-black text-sm">
+            {/* Lignes de Débit */}
+            {debitLines.map((row, idx) => (
+              <tr key={row.id || idx}>
+                {/* Code Compte Débit */}
+                <td className="py-1.5 px-3 text-center font-mono text-[#7fb2eb] font-bold border-x border-black align-top text-base">
+                  <input
+                    type="text"
+                    value={row.account}
+                    onChange={(e) => handleDebitAccountChange(idx, e.target.value)}
+                    className="w-full text-center bg-transparent focus:bg-blue-50 focus:outline-none rounded font-mono text-[#7fb2eb] font-bold"
+                  />
+                </td>
+                <td className="py-1.5 px-3 text-center border-x border-black"></td>
 
-        <div className="flex items-center gap-2 flex-1 max-w-sm">
-          <span className="font-bold text-slate-700 shrink-0">Référence / N° :</span>
-          <input
-            type="text"
-            value={reference}
-            onChange={(e) => setReference(e.target.value)}
-            placeholder="Ex: Facture N° 19/2026"
-            className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-xs text-slate-900 font-medium focus:outline-none focus:ring-1 focus:ring-teal-500"
-          />
+                {/* Libellé Débit */}
+                <td className="py-1.5 px-4 text-black border-x border-black text-left font-medium">
+                  <input
+                    type="text"
+                    value={row.label}
+                    onChange={(e) => handleDebitLabelChange(idx, e.target.value)}
+                    className="w-full bg-transparent focus:bg-slate-50 focus:outline-none rounded text-black font-medium"
+                  />
+                </td>
+
+                {/* Montant Débit */}
+                <td className="py-1.5 px-4 text-left font-mono text-[#7fb2eb] font-bold border-x border-black align-top text-base">
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={row.amount === 0 ? "" : row.amount}
+                    onChange={(e) => handleDebitAmountChange(idx, parseFloat(e.target.value) || 0)}
+                    placeholder="0.00"
+                    className="w-full text-left bg-transparent focus:bg-blue-50 focus:outline-none rounded font-mono text-[#7fb2eb] font-bold"
+                  />
+                </td>
+                <td className="py-1.5 px-4 text-left border-x border-black"></td>
+              </tr>
+            ))}
+
+            {/* Lignes de Crédit */}
+            {creditLines.map((row, idx) => (
+              <tr key={row.id || idx}>
+                <td className="py-1.5 px-3 text-center border-x border-black"></td>
+
+                {/* Code Compte Crédit */}
+                <td className="py-1.5 px-3 text-center font-mono text-[#7fb2eb] font-bold border-x border-black align-top text-base">
+                  <input
+                    type="text"
+                    value={row.account}
+                    onChange={(e) => handleCreditAccountChange(idx, e.target.value)}
+                    className="w-full text-center bg-transparent focus:bg-blue-50 focus:outline-none rounded font-mono text-[#7fb2eb] font-bold"
+                  />
+                </td>
+
+                {/* Libellé Crédit (Indenté avec pl-12) */}
+                <td className="py-1.5 px-4 text-black border-x border-black text-left font-medium">
+                  <div className="pl-12">
+                    <input
+                      type="text"
+                      value={row.label}
+                      onChange={(e) => handleCreditLabelChange(idx, e.target.value)}
+                      className="w-full bg-transparent focus:bg-slate-50 focus:outline-none rounded text-black font-medium"
+                    />
+                  </div>
+                </td>
+
+                <td className="py-1.5 px-4 text-left border-x border-black"></td>
+
+                {/* Montant Crédit */}
+                <td className="py-1.5 px-4 text-left font-mono text-[#7fb2eb] font-bold border-x border-black align-top text-base">
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={row.amount === 0 ? "" : row.amount}
+                    onChange={(e) => handleCreditAmountChange(idx, parseFloat(e.target.value) || 0)}
+                    placeholder="0.00"
+                    className="w-full text-left bg-transparent focus:bg-blue-50 focus:outline-none rounded font-mono text-[#7fb2eb] font-bold"
+                  />
+                </td>
+              </tr>
+            ))}
+
+            {/* Ligne de Référence (Centrée en bas) */}
+            <tr>
+              <td className="py-4 px-4 text-center border-x border-black"></td>
+              <td className="py-4 px-4 text-center border-x border-black"></td>
+              <td className="py-4 px-4 text-center text-black border-x border-black">
+                <div className="flex items-center justify-center gap-1.5 font-bold text-base">
+                  <span>Facture N°</span>
+                  <input
+                    type="text"
+                    value={reference}
+                    onChange={(e) => setReference(e.target.value)}
+                    className="font-bold border-b border-dashed border-black focus:border-blue-600 focus:outline-none text-center px-1 max-w-[140px]"
+                    placeholder="19/2026"
+                  />
+                </div>
+              </td>
+              <td className="py-4 px-4 border-x border-black"></td>
+              <td className="py-4 px-4 border-x border-black"></td>
+            </tr>
+          </tbody>
+
+          {/* Ligne des Totaux */}
+          <tfoot>
+            <tr className="border-t border-black font-bold text-sm bg-slate-50/50">
+              <td colSpan={2} className="py-2.5 px-4 text-right border-r border-black uppercase text-xs">
+                Total :
+              </td>
+              <td className="py-2.5 px-4 text-center border-r border-black text-xs font-bold text-slate-500">
+                {isBalanced ? (
+                  <span className="text-teal-700 font-bold">✓ Écriture équilibrée</span>
+                ) : (
+                  <span className="text-rose-600 font-bold">⚠️ Écart : {difference.toFixed(2)} DA</span>
+                )}
+              </td>
+              <td className="py-2.5 px-4 text-left font-mono font-bold text-black border-r border-black text-sm">
+                {totalDebit.toLocaleString("fr-FR", { minimumFractionDigits: 2 })}
+              </td>
+              <td className="py-2.5 px-4 text-left font-mono font-bold text-black text-sm">
+                {totalCredit.toLocaleString("fr-FR", { minimumFractionDigits: 2 })}
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      {/* ── Add Lines Controls & Original AI Toggle ───────────────────────── */}
+      <div className="flex flex-wrap items-center justify-between gap-3 pt-2 text-xs">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleAddDebitLine}
+            className="inline-flex items-center gap-1 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-bold transition-all"
+          >
+            <Plus size={13} />
+            <span>Ajouter ligne Débit</span>
+          </button>
+          <button
+            type="button"
+            onClick={handleAddCreditLine}
+            className="inline-flex items-center gap-1 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-bold transition-all"
+          >
+            <Plus size={13} />
+            <span>Ajouter ligne Crédit</span>
+          </button>
         </div>
 
         <button
           type="button"
           onClick={() => setShowAiOriginal(!showAiOriginal)}
-          className="text-slate-500 hover:text-slate-900 font-bold flex items-center gap-1.5 text-[11px] transition-colors ml-auto"
+          className="text-slate-500 hover:text-slate-900 font-bold flex items-center gap-1.5 text-xs transition-colors"
         >
           <History size={13} className="text-blue-600" />
           <span>{showAiOriginal ? "Masquer proposition IA" : "Voir proposition IA originale"}</span>
@@ -497,128 +698,6 @@ export function DocumentValidationCard({
           </div>
         </div>
       )}
-
-      {/* ── Standard Accounting Voucher Table ──────────────────────────────── */}
-      <div className="overflow-x-auto rounded-xl border border-slate-900 shadow-sm">
-        <table className="w-full text-xs text-left border-collapse">
-          <thead>
-            <tr className="bg-slate-900 text-white font-bold uppercase tracking-wider text-[10px]">
-              <th className="py-2.5 px-3 border-r border-slate-800 w-28 text-center">Compte</th>
-              <th className="py-2.5 px-4 border-r border-slate-800">Intitulé du compte</th>
-              <th className="py-2.5 px-4 border-r border-slate-800 w-36 text-right">Débit (DA)</th>
-              <th className="py-2.5 px-4 border-r border-slate-800 w-36 text-right">Crédit (DA)</th>
-              <th className="py-2.5 px-2 w-10 text-center"></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-200">
-            {lines.map((line, idx) => (
-              <tr key={line.id || idx} className="hover:bg-slate-50/80 transition-colors">
-                {/* Compte Code Input */}
-                <td className="p-2 border-r border-slate-200 font-mono text-center">
-                  <input
-                    type="text"
-                    value={line.account}
-                    onChange={(e) => handleAccountChange(idx, e.target.value)}
-                    className="w-full text-center font-bold text-blue-700 bg-transparent focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 rounded py-1 font-mono"
-                  />
-                </td>
-
-                {/* Intitulé du compte */}
-                <td className="p-2 px-4 border-r border-slate-200 text-slate-900 font-medium">
-                  {line.label}
-                </td>
-
-                {/* Débit Amount Input */}
-                <td className="p-2 border-r border-slate-200 text-right font-mono">
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={line.debit === 0 ? "" : line.debit}
-                    onChange={(e) => handleDebitChange(idx, parseFloat(e.target.value) || 0)}
-                    placeholder="0.00"
-                    className={`w-full text-right font-bold bg-transparent focus:bg-white focus:outline-none focus:ring-1 focus:ring-teal-500 rounded py-1 ${
-                      line.debit > 0 ? "text-slate-900" : "text-slate-300"
-                    }`}
-                  />
-                </td>
-
-                {/* Crédit Amount Input */}
-                <td className="p-2 border-r border-slate-200 text-right font-mono">
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={line.credit === 0 ? "" : line.credit}
-                    onChange={(e) => handleCreditChange(idx, parseFloat(e.target.value) || 0)}
-                    placeholder="0.00"
-                    className={`w-full text-right font-bold bg-transparent focus:bg-white focus:outline-none focus:ring-1 focus:ring-teal-500 rounded py-1 ${
-                      line.credit > 0 ? "text-slate-900" : "text-slate-300"
-                    }`}
-                  />
-                </td>
-
-                {/* Delete line action */}
-                <td className="p-1 text-center">
-                  {lines.length > 2 && (
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveLine(idx)}
-                      className="text-slate-300 hover:text-rose-600 transition-colors p-1"
-                      title="Supprimer la ligne"
-                    >
-                      <Trash2 size={13} />
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-
-          {/* ── Totaux & Contrôle d'équilibre ────────────────────────────── */}
-          <tfoot>
-            <tr className="bg-slate-100 font-black text-xs border-t-2 border-slate-900">
-              <td colSpan={2} className="py-3 px-4 text-right uppercase tracking-wider text-slate-900 border-r border-slate-200">
-                Total de l'écriture :
-              </td>
-              <td className="py-3 px-4 text-right font-mono text-slate-900 border-r border-slate-200">
-                {totalDebit.toLocaleString(locale, { minimumFractionDigits: 2 })} DA
-              </td>
-              <td className="py-3 px-4 text-right font-mono text-slate-900 border-r border-slate-200">
-                {totalCredit.toLocaleString(locale, { minimumFractionDigits: 2 })} DA
-              </td>
-              <td></td>
-            </tr>
-          </tfoot>
-        </table>
-      </div>
-
-      {/* ── Add Line Button & Balance Verification Banner ────────────────── */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-1">
-        <button
-          type="button"
-          onClick={handleAddLine}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition-all"
-        >
-          <Plus size={13} />
-          <span>Ajouter une ligne d'écriture</span>
-        </button>
-
-        {/* Balance Status */}
-        {isBalanced ? (
-          <div className="flex items-center gap-2 text-xs font-extrabold text-teal-800 bg-teal-50 border border-teal-200 rounded-xl px-4 py-2 shadow-xs">
-            <CheckCircle2 size={16} className="text-teal-600" />
-            <span>Écriture équilibrée (Total Débit = Total Crédit = {totalDebit.toLocaleString(locale, { minimumFractionDigits: 2 })} DA)</span>
-          </div>
-        ) : (
-          <div className="flex items-center gap-2 text-xs font-extrabold text-rose-800 bg-rose-50 border border-rose-300 rounded-xl px-4 py-2 animate-pulse shadow-xs">
-            <AlertTriangle size={16} className="text-rose-600" />
-            <span>
-              ⚠️ Écriture déséquilibrée — Écart : {difference.toLocaleString(locale, { minimumFractionDigits: 2 })} DA (Validation bloquée)
-            </span>
-          </div>
-        )}
-      </div>
 
       {/* ── Actions Footer ────────────────────────────────────────────────── */}
       <div className="pt-4 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
