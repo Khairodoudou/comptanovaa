@@ -45,6 +45,67 @@ enum PaymentDeclarationStatus {
   REFUSED
 }
 
+// NEW enums
+
+enum UserRole {
+  CLIENT
+  COMPTABLE
+  ADMIN
+}
+
+enum RegimeFiscal {
+  FORFAITAIRE
+  REEL
+}
+
+enum InvitationType {
+  INVITATION
+  REQUEST
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  EXPIRED
+  CANCELLED
+}
+
+enum EntrySource {
+  AI
+  MANUAL
+}
+
+enum VersionType {
+  AI_PROPOSAL
+  COMPTABLE_CORRECTION
+  MANUAL_ENTRY
+  VALIDATION
+}
+
+enum ReconciliationStatus {
+  PENDING
+  MATCHED
+  ACCOUNTING_ONLY
+  BANK_ONLY
+  PARTIAL
+  IGNORED
+  MANUAL_MATCH
+}
+
+enum FiscalFrequency {
+  MONTHLY
+  QUARTERLY
+  ANNUAL
+  ONCE
+}
+
+enum FiscalDeadlineStatus {
+  UPCOMING
+  COMPLETED
+  OVERDUE
+}
+
 // ─── Models ───────────────────────────────────────────────
 
 model User {
@@ -54,42 +115,80 @@ model User {
   passwordHash     String
   phone            String?
   preferredLang    String              @default("fr")
-  role             String
+  role             String              @default("CLIENT")
   createdAt        DateTime            @default(now())
   updatedAt        DateTime            @updatedAt
-  // Client owns companies
-  companies        Company[]           @relation("ClientCompanies")
-  // Comptable is assigned to companies
-  assignedClients  Company[]           @relation("AssignedComptable")
-  validatedEntries JournalEntry[]      @relation("ValidatedEntries")
-  notifications    Notification[]
-  auditLogs        AuditLog[]
+
+  // Comptable professional info
+  cabinetName      String?
+  agrementNumber   String?
+  wilaya           String?
+  commune          String?
+  adresseCabinet   String?
+  specialisation   String?
+  secteurActivite  String?
+  nbCollaborateurs Int?
+  logoCabinet      String?
+
+  // Relations
+  companies             Company[]           @relation("ClientCompanies")
+  assignedClients       Company[]           @relation("AssignedComptable")
+  validatedEntries      JournalEntry[]      @relation("ValidatedEntries")
+  notifications         Notification[]
+  auditLogs             AuditLog[]
+  sentInvitations       ComptableInvitation[] @relation("SentInvitations")
+  receivedInvitations   ComptableInvitation[] @relation("ReceivedInvitations")
+  uploadedDocuments     Document[]          @relation("UploadedBy")
+  correctedEntries      JournalEntry[]      @relation("CorrectedEntries")
+  sentToClientEntries   JournalEntry[]      @relation("SentToClientBy")
+  entryVersions         JournalEntryVersion[]
+  completedDeadlines    FiscalDeadline[]    @relation("CompletedDeadlines")
+  reconMatches          ReconciliationMatch[] @relation("MatchedBy")
 }
 
 model Company {
   id               String              @id @default(cuid())
   name             String
+
+  // Client info
   clientId         String
   client           User                @relation("ClientCompanies", fields: [clientId], references: [id])
-  // Optional: assigned comptable for this company
+
+  // Assigned comptable
   comptableId      String?
   comptable        User?               @relation("AssignedComptable", fields: [comptableId], references: [id])
+
   createdAt        DateTime            @default(now())
   updatedAt        DateTime            @updatedAt
-  // Bank coordinates (filled by comptable)
+
+  // Bank coordinates
   bankName         String?
   rib              String?
   iban             String?
   ccp              String?
   beneficiaryName  String?
+
+  // Enterprise info (client registration)
+  raisonSociale    String?
+  formeJuridique   String?
+  nrc              String?
+  nif              String?
+  regimeFiscal     String              @default("REEL")
+  secteurActivite  String?
+  adresseSiege     String?
+  wilayaEntreprise String?
+
   // Relations
   documents        Document[]
+  journalEntries   JournalEntry[]      @relation("CompanyJournalEntries")
   bankTransactions BankTransaction[]
   accountBalances  AccountBalance[]
   subAccounts      SubAccount[]
   invoices         Invoice[]
   bankImports      BankStatementImport[]
   auditLogs        AuditLog[]
+  invitations      ComptableInvitation[]
+  fiscalDeadlines  FiscalDeadline[]
 }
 
 model Document {
@@ -103,8 +202,22 @@ model Document {
   uploadedAt     DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
   ocrData        String?
+
   companyId      String
   company        Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  // Who uploaded
+  uploadedById   String?
+  uploadedBy     User?          @relation("UploadedBy", fields: [uploadedById], references: [id])
+  uploadedByRole String?        // "CLIENT" | "COMPTABLE"
+
+  // Traceability timestamps
+  ocrStartedAt   DateTime?
+  ocrFinishedAt  DateTime?
+  aiProposedAt   DateTime?
+  validatedAt    DateTime?
+  sentToClientAt DateTime?
+
   journalEntries JournalEntry[]
   invoice        Invoice?
 }
@@ -121,12 +234,60 @@ model JournalEntry {
   comment         String?
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
+
+  // Link to document (optional — manual entries have no document)
   documentId      String?
   document        Document?        @relation(fields: [documentId], references: [id])
+
+  // Direct company link (required for manual entries)
+  companyId       String?
+  company         Company?         @relation("CompanyJournalEntries", fields: [companyId], references: [id])
+
+  // Source
+  source          String           @default("AI")   // AI | MANUAL
+  journalType     String?          // ACHATS | VENTES | BANQUE | OD | PAIE
+
+  // Validation
   validatedById   String?
   validatedBy     User?            @relation("ValidatedEntries", fields: [validatedById], references: [id])
   validatedAt     DateTime?
+
+  // Correction
+  correctedById   String?
+  correctedBy     User?            @relation("CorrectedEntries", fields: [correctedById], references: [id])
+  correctedAt     DateTime?
+
+  // Client visibility
+  sentToClient    Boolean          @default(false)
+  sentToClientAt  DateTime?
+  sentToClientById String?
+  sentToClientBy  User?            @relation("SentToClientBy", fields: [sentToClientById], references: [id])
+
   bankTransaction BankTransaction?
+  versions        JournalEntryVersion[]
+  reconMatches    ReconciliationMatch[]
+}
+
+model JournalEntryVersion {
+  id              String       @id @default(cuid())
+  journalEntryId  String
+  journalEntry    JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+
+  versionNumber   Int
+  versionType     String       // AI_PROPOSAL | COMPTABLE_CORRECTION | MANUAL_ENTRY | VALIDATION
+
+  debitAccount    String
+  creditAccount   String
+  amount          Float
+  description     String
+  reference       String?
+
+  createdById     String?
+  createdBy       User?        @relation(fields: [createdById], references: [id])
+  actorType       String       @default("USER")  // USER | SYSTEM | AI
+  reason          String?
+
+  createdAt       DateTime     @default(now())
 }
 
 model BankTransaction {
@@ -139,16 +300,50 @@ model BankTransaction {
   senderName     String?
   label          String?
   balance        Float?
+
+  // Legacy boolean kept for compatibility
   matched        Boolean              @default(false)
-  matchScore     Int?                 // 0–100 %
+  matchScore     Int?
+
+  // New: reconciliation status
+  matchStatus    String               @default("PENDING")  // PENDING | MATCHED | ACCOUNTING_ONLY | BANK_ONLY | PARTIAL | IGNORED | MANUAL_MATCH
+  matchReason    String?
+  matchedAt      DateTime?
+
   createdAt      DateTime             @default(now())
+
   companyId      String
   company        Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
   journalEntryId String?              @unique
   journalEntry   JournalEntry?        @relation(fields: [journalEntryId], references: [id])
+
   importId       String?
   import         BankStatementImport? @relation(fields: [importId], references: [id])
+
   invoicePayments InvoicePayment[]
+  reconMatches    ReconciliationMatch[]
+}
+
+model ReconciliationMatch {
+  id                String           @id @default(cuid())
+  bankTransactionId String
+  bankTransaction   BankTransaction  @relation(fields: [bankTransactionId], references: [id], onDelete: Cascade)
+
+  journalEntryId    String
+  journalEntry      JournalEntry     @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+
+  status            String           @default("MATCHED")  // MATCHED | PARTIAL | MANUAL_MATCH
+  score             Int?             // 0-100
+  reason            String?
+
+  matchedById       String?
+  matchedBy         User?            @relation("MatchedBy", fields: [matchedById], references: [id])
+  matchedAt         DateTime         @default(now())
+
+  createdAt         DateTime         @default(now())
+
+  @@unique([bankTransactionId, journalEntryId])
 }
 
 model AccountBalance {
@@ -179,9 +374,9 @@ model Notification {
 
 model SubAccount {
   id            String   @id @default(cuid())
-  parentAccount String   // e.g., "380", "401", "411"
-  subAccount    String   // e.g., "380.1", "401.A"
-  name          String   // e.g., "Stock Marchandises A", "Fournisseur X"
+  parentAccount String
+  subAccount    String
+  name          String
   companyId     String
   company       Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   createdAt     DateTime @default(now())
@@ -190,7 +385,7 @@ model SubAccount {
   @@unique([subAccount, companyId])
 }
 
-// ─── Invoice (Facture Client) ──────────────────────────────
+// ─── Invoice ──────────────────────────────────────────────
 
 model Invoice {
   id              String            @id @default(cuid())
@@ -209,25 +404,21 @@ model Invoice {
   payments        InvoicePayment[]
 }
 
-// ─── PaymentDeclaration (Déclaration paiement client) ────
-
 model PaymentDeclaration {
   id              String                   @id @default(cuid())
   invoiceId       String
   invoice         Invoice                  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-  reference       String?                  // Référence virement saisie par le client
-  paymentDate     DateTime?                // Date paiement déclarée par le client
+  reference       String?
+  paymentDate     DateTime?
   amount          Float
-  justificatif    String?                  // URL/filename du justificatif uploadé
+  justificatif    String?
   status          PaymentDeclarationStatus @default(PENDING)
-  refusalReason   String?                  // Motif de refus (si refusé)
-  notes           String?                  // Notes internes comptable
+  refusalReason   String?
+  notes           String?
   createdAt       DateTime                 @default(now())
   updatedAt       DateTime                 @updatedAt
   invoicePayments InvoicePayment[]
 }
-
-// ─── InvoicePayment (Liaison Invoice ↔ BankTransaction) ──
 
 model InvoicePayment {
   id                    String             @id @default(cuid())
@@ -237,16 +428,14 @@ model InvoicePayment {
   bankTransaction       BankTransaction    @relation(fields: [bankTransactionId], references: [id])
   declarationId         String?
   declaration           PaymentDeclaration? @relation(fields: [declarationId], references: [id])
-  amount                Float              // Montant alloué à cette facture
+  amount                Float
   createdAt             DateTime           @default(now())
 }
-
-// ─── BankStatementImport (Historique import relevés) ──────
 
 model BankStatementImport {
   id            String            @id @default(cuid())
   filename      String
-  format        String            // "csv" | "pdf" | "excel" | "ofx"
+  format        String            // "csv" | "pdf" | "excel" | "photo"
   rowCount      Int               @default(0)
   matchedCount  Int               @default(0)
   companyId     String
@@ -255,15 +444,112 @@ model BankStatementImport {
   transactions  BankTransaction[]
 }
 
+// ─── Comptable Invitation / Request ─────────────────────
+
+model ComptableInvitation {
+  id           String   @id @default(cuid())
+
+  // INVITATION (comptable→client) | REQUEST (client→comptable)
+  type         String   // InvitationType
+
+  // Invitation code (Scenario A)
+  code         String?  @unique
+  codeHash     String?  // hashed version
+
+  // Status
+  status       String   @default("PENDING")  // InvitationStatus
+
+  // Sender
+  senderId     String
+  sender       User     @relation("SentInvitations", fields: [senderId], references: [id])
+
+  // Recipient (optional — invitation may target by email)
+  recipientId  String?
+  recipient    User?    @relation("ReceivedInvitations", fields: [recipientId], references: [id])
+
+  // Target company
+  companyId    String?
+  company      Company? @relation(fields: [companyId], references: [id])
+
+  // Target email (for INVITATION before client registers)
+  targetEmail  String?
+
+  // Message / note
+  message      String?
+
+  // Timing
+  expiresAt    DateTime?
+  acceptedAt   DateTime?
+  rejectedAt   DateTime?
+  cancelledAt  DateTime?
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+// ─── Fiscal Rules & Calendar ─────────────────────────────
+
+model FiscalRule {
+  id              String   @id @default(cuid())
+  regimeFiscal    String   // FORFAITAIRE | REEL
+  taxType         String   // IFU | TVA | IRG_SALAIRES | IBS_ACOMPTE1 | etc.
+  label           String
+  form            String?  // G12 | G50 | G4 | G12BIS
+  frequency       String   // MONTHLY | QUARTERLY | ANNUAL | ONCE
+  description     String?
+
+  // Date rule (used for generation)
+  dueDay          Int?     // e.g. 20
+  dueMonth        Int?     // e.g. 9 (September) — for annual/once
+  offsetMonths    Int?     // e.g. 1 = month after reference month
+  periodStartDay  Int?     // e.g. 1
+  periodEndDay    Int?     // e.g. 20
+
+  active          Boolean  @default(true)
+  version         Int      @default(1)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  deadlines       FiscalDeadline[]
+}
+
+model FiscalDeadline {
+  id              String      @id @default(cuid())
+  companyId       String
+  company         Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  fiscalRuleId    String?
+  fiscalRule      FiscalRule? @relation(fields: [fiscalRuleId], references: [id])
+
+  fiscalYear      Int
+  period          String?     // "2026-01" | "Q1-2026" | "2026"
+  taxType         String      // IFU | TVA | IRG_SALAIRES | IBS_ACOMPTE1 | etc.
+  label           String
+  form            String?     // G12 | G50 | G4
+  dueDate         DateTime
+
+  status          String      @default("UPCOMING") // UPCOMING | COMPLETED | OVERDUE
+
+  responsibleUserId String?
+  completedAt     DateTime?
+  completedById   String?
+  completedBy     User?       @relation("CompletedDeadlines", fields: [completedById], references: [id])
+  notes           String?
+
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+}
+
 // ─── AuditLog ────────────────────────────────────────────
 
 model AuditLog {
   id          String   @id @default(cuid())
-  action      String   // "PAYMENT_DECLARED" | "PAYMENT_VALIDATED" | "PAYMENT_REFUSED" | "STATUS_CHANGED" etc.
-  entityType  String   // "Invoice" | "PaymentDeclaration" | "BankTransaction"
+  action      String
+  entityType  String
   entityId    String
-  oldValue    String?  // JSON string
-  newValue    String?  // JSON string
+  oldValue    String?
+  newValue    String?
   comment     String?
   ipAddress   String?
   companyId   String?

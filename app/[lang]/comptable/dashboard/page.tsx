@@ -1,10 +1,11 @@
 import { getCurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
-import { Users, FileText, CheckSquare, TrendingUp, Clock, Landmark } from "lucide-react";
+import { Users, FileText, CheckSquare, Clock, CalendarDays, AlertTriangle, MessageCircle, ArrowRight } from "lucide-react";
 import { ComptableDashboardCharts } from "./DashboardCharts";
 import { getDictionary } from "@/get-dictionary";
 import type { Locale } from "@/i18n-config";
+import Link from "next/link";
 
 export default async function ComptableDashboardPage({
   params,
@@ -24,100 +25,74 @@ export default async function ComptableDashboardPage({
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-  const assignedFilter = { company: { comptableId: user.userId } };
-  const companyFilter = { comptableId: user.userId };
+  const assignedCompanies = await db.company.findMany({
+    where: { comptableId: user.userId },
+    select: { id: true, name: true, client: { select: { name: true, phone: true } } },
+  });
+  const assignedCompanyIds = assignedCompanies.map((c) => c.id);
 
-  let totalClients = 0;
+  const entryScope = {
+    OR: [
+      { companyId: { in: assignedCompanyIds } },
+      { document: { companyId: { in: assignedCompanyIds } } },
+    ],
+  };
+
+  let totalClients = assignedCompanies.length;
   let pendingEntries = 0;
   let docsToday = 0;
   let validatedThisMonth = 0;
   let recentDocs: any[] = [];
   let recentValidations: any[] = [];
   let weeklyEntries: any[] = [];
-  let pendingPaymentsCount = 0;
-  let unmatchedTxsCount = 0;
-  let partiallyPaidCount = 0;
-  let totalEncaisseVal = 0;
+  let upcomingDeadlines: any[] = [];
 
   try {
     const res = await Promise.all([
-      db.user.count({
-        where: {
-          role: "CLIENT",
-          companies: { some: companyFilter },
-        },
-      }),
-      db.journalEntry.count({ where: { status: "PROPOSED", document: assignedFilter } }),
-      db.document.count({ where: { uploadedAt: { gte: startOfToday }, ...assignedFilter } }),
+      db.journalEntry.count({ where: { status: "PROPOSED", ...entryScope } }),
+      db.document.count({ where: { uploadedAt: { gte: startOfToday }, companyId: { in: assignedCompanyIds } } }),
       db.journalEntry.count({
-        where: { status: "VALIDATED", validatedAt: { gte: startOfMonth }, document: assignedFilter },
+        where: { status: "VALIDATED", validatedAt: { gte: startOfMonth }, ...entryScope },
       }),
       db.document.findMany({
         take: 5,
         orderBy: { uploadedAt: "desc" },
-        where: assignedFilter,
+        where: { companyId: { in: assignedCompanyIds } },
         include: { company: { include: { client: { select: { name: true } } } } },
       }),
       db.journalEntry.findMany({
         take: 5,
-        where: { status: "VALIDATED", document: assignedFilter },
+        where: { status: "VALIDATED", ...entryScope },
         orderBy: { validatedAt: "desc" },
         include: { validatedBy: { select: { name: true } } },
       }),
       db.journalEntry.findMany({
         where: {
           createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
-          document: assignedFilter,
+          ...entryScope,
         },
         select: { createdAt: true, status: true },
       }),
+      db.fiscalDeadline.findMany({
+        take: 4,
+        where: {
+          companyId: { in: assignedCompanyIds },
+          status: { in: ["UPCOMING", "OVERDUE"] },
+        },
+        include: { company: { select: { name: true } } },
+        orderBy: { dueDate: "asc" },
+      }),
     ]);
 
-    totalClients = res[0];
-    pendingEntries = res[1];
-    docsToday = res[2];
-    validatedThisMonth = res[3];
-    recentDocs = res[4];
-    recentValidations = res[5];
-    weeklyEntries = res[6];
+    pendingEntries = res[0];
+    docsToday = res[1];
+    validatedThisMonth = res[2];
+    recentDocs = res[3];
+    recentValidations = res[4];
+    weeklyEntries = res[5];
+    upcomingDeadlines = res[6];
   } catch (e) {
     console.error("Dashboard primary queries error:", e);
-  }
-
-  // Safe queries for optional new models (Invoice, InvoicePayment, BankTransaction)
-  try {
-    if ("invoice" in db && typeof (db as any).invoice?.count === "function") {
-      pendingPaymentsCount = await (db as any).invoice.count({
-        where: { status: "PENDING_VERIFICATION", company: companyFilter },
-      });
-      partiallyPaidCount = await (db as any).invoice.count({
-        where: { status: "PARTIALLY_PAID", company: companyFilter },
-      });
-    }
-  } catch (e) {
-    console.error("Invoice KPI query error:", e);
-  }
-
-  try {
-    if ("bankTransaction" in db && typeof (db as any).bankTransaction?.count === "function") {
-      unmatchedTxsCount = await (db as any).bankTransaction.count({
-        where: { matched: false, company: companyFilter },
-      });
-    }
-  } catch (e) {
-    console.error("BankTransaction KPI query error:", e);
-  }
-
-  try {
-    if ("invoicePayment" in db && typeof (db as any).invoicePayment?.aggregate === "function") {
-      const monthEncaisse = await (db as any).invoicePayment.aggregate({
-        where: { createdAt: { gte: startOfMonth }, invoice: { company: companyFilter } },
-        _sum: { amount: true },
-      });
-      totalEncaisseVal = monthEncaisse?._sum?.amount || 0;
-    }
-  } catch (e) {
-    console.error("InvoicePayment KPI query error:", e);
   }
 
   const days = Array.from({ length: 7 }, (_, i) => {
@@ -131,121 +106,133 @@ export default async function ComptableDashboardPage({
   });
 
   const kpis = [
-    { label: kpiT.total_clients, value: totalClients, icon: Users, color: "bg-blue-50 text-[#1a6fbf]", border: "border-blue-100" },
-    { label: kpiT.pending_entries, value: pendingEntries, icon: Clock, color: "bg-amber-50 text-amber-600", border: "border-amber-100" },
-    { label: kpiT.docs_today, value: docsToday, icon: FileText, color: "bg-purple-50 text-purple-600", border: "border-purple-100" },
-    { label: kpiT.validated_month, value: validatedThisMonth, icon: CheckSquare, color: "bg-green-50 text-[#2d8f5e]", border: "border-green-100" },
+    { label: kpiT.total_clients || "Total clients", value: totalClients, icon: Users, color: "bg-blue-50 text-blue-700", border: "border-blue-100" },
+    { label: kpiT.pending_entries || "Écritures à valider", value: pendingEntries, icon: Clock, color: "bg-amber-50 text-amber-700", border: "border-amber-100" },
+    { label: kpiT.docs_today || "Docs déposés aujourd'hui", value: docsToday, icon: FileText, color: "bg-teal-50 text-teal-700", border: "border-teal-100" },
+    { label: kpiT.validated_month || "Validées ce mois", value: validatedThisMonth, icon: CheckSquare, color: "bg-emerald-50 text-emerald-700", border: "border-emerald-100" },
   ];
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold text-[#0f172a] tracking-tight">{c.dashboard_title}</h1>
-        <p className="text-sm text-[#64748b] mt-1">
-          {c.dashboard_subtitle} {user.name} — {c.dashboard_overview}
-        </p>
+    <div className="p-6 sm:p-8 max-w-7xl mx-auto space-y-6">
+      {/* Header */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-black text-slate-900 tracking-tight">
+            {lang === "ar" ? "لوحة القيادة — مساحة المحاسب" : "Tableau de Bord Cabinet"}
+          </h1>
+          <p className="text-xs text-slate-500 mt-1">
+            {user.name} — {lang === "ar" ? "متابعة وإشراف على الملفات والعمليات المحاسبية" : "Supervision des écritures et suivi des obligations"}
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Link
+            href={`/${lang}/comptable/validate`}
+            className="bg-gradient-to-r from-blue-600 to-teal-600 hover:from-blue-700 hover:to-teal-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-md transition-all flex items-center gap-2"
+          >
+            <span>{lang === "ar" ? "المصادقة على القيود" : "Valider les écritures"}</span>
+            {pendingEntries > 0 && (
+              <span className="px-1.5 py-0.2 bg-white text-blue-900 rounded-full text-[10px] font-black">
+                {pendingEntries}
+              </span>
+            )}
+          </Link>
+        </div>
       </div>
 
-      {/* Primary KPIs */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-        {kpis.map((kpi) => {
+      {/* KPI Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {kpis.map((kpi, idx) => {
           const Icon = kpi.icon;
           return (
-            <div key={kpi.label} className={`bg-white rounded-xl p-5 border ${kpi.border} shadow-sm hover:shadow-md transition-shadow`}>
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-xs text-[#64748b] font-medium mb-1">{kpi.label}</p>
-                  <p className="text-3xl font-bold text-[#0f172a]">{kpi.value}</p>
-                </div>
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${kpi.color}`}>
-                  <Icon size={20} />
-                </div>
+            <div
+              key={idx}
+              className={`bg-white rounded-2xl p-5 border shadow-sm flex items-center gap-4 ${kpi.border}`}
+            >
+              <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${kpi.color}`}>
+                <Icon size={22} />
+              </div>
+              <div>
+                <p className="text-xs text-slate-500 font-medium">{kpi.label}</p>
+                <p className="text-2xl font-black text-slate-900 mt-0.5">{kpi.value}</p>
               </div>
             </div>
           );
         })}
       </div>
 
-      {/* Bank & Payment Rapprochement Statistics */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6 space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="font-bold text-[#0f172a] text-sm flex items-center gap-2">
-            <Landmark size={18} className="text-[#1a6fbf]" />
-            Statistiques & Rapprochement Bancaire
-          </h2>
+      {/* Fiscal Alert Bar if upcoming deadlines */}
+      {upcomingDeadlines.length > 0 && (
+        <div className="bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border border-amber-200 rounded-2xl p-5">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-800 flex items-center justify-center font-bold">
+                <CalendarDays size={16} />
+              </div>
+              <h3 className="font-extrabold text-sm text-slate-900">
+                {lang === "ar" ? "الاستحقاقات الجبائية القادمة" : "Prochaines échéances fiscales à surveiller"}
+              </h3>
+            </div>
+            <Link
+              href={`/${lang}/comptable/fiscal`}
+              className="text-xs font-bold text-teal-700 hover:underline flex items-center gap-1"
+            >
+              <span>{lang === "ar" ? "عرض الرزنامة كاملة" : "Calendrier complet"}</span>
+              <ArrowRight size={13} />
+            </Link>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {upcomingDeadlines.map((d) => (
+              <div key={d.id} className="bg-white p-3.5 rounded-xl border border-amber-200/60 shadow-sm space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-xs text-slate-900">{d.company.name}</span>
+                  <span className="px-1.5 py-0.5 bg-slate-100 rounded text-[9px] font-mono font-bold">
+                    {d.form || "G50"}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-600 truncate">{d.label}</p>
+                <p className="text-[10px] text-amber-700 font-bold">
+                  Limite : {new Date(d.dueDate).toLocaleDateString(locale, { day: "2-digit", month: "short" })}
+                </p>
+              </div>
+            ))}
+          </div>
         </div>
+      )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-amber-50/60 border border-amber-200/70 rounded-xl p-4">
-            <p className="text-xs text-amber-800 font-semibold mb-1">Paiements à vérifier</p>
-            <p className="text-2xl font-bold text-amber-900">{pendingPaymentsCount}</p>
-            <p className="text-[10px] text-amber-700 mt-1">Déclarations client en attente</p>
-          </div>
-
-          <div className="bg-[#f0f7ff] border border-blue-200/70 rounded-xl p-4">
-            <p className="text-xs text-[#1a6fbf] font-semibold mb-1">Paiements partiels</p>
-            <p className="text-2xl font-bold text-[#0f172a]">{partiallyPaidCount}</p>
-            <p className="text-[10px] text-slate-500 mt-1">Factures en cours de règlement</p>
-          </div>
-
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
-            <p className="text-xs text-slate-600 font-semibold mb-1">Virements non rapprochés</p>
-            <p className="text-2xl font-bold text-slate-800">{unmatchedTxsCount}</p>
-            <p className="text-[10px] text-slate-500 mt-1">Lignes sans facture affectée</p>
-          </div>
-
-          <div className="bg-green-50/60 border border-green-200/70 rounded-xl p-4">
-            <p className="text-xs text-green-800 font-semibold mb-1">Total Encaissé Ce Mois</p>
-            <p className="text-xl font-bold text-green-900">
-              {totalEncaisseVal.toLocaleString(locale, { minimumFractionDigits: 2 })} DA
-            </p>
-            <p className="text-[10px] text-green-700 mt-1">Règlements bancaires validés</p>
-          </div>
-        </div>
-      </div>
-
+      {/* Activity Chart & Recent Validations */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-          <div className="flex items-center gap-2 mb-5">
-            <TrendingUp size={18} className="text-[#1a6fbf]" />
-            <h2 className="font-semibold text-[#0f172a] text-sm">{c.chart_title}</h2>
-          </div>
+        <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6">
+          <h3 className="font-extrabold text-sm text-slate-900 mb-4">
+            {lang === "ar" ? "نشاط معالجة القيود (آخر 7 أيام)" : "Activité hebdomadaire des écritures"}
+          </h3>
           <ComptableDashboardCharts days={days} counts={dayCounts} />
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-          <h2 className="font-semibold text-[#0f172a] text-sm mb-4">{c.activity_title}</h2>
-          <div className="space-y-3 max-h-[320px] overflow-y-auto pr-2">
-            {recentDocs.map((doc: any) => (
-              <div key={doc.id} className="flex items-start gap-3">
-                <div className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center shrink-0 mt-0.5">
-                  <FileText size={13} className="text-[#1a6fbf]" />
+        {/* Recent Validations */}
+        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6 space-y-4">
+          <h3 className="font-extrabold text-sm text-slate-900">
+            {lang === "ar" ? "آخر القيود المصادق عليها" : "Dernières validations"}
+          </h3>
+          {recentValidations.length === 0 ? (
+            <p className="text-xs text-slate-400 italic">Aucune validation récente.</p>
+          ) : (
+            <div className="space-y-3">
+              {recentValidations.map((e) => (
+                <div key={e.id} className="p-3 bg-slate-50 rounded-xl border border-slate-100 text-xs space-y-1">
+                  <div className="flex justify-between items-center">
+                    <span className="font-bold text-slate-900 truncate max-w-[140px]">{e.description}</span>
+                    <span className="font-bold text-teal-700">{e.amount.toFixed(2)} DA</span>
+                  </div>
+                  <div className="flex justify-between items-center text-[10px] text-slate-400">
+                    <span>{e.debitAccount} / {e.creditAccount}</span>
+                    <span>{e.validatedAt ? new Date(e.validatedAt).toLocaleDateString(locale) : ""}</span>
+                  </div>
                 </div>
-                <div className="min-w-0">
-                  <p className="text-xs font-medium text-[#0f172a] truncate">{doc.originalName}</p>
-                  <p className="text-[11px] text-[#64748b]">
-                    {doc.company?.client?.name || "Client"} · {new Date(doc.uploadedAt).toLocaleDateString(locale)}
-                  </p>
-                </div>
-              </div>
-            ))}
-            {recentValidations.map((entry) => (
-              <div key={entry.id} className="flex items-start gap-3">
-                <div className="w-7 h-7 rounded-lg bg-green-50 flex items-center justify-center shrink-0 mt-0.5">
-                  <CheckSquare size={13} className="text-[#2d8f5e]" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-xs font-medium text-[#0f172a] truncate">{entry.description}</p>
-                  <p className="text-[11px] text-[#64748b]">
-                    {c.validated_label} · {new Date(entry.validatedAt ?? entry.createdAt).toLocaleDateString(locale)}
-                  </p>
-                </div>
-              </div>
-            ))}
-            {recentDocs.length === 0 && recentValidations.length === 0 && (
-              <p className="text-xs text-[#64748b] text-center py-4">{c.activity_empty}</p>
-            )}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>

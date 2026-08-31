@@ -1083,7 +1083,7 @@ export function RapprochementClient({
                 <label className="block font-semibold text-slate-700 mb-1">Nom du Bénéficiaire</label>
                 <input
                   type="text"
-                  placeholder="Ex: SARL COMPTANOVA DZ"
+                  placeholder="Ex: SARL TAYSIR COMPTA DZ"
                   value={bankForm.beneficiaryName}
                   onChange={(e) => setBankForm({ ...bankForm, beneficiaryName: e.target.value })}
                   className="w-full px-3 py-2 border border-slate-300 rounded-xl"

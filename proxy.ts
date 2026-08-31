@@ -5,10 +5,10 @@ import { match as matchLocale } from "@formatjs/intl-localematcher";
 import Negotiator from "negotiator";
 
 const SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET ?? "comptanova-secret-dev-key-change-in-production"
+  process.env.JWT_SECRET ?? "taysircompta-secret-dev-key-change-in-production"
 );
 
-const COOKIE_NAME = "comptanova_token";
+const COOKIE_NAME = "taysir_token";
 
 function getLocale(request: NextRequest): string {
   const negotiatorHeaders: Record<string, string> = {};

@@ -56,7 +56,7 @@ export default function ContactMap() {
           />
           <Marker position={position}>
             <Popup>
-              <div className="text-sm font-medium">ComptaNova</div>
+              <div className="text-sm font-medium">TAYSIR COMPTA</div>
               <div className="text-xs text-gray-500">Alger, Algérie</div>
             </Popup>
           </Marker>

@@ -16,9 +16,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ComptaNova — Comptabilité digitale pour PME",
+  title: "TAYSIR COMPTA — Comptabilité simplifiée, travail optimisé",
   description:
-    "Automatisez vos écritures comptables et votre rapprochement bancaire avec ComptaNova.",
+    "TAYSIR COMPTA : Plateforme de comptabilité moderne et intelligente pour experts-comptables et PME.",
 };
 
 export default async function RootLayout({

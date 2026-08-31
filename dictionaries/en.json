@@ -13,7 +13,7 @@
     "contact": "Contact",
     "privacy": "Privacy",
     "terms": "Terms",
-    "rights": "© 2026 ComptaNova"
+    "rights": "© 2026 TAYSIR COMPTA"
   },
   "home": {
     "hero": {
@@ -42,7 +42,7 @@
         },
         {
           "title": "Automatic Accounting Entries",
-          "description": "Based on the extracted data, ComptaNova generates accounting entries according to the Algerian PCG rules."
+          "description": "Based on the extracted data, TAYSIR COMPTA generates accounting entries according to the Algerian PCG rules."
         },
         {
           "title": "Validation by Accountant",
@@ -107,7 +107,7 @@
     },
     "cta_section": {
       "title": "Ready to digitalize your accounting?",
-      "subtitle": "Join ComptaNova and automate your accounting tasks today.",
+      "subtitle": "Join TAYSIR COMPTA and automate your accounting tasks today.",
       "button_primary": "Create my account",
       "button_secondary": "Contact us"
     }
@@ -132,7 +132,7 @@
     "terms": "By logging in, you accept our terms of service."
   },
   "register": {
-    "welcome": "Join ComptaNova today",
+    "welcome": "Join TAYSIR COMPTA today",
     "description": "Create your account in under 2 minutes and start digitizing your accounting.",
     "features": {
       "no_card": "No credit card required",
@@ -164,12 +164,12 @@
     "hero": {
       "title_1": "Rethinking accounting",
       "title_2": "for Algerian SMEs",
-      "subtitle": "ComptaNova was born from a simple vision: eliminate manual data entry and restore accountants to their true role as strategic advisors."
+      "subtitle": "TAYSIR COMPTA was born from a simple vision: eliminate manual data entry and restore accountants to their true role as strategic advisors."
     },
     "story": {
       "title": "Our Story",
       "p1": "Faced with slow traditional accounting processes and piles of paper invoices, we designed a platform capable of automating data processing using artificial intelligence (OCR).",
-      "p2": "As an academic MVP project, ComptaNova aims to prove that it is possible to create a smooth, collaborative ecosystem between the accountant and their client, while strictly adhering to the Algerian General Accounting Plan (PCG)."
+      "p2": "As an academic MVP project, TAYSIR COMPTA aims to prove that it is possible to create a smooth, collaborative ecosystem between the accountant and their client, while strictly adhering to the Algerian General Accounting Plan (PCG)."
     },
     "goal": {
       "title": "Our Goal",
@@ -177,7 +177,7 @@
     },
     "values": {
       "title": "Our values",
-      "subtitle": "The principles that guide the daily development of ComptaNova.",
+      "subtitle": "The principles that guide the daily development of TAYSIR COMPTA.",
       "items": {
         "innovation": {
           "title": "Innovation",
@@ -195,7 +195,7 @@
     },
     "cta": {
       "title": "Ready to take the step towards digitalization?",
-      "subtitle": "Join the SMEs and accountants who already use ComptaNova to save precious time every day.",
+      "subtitle": "Join the SMEs and accountants who already use TAYSIR COMPTA to save precious time every day.",
       "button": "Create my free account"
     }
   },

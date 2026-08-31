@@ -46,8 +46,8 @@ export default async function ContactPage({ params }: { params: Promise<{ lang: 
                     <div>
                       <h3 className="font-semibold text-gray-900">{dict.contact.info.email.title}</h3>
                       <p className="text-sm text-gray-500 mt-1">{dict.contact.info.email.desc}</p>
-                      <a href="mailto:contact@comptanova.dz" className="text-blue-600 font-medium hover:underline mt-1 inline-block">
-                        contact@comptanova.dz
+                      <a href="mailto:contact@taysircompta.dz" className="text-blue-600 font-medium hover:underline mt-1 inline-block">
+                        contact@taysircompta.dz
                       </a>
                     </div>
                   </div>

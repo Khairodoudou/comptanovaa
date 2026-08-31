@@ -2,9 +2,11 @@ import { getCurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Users, FileText, Clock, ArrowRight, ArrowLeft } from "lucide-react";
+import { Users, FileText, Clock, ArrowRight, ArrowLeft, MessageCircle, Building2, CreditCard } from "lucide-react";
 import { getDictionary } from "@/get-dictionary";
 import type { Locale } from "@/i18n-config";
+import { InviteClientModal } from "./InviteClientModal";
+import { PendingRequests } from "./PendingRequests";
 
 export default async function ComptableClientsPage({
   params,
@@ -15,12 +17,11 @@ export default async function ComptableClientsPage({
   const user = await getCurrentUser();
   if (!user || user.role !== "COMPTABLE") redirect(`/${lang}/login`);
 
-  const [dict, clients] = await Promise.all([
+  const [dict, clients, pendingRequests] = await Promise.all([
     getDictionary(lang as Locale),
     db.user.findMany({
       where: {
         role: "CLIENT",
-        // Only clients who have at least one company assigned to this comptable
         companies: {
           some: { comptableId: user.userId },
         },
@@ -31,6 +32,34 @@ export default async function ComptableClientsPage({
           include: {
             documents: { select: { id: true, uploadedAt: true } },
             _count: { select: { documents: true } },
+          },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    }),
+    db.comptableInvitation.findMany({
+      where: {
+        recipientId: user.userId,
+        type: "REQUEST",
+        status: "PENDING",
+      },
+      include: {
+        sender: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+            companies: {
+              select: {
+                id: true,
+                name: true,
+                formeJuridique: true,
+                regimeFiscal: true,
+                nrc: true,
+                nif: true,
+              },
+            },
           },
         },
       },
@@ -47,7 +76,7 @@ export default async function ComptableClientsPage({
     clients.map(async (client) => {
       const companyIds = client.companies.map((co) => co.id);
       const pendingEntries = await db.journalEntry.count({
-        where: { status: "PROPOSED", document: { companyId: { in: companyIds } } },
+        where: { status: "PROPOSED", companyId: { in: companyIds } },
       });
       const lastDoc = client.companies
         .flatMap((co) => co.documents)
@@ -58,101 +87,236 @@ export default async function ComptableClientsPage({
   );
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-[#0f172a] tracking-tight">{c.clients_title}</h1>
-        <p className="text-sm text-[#64748b] mt-1">
-          {clients.length} {clients.length !== 1 ? c.clients_subtitle_many : c.clients_subtitle_one}
-        </p>
+    <div className="p-6 sm:p-8 max-w-7xl mx-auto space-y-6">
+      {/* Header with Invite Action */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm">
+        <div>
+          <h1 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2.5">
+            <span>{c.clients_title || (lang === "ar" ? "إدارة العملاء والملفات" : "Dossiers Clients")}</span>
+            <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-teal-50 text-teal-700 border border-teal-200">
+              {clients.length}
+            </span>
+          </h1>
+          <p className="text-xs text-slate-500 mt-1">
+            {lang === "ar"
+              ? "متابعة الشركات الموكلة لمكتبك وإدارتها"
+              : "Suivi des entreprises rattachées à votre cabinet et coordonnées"}
+          </p>
+        </div>
+
+        <InviteClientModal lang={lang} />
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-gray-100 bg-[#f8fafc]">
-              {[c.col_client, c.col_company, c.col_documents, c.col_pending, c.col_last_activity, ""].map((h, i) => (
-                <th key={i} className={`${i < 5 ? "text-left" : ""} px-5 py-3.5 text-[#64748b] font-medium text-xs uppercase tracking-wide`}>
-                  {h}
+      {/* Pending Collaboration Requests (Scenario B) */}
+      <PendingRequests
+        initialRequests={JSON.parse(JSON.stringify(pendingRequests))}
+        lang={lang}
+      />
+
+      {/* Clients Table */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-slate-200 bg-slate-50/70">
+                <th className="text-left px-5 py-3.5 text-slate-500 font-bold uppercase tracking-wider">
+                  {lang === "ar" ? "العميل والاتصال" : "Client & Contact"}
                 </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-50">
-            {clientsWithStats.length === 0 && (
-              <tr>
-                <td colSpan={6} className="px-5 py-12 text-center text-[#64748b] text-sm">
-                  {c.clients_empty}
-                </td>
+                <th className="text-left px-5 py-3.5 text-slate-500 font-bold uppercase tracking-wider">
+                  {lang === "ar" ? "الشركة والنظام الجبائي" : "Entreprise & Régime"}
+                </th>
+                <th className="text-left px-5 py-3.5 text-slate-500 font-bold uppercase tracking-wider">
+                  {lang === "ar" ? "الحساب البنكي" : "Coordonnées Bancaires"}
+                </th>
+                <th className="text-center px-5 py-3.5 text-slate-500 font-bold uppercase tracking-wider">
+                  {c.col_documents || "Documents"}
+                </th>
+                <th className="text-center px-5 py-3.5 text-slate-500 font-bold uppercase tracking-wider">
+                  {c.col_pending || "À valider"}
+                </th>
+                <th className="text-right px-5 py-3.5 text-slate-500 font-bold uppercase tracking-wider">
+                  Actions
+                </th>
               </tr>
-            )}
-            {clientsWithStats.map((client) => (
-              <tr key={client.id} className="hover:bg-[#f8fafc] transition-colors">
-                <td className="px-5 py-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-[#1a6fbf]/10 flex items-center justify-center text-[#1a6fbf] text-xs font-bold shrink-0">
-                      {client.name.charAt(0).toUpperCase()}
-                    </div>
-                    <div>
-                      <p className="font-medium text-[#0f172a]">{client.name}</p>
-                      <p className="text-[11px] text-[#64748b]">{client.email}</p>
-                    </div>
-                  </div>
-                </td>
-                <td className="px-5 py-4 text-[#0f172a]">
-                  {client.companies.map((co) => co.name).join(", ") || "—"}
-                </td>
-                <td className="px-5 py-4 text-center">
-                  <div className="flex items-center justify-center gap-1.5">
-                    <FileText size={13} className="text-[#64748b]" />
-                    <span className="font-medium text-[#0f172a]">{client.totalDocs}</span>
-                  </div>
-                </td>
-                <td className="px-5 py-4 text-center">
-                  {client.pendingEntries > 0 ? (
-                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">
-                      <Clock size={10} />
-                      {client.pendingEntries}
-                    </span>
-                  ) : (
-                    <span className="text-[#64748b] text-xs">—</span>
-                  )}
-                </td>
-                <td className="px-5 py-4 text-[#64748b] text-xs">
-                  {client.lastDoc
-                    ? new Date(client.lastDoc.uploadedAt).toLocaleDateString(locale, {
-                        day: "numeric", month: "short", year: "numeric",
-                      })
-                    : "—"}
-                </td>
-                <td className="px-5 py-4">
-                  <Link
-                    href={`/${lang}/comptable/clients/${client.id}`}
-                    className="flex items-center gap-1 text-[#1a6fbf] hover:text-[#185fa5] text-xs font-medium"
-                  >
-                    {c.see} <ArrowIcon size={12} />
-                  </Link>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {clientsWithStats.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-5 py-12 text-center text-slate-400 text-sm">
+                    {lang === "ar"
+                      ? "لا يوجد عملاء مرتبطين بمكتبك حالياً. يمكنك استخدام زر 'دعوة عميل جديد'."
+                      : "Aucun dossier client rattaché. Utilisez le bouton 'Inviter un client' pour commencer."}
+                  </td>
+                </tr>
+              )}
+
+              {clientsWithStats.map((client) => {
+                const company = client.companies[0];
+                const phoneClean = client.phone ? client.phone.replace(/[^0-9]/g, "") : "";
+                const whatsappUrl = phoneClean
+                  ? `https://wa.me/${phoneClean.startsWith("0") ? "213" + phoneClean.slice(1) : phoneClean}`
+                  : null;
+
+                return (
+                  <tr key={client.id} className="hover:bg-slate-50/80 transition-colors">
+                    {/* Client & Phone */}
+                    <td className="px-5 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600 to-teal-500 flex items-center justify-center text-white text-xs font-black shrink-0 shadow-sm">
+                          {client.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                          <p className="font-bold text-slate-900">{client.name}</p>
+                          <p className="text-[11px] text-slate-500">{client.email}</p>
+                          {client.phone && (
+                            <p className="text-[10px] text-slate-400 font-mono mt-0.5">{client.phone}</p>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+
+                    {/* Company & Fiscal Regime */}
+                    <td className="px-5 py-4">
+                      {company ? (
+                        <div>
+                          <p className="font-bold text-slate-900 flex items-center gap-1.5">
+                            <Building2 size={13} className="text-slate-400" />
+                            <span>{company.name}</span>
+                          </p>
+                          <div className="flex items-center gap-1.5 mt-1">
+                            <span className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded text-[10px] font-bold">
+                              {company.formeJuridique || "SARL"}
+                            </span>
+                            <span
+                              className={`px-2 py-0.5 rounded text-[10px] font-extrabold ${
+                                company.regimeFiscal === "FORFAITAIRE"
+                                  ? "bg-amber-50 text-amber-700 border border-amber-200"
+                                  : "bg-teal-50 text-teal-700 border border-teal-200"
+                              }`}
+                            >
+                              {company.regimeFiscal || "REEL"}
+                            </span>
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="text-slate-400">—</span>
+                      )}
+                    </td>
+
+                    {/* Bank Coordinates */}
+                    <td className="px-5 py-4">
+                      {company && (company.bankName || company.rib || company.ccp) ? (
+                        <div className="space-y-0.5">
+                          {company.bankName && (
+                            <p className="font-bold text-slate-800 text-[11px] flex items-center gap-1">
+                              <CreditCard size={12} className="text-teal-600" />
+                              <span>{company.bankName}</span>
+                            </p>
+                          )}
+                          {company.rib && (
+                            <p className="font-mono text-[10px] text-slate-500 truncate max-w-[160px]">
+                              RIB: {company.rib}
+                            </p>
+                          )}
+                          {company.ccp && (
+                            <p className="font-mono text-[10px] text-slate-500">
+                              CCP: {company.ccp}
+                            </p>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-slate-400 text-[11px] italic">
+                          {lang === "ar" ? "غير مسجلة" : "Non renseignées"}
+                        </span>
+                      )}
+                    </td>
+
+                    {/* Total docs */}
+                    <td className="px-5 py-4 text-center">
+                      <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 rounded-lg text-slate-700 font-bold text-xs">
+                        <FileText size={13} className="text-slate-500" />
+                        <span>{client.totalDocs}</span>
+                      </div>
+                    </td>
+
+                    {/* Pending Entries to validate */}
+                    <td className="px-5 py-4 text-center">
+                      {client.pendingEntries > 0 ? (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-black bg-amber-50 text-amber-700 border border-amber-200">
+                          <Clock size={11} />
+                          {client.pendingEntries}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 text-xs">—</span>
+                      )}
+                    </td>
+
+                    {/* Actions: WhatsApp + See dossier */}
+                    <td className="px-5 py-4">
+                      <div className="flex items-center justify-end gap-2">
+                        {whatsappUrl && (
+                          <a
+                            href={whatsappUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title="Contacter via WhatsApp"
+                            className="p-2 rounded-xl bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white transition-all shadow-sm"
+                          >
+                            <MessageCircle size={15} />
+                          </a>
+                        )}
+
+                        <Link
+                          href={`/${lang}/comptable/clients/${client.id}`}
+                          className="inline-flex items-center gap-1 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold px-3 py-1.5 rounded-xl transition-colors"
+                        >
+                          <span>{c.see || (lang === "ar" ? "فتح الملف" : "Dossier")}</span>
+                          <ArrowIcon size={12} />
+                        </Link>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
+      {/* KPI Stats */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {[
-          { icon: Users, label: c.col_total_clients, value: clients.length, color: "text-[#1a6fbf] bg-blue-50" },
-          { icon: FileText, label: c.col_total_documents, value: clientsWithStats.reduce((s, cl) => s + cl.totalDocs, 0), color: "text-purple-600 bg-purple-50" },
-          { icon: Clock, label: dict.dashboard.kpi.pending_entries, value: clientsWithStats.reduce((s, cl) => s + cl.pendingEntries, 0), color: "text-amber-600 bg-amber-50" },
+          {
+            icon: Users,
+            label: c.col_total_clients || (lang === "ar" ? "إجمالي العملاء" : "Total clients"),
+            value: clients.length,
+            color: "text-blue-600 bg-blue-50 border-blue-100",
+          },
+          {
+            icon: FileText,
+            label: c.col_total_documents || (lang === "ar" ? "إجمالي المستندات" : "Total documents"),
+            value: clientsWithStats.reduce((s, cl) => s + cl.totalDocs, 0),
+            color: "text-teal-600 bg-teal-50 border-teal-100",
+          },
+          {
+            icon: Clock,
+            label: dict.dashboard.kpi.pending_entries || (lang === "ar" ? "قيود بانتظار المصادقة" : "Écritures à valider"),
+            value: clientsWithStats.reduce((s, cl) => s + cl.pendingEntries, 0),
+            color: "text-amber-600 bg-amber-50 border-amber-100",
+          },
         ].map((stat) => {
           const Icon = stat.icon;
           return (
-            <div key={stat.label} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 flex items-center gap-4">
-              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${stat.color}`}>
-                <Icon size={18} />
+            <div
+              key={stat.label}
+              className={`bg-white rounded-2xl border p-5 flex items-center gap-4 shadow-sm ${stat.color.split(" ")[2]}`}
+            >
+              <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${stat.color}`}>
+                <Icon size={20} />
               </div>
               <div>
-                <p className="text-xs text-[#64748b]">{stat.label}</p>
-                <p className="text-xl font-bold text-[#0f172a]">{stat.value}</p>
+                <p className="text-xs text-slate-500 font-medium">{stat.label}</p>
+                <p className="text-2xl font-black text-slate-900">{stat.value}</p>
               </div>
             </div>
           );

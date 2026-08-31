@@ -1,15 +1,7 @@
 /**
  * POST /api/documents/upload
- * Upload a document, run professional OCR, create journal entries (PCN Algérien).
- *
- * Multi-entry accounting with TVA 19%:
- *   - FACTURE_FOURNISSEUR : Débit 380.x (HT) + Débit 44566 (TVA) / Crédit 401.x (TTC)
- *   - BON_RECEPTION       : Débit 30.x (stock) / Crédit 380.x (HT) — transfert stock
- *   - FACTURE_CLIENT      : Débit 411.x (TTC) / Crédit 700 (HT) + Crédit 44571 (TVA)
- *   - CHEQUE (émis)       : Débit 401.x / Crédit 512 — règlement fournisseur
- *   - RELEVE_BANCAIRE     : Débit 512 / Crédit 401.x
- *   - BON_LIVRAISON       : Débit 600 / Crédit 30.x — sortie de stock au coût d'achat
- *   - AUTRE/Charge        : Débit 607|626 + Débit 44566 / Crédit 401.x|512|53
+ * Upload a document (Client or Comptable), run OCR, create AI PROPOSED entries
+ * with full traceability timestamps and JournalEntryVersion (AI_PROPOSAL).
  */
 import { getCurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -17,24 +9,21 @@ import { NextRequest, NextResponse } from "next/server";
 import { runOcr } from "@/lib/ocr/professional-ocr";
 import { generateEntries, TVA_RATE } from "@/lib/entry-generator";
 
-export const runtime = "nodejs"; // Required for sharp + Tesseract
-
+export const runtime = "nodejs"; // sharp + Tesseract
 
 const MAX_SIZE = 10 * 1024 * 1024; // 10 MB
 
-// ─── Route ────────────────────────────────────────────────────────────────────
-
 export async function POST(req: NextRequest) {
   const user = await getCurrentUser();
-  if (!user || user.role !== "CLIENT") {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user || (user.role !== "CLIENT" && user.role !== "COMPTABLE")) {
+    return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
   }
 
   let formData: FormData;
   try {
     formData = await req.formData();
   } catch {
-    return NextResponse.json({ error: "Invalid form data" }, { status: 400 });
+    return NextResponse.json({ error: "Données de formulaire invalides" }, { status: 400 });
   }
 
   const file = formData.get("file") as File | null;
@@ -42,29 +31,40 @@ export async function POST(req: NextRequest) {
 
   if (!file || !companyId) {
     return NextResponse.json(
-      { error: "File and companyId are required" },
+      { error: "Le fichier et l'identifiant d'entreprise sont requis" },
       { status: 400 }
     );
   }
 
   if (file.size > MAX_SIZE) {
     return NextResponse.json(
-      { error: "File too large (max 10 MB)" },
+      { error: "Fichier trop volumineux (max 10 Mo)" },
       { status: 413 }
     );
   }
 
-  // Validate company belongs to this user
+  // Validate company permissions:
+  // - If CLIENT: company.clientId === user.userId
+  // - If COMPTABLE: company.comptableId === user.userId
   const company = await db.company.findFirst({
-    where: { id: companyId, clientId: user.userId },
+    where:
+      user.role === "CLIENT"
+        ? { id: companyId, clientId: user.userId }
+        : { id: companyId, comptableId: user.userId },
   });
+
   if (!company) {
-    return NextResponse.json({ error: "Company not found" }, { status: 403 });
+    return NextResponse.json(
+      { error: "Dossier entreprise introuvable ou accès refusé" },
+      { status: 403 }
+    );
   }
 
   const subAccounts = await db.subAccount.findMany({
     where: { companyId },
   });
+
+  const ocrStartedAt = new Date();
 
   // ── Run OCR pipeline ────────────────────────────────────────────────────────
   const arrayBuffer = await file.arrayBuffer();
@@ -91,7 +91,6 @@ export async function POST(req: NextRequest) {
   if (!manualOverride) {
     try {
       const fullResult = await runOcr(buffer, file.name, file.type, company.name);
-      // Separate extracted data (OCR fields) from the processing metadata
       extracted = fullResult.extracted as typeof extracted;
       ocrResult = {
         rawText:             fullResult.rawText,
@@ -124,39 +123,36 @@ export async function POST(req: NextRequest) {
     };
   }
 
+  const ocrFinishedAt = new Date();
+  const aiProposedAt = new Date();
+
   // ── Resolve document data ───────────────────────────────────────────────────
   const docType = extracted.documentType || "AUTRE";
   const amountTTC = extracted.amount ?? 0;
   const date = extracted.date ?? new Date().toISOString().split("T")[0];
   const supplier = extracted.supplier ?? "Inconnu";
 
-  // Use HT/TVA from OCR if available; otherwise compute from TTC
   const computedHT  = Math.round((amountTTC / 1.19) * 100) / 100;
   const computedTVA = Math.round((amountTTC - computedHT) * 100) / 100;
   const htForEntries  = extracted.amountHT  ?? computedHT;
   const tvaForEntries = extracted.amountTVA ?? computedTVA;
+  const refNumber: string | null = extracted.invoiceNumber ?? null;
 
-  // Fix 2: for CHEQUE documents, use invoiceNumber as the cheque reference;
-  // for all other documents, use invoiceNumber as the invoice reference.
-  const refNumber: string | null =
-    extracted.invoiceNumber ?? null;
-
-  // ── Persist document ────────────────────────────────────────────────────────
+  // ── Persist document with Full Traceability ─────────────────────────────────
   const document = await db.document.create({
     data: {
       filename: `${Date.now()}_${file.name}`,
       originalName: file.name,
       mimeType: file.type || "application/octet-stream",
       size: file.size,
-      type: docType as
-        | "FACTURE_FOURNISSEUR"
-        | "FACTURE_CLIENT"
-        | "BON_LIVRAISON"
-        | "RELEVE_BANCAIRE"
-        | "CHEQUE"
-        | "AUTRE",
+      type: docType as any,
       status: ocrResult.needsManualReview ? "UPLOADED" : "REVIEWED",
       companyId,
+      uploadedById: user.userId,
+      uploadedByRole: user.role,
+      ocrStartedAt,
+      ocrFinishedAt,
+      aiProposedAt,
       ocrData: JSON.stringify({
         rawText: ocrResult.rawText.substring(0, 2000),
         extracted,
@@ -167,34 +163,31 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  // ── Auto-create Invoice record if FACTURE (CLIENT or FOURNISSEUR) ───────────────
+  // ── Auto-create Invoice record if FACTURE ───────────────────────────────────
   if ((docType === "FACTURE_CLIENT" || docType === "FACTURE_FOURNISSEUR" || docType.includes("FACTURE")) && amountTTC > 0) {
     try {
-      if ("invoice" in db) {
-        await (db as any).invoice.create({
-          data: {
-            companyId,
-            documentId: document.id,
-            invoiceNumber: refNumber || `FAC-${Date.now().toString().slice(-6)}`,
-            amount: amountTTC,
-            status: "UNPAID",
-            description: `${docType === "FACTURE_CLIENT" ? "Facture Client" : "Facture Fournisseur"} - ${supplier}`,
-          },
-        });
-      }
+      await db.invoice.create({
+        data: {
+          companyId,
+          documentId: document.id,
+          invoiceNumber: refNumber || `FAC-${Date.now().toString().slice(-6)}`,
+          amount: amountTTC,
+          status: "UNPAID",
+          description: `${docType === "FACTURE_CLIENT" ? "Facture Client" : "Facture Fournisseur"} - ${supplier}`,
+        },
+      });
     } catch (e) {
       console.error("Auto invoice creation error:", e);
     }
   }
 
-  // ── Auto-generate PROPOSED journal entries (multi-line, with TVA) ───────────
-  // Pass raw OCR text as rawDesc so charge/payment-mode keywords are detected
+  // ── Generate PROPOSED journal entries + JournalEntryVersion (AI_PROPOSAL) ──
   const rawDesc = ocrResult.rawText !== "MANUAL_ENTRY" ? ocrResult.rawText : supplier;
   const entrySpecs = generateEntries(docType, amountTTC, supplier, refNumber, rawDesc, subAccounts, htForEntries, tvaForEntries);
 
   const journalEntries = await Promise.all(
-    entrySpecs.map((spec) =>
-      db.journalEntry.create({
+    entrySpecs.map(async (spec) => {
+      const entry = await db.journalEntry.create({
         data: {
           date: new Date(date),
           description: spec.description,
@@ -203,39 +196,74 @@ export async function POST(req: NextRequest) {
           amount: spec.amount,
           reference: spec.reference,
           status: "PROPOSED",
+          source: "AI",
+          companyId,
           documentId: document.id,
+          sentToClient: false,
         },
-      })
-    )
+      });
+
+      // Save initial AI Proposal Version (Never to be overwritten)
+      await db.journalEntryVersion.create({
+        data: {
+          journalEntryId: entry.id,
+          versionNumber: 1,
+          versionType: "AI_PROPOSAL",
+          actorType: "AI",
+          debitAccount: spec.debitAccount,
+          creditAccount: spec.creditAccount,
+          amount: spec.amount,
+          description: spec.description,
+          reference: spec.reference,
+          reason: "Proposition automatique IA basée sur extraction OCR",
+        },
+      });
+
+      return entry;
+    })
   );
 
-  // ── Notify assigned comptable ─────────────────────────────────────────────
-  const companyWithComptable = await db.company.findUnique({
-    where: { id: companyId },
-    select: {
-      comptable: { select: { id: true, preferredLang: true } },
+  // ── Audit Log ───────────────────────────────────────────────────────────────
+  await db.auditLog.create({
+    data: {
+      action: "DOCUMENT_UPLOADED_AI_PROPOSED",
+      entityType: "Document",
+      entityId: document.id,
+      companyId,
+      userId: user.userId,
+      newValue: JSON.stringify({
+        filename: file.name,
+        type: docType,
+        amountTTC,
+        entriesCount: journalEntries.length,
+        uploadedByRole: user.role,
+      }),
+      comment: `Document déposé par ${user.role} (${user.name}) - ${journalEntries.length} écritures générées par IA`,
     },
   });
 
-  if (companyWithComptable?.comptable) {
-    const { id: comptableId, preferredLang } = companyWithComptable.comptable;
-    const comptableLang = preferredLang ?? "fr";
-    const reviewNote = ocrResult.needsManualReview ? " ⚠ Révision manuelle recommandée" : "";
-    await db.notification.create({
-      data: {
-        message: `Nouveau document "${file.name}" par ${user.name}${reviewNote}`,
-        type: ocrResult.needsManualReview ? "warning" : "info",
-        link: `/${comptableLang}/comptable/validate`,
-        userId: comptableId,
-      },
+  // ── Notify assigned comptable if uploaded by Client ─────────────────────────
+  if (user.role === "CLIENT") {
+    const companyWithComptable = await db.company.findUnique({
+      where: { id: companyId },
+      select: { comptable: { select: { id: true, preferredLang: true } } },
     });
+
+    if (companyWithComptable?.comptable) {
+      const { id: comptableId, preferredLang } = companyWithComptable.comptable;
+      const comptableLang = preferredLang ?? "fr";
+      const reviewNote = ocrResult.needsManualReview ? " ⚠ Révision manuelle recommandée" : "";
+      await db.notification.create({
+        data: {
+          message: `Nouveau document "${file.name}" déposé par ${user.name}${reviewNote}`,
+          type: ocrResult.needsManualReview ? "warning" : "info",
+          link: `/${comptableLang}/comptable/validate`,
+          userId: comptableId,
+        },
+      });
+    }
   }
 
-  // ── Compute HT/TVA for the response ─────────────────────────────────────────
-  const htForResp  = htForEntries;
-  const tvaForResp = tvaForEntries;
-
-  // First entry for backward-compatible clients still reading `journalEntry`
   const firstEntry = journalEntries[0];
 
   return NextResponse.json(
@@ -248,9 +276,9 @@ export async function POST(req: NextRequest) {
       ocrResult: {
         date,
         amountTTC: amountTTC.toFixed(2),
-        amountHT:  htForResp.toFixed(2),
-        amountTVA: tvaForResp.toFixed(2),
-        htFromPDF: !!(extracted.amountHT),  // true only if extracted from PDF
+        amountHT:  htForEntries.toFixed(2),
+        amountTVA: tvaForEntries.toFixed(2),
+        htFromPDF: !!(extracted.amountHT),
         tvaRate:   `${TVA_RATE * 100}%`,
         supplier,
         reference: refNumber ?? "",
@@ -260,7 +288,6 @@ export async function POST(req: NextRequest) {
         method: ocrResult.method,
         processingMs: ocrResult.processingMs,
       },
-      // Full list of generated entries (one or two depending on doc type)
       journalEntries: journalEntries.map((e) => ({
         id: e.id,
         description: e.description,
@@ -268,8 +295,8 @@ export async function POST(req: NextRequest) {
         creditAccount: e.creditAccount,
         amount: e.amount,
         reference: e.reference,
+        status: e.status,
       })),
-      // Backward-compatible alias — always the first entry
       journalEntry: {
         id: firstEntry.id,
         description: firstEntry.description,

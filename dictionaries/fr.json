@@ -13,7 +13,7 @@
     "contact": "Contact",
     "privacy": "Confidentialité",
     "terms": "Conditions",
-    "rights": "© 2026 ComptaNova"
+    "rights": "© 2026 TAYSIR COMPTA"
   },
   "home": {
     "hero": {
@@ -42,7 +42,7 @@
         },
         {
           "title": "Écritures comptables automatiques",
-          "description": "À partir des données extraites, ComptaNova génère les écritures comptables selon les règles du PCG algérien."
+          "description": "À partir des données extraites, TAYSIR COMPTA génère les écritures comptables selon les règles du PCG algérien."
         },
         {
           "title": "Validation par le comptable",
@@ -107,7 +107,7 @@
     },
     "cta_section": {
       "title": "Prêt à digitaliser votre comptabilité ?",
-      "subtitle": "Rejoignez ComptaNova et automatisez vos tâches comptables dès aujourd'hui.",
+      "subtitle": "Rejoignez TAYSIR COMPTA et automatisez vos tâches comptables dès aujourd'hui.",
       "button_primary": "Créer mon compte",
       "button_secondary": "Nous contacter"
     }
@@ -132,7 +132,7 @@
     "terms": "En vous connectant, vous acceptez nos conditions d'utilisation."
   },
   "register": {
-    "welcome": "Rejoignez ComptaNova aujourd'hui",
+    "welcome": "Rejoignez TAYSIR COMPTA aujourd'hui",
     "description": "Créez votre compte en moins de 2 minutes et commencez à digitaliser votre comptabilité.",
     "features": {
       "no_card": "Aucune carte bancaire requise",
@@ -164,12 +164,12 @@
     "hero": {
       "title_1": "Repenser la comptabilité",
       "title_2": "pour les PME algériennes",
-      "subtitle": "ComptaNova est née d'une vision simple : éliminer la saisie manuelle et redonner aux experts-comptables leur véritable rôle de conseiller stratégique."
+      "subtitle": "TAYSIR COMPTA est née d'une vision simple : éliminer la saisie manuelle et redonner aux experts-comptables leur véritable rôle de conseiller stratégique."
     },
     "story": {
       "title": "Notre Histoire",
       "p1": "Face à la lenteur des processus comptables traditionnels et aux tas de factures papier, nous avons conçu une plateforme capable d'automatiser le traitement des données grâce à l'intelligence artificielle (OCR).",
-      "p2": "En tant que projet académique MVP, ComptaNova vise à prouver qu'il est possible de créer un écosystème collaboratif et fluide entre le comptable et son client, tout en respectant strictement le Plan Comptable Général (PCG) algérien."
+      "p2": "En tant que projet académique MVP, TAYSIR COMPTA vise à prouver qu'il est possible de créer un écosystème collaboratif et fluide entre le comptable et son client, tout en respectant strictement le Plan Comptable Général (PCG) algérien."
     },
     "goal": {
       "title": "Notre Objectif",
@@ -177,7 +177,7 @@
     },
     "values": {
       "title": "Nos valeurs",
-      "subtitle": "Les principes qui guident le développement de ComptaNova au quotidien.",
+      "subtitle": "Les principes qui guident le développement de TAYSIR COMPTA au quotidien.",
       "items": {
         "innovation": {
           "title": "Innovation",
@@ -195,7 +195,7 @@
     },
     "cta": {
       "title": "Prêt à franchir le pas de la digitalisation ?",
-      "subtitle": "Rejoignez les PME et les comptables qui utilisent déjà ComptaNova pour gagner un temps précieux chaque jour.",
+      "subtitle": "Rejoignez les PME et les comptables qui utilisent déjà TAYSIR COMPTA pour gagner un temps précieux chaque jour.",
       "button": "Créer mon compte gratuit"
     }
   },

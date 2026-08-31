@@ -5,7 +5,7 @@
  *   - 95%: Highly probable (Amount match + reference/cheque match OR exact amount + date)
  *   - 80%: Manual verification needed (Amount match OR close amount/date match)
  *   - 0%: No match found
- * Stores BankStatementImport session and enriches BankTransaction.
+ * Stores BankStatementImport session and creates ReconciliationMatch records.
  */
 import { getCurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -153,14 +153,9 @@ function calculateScore(
 
   const clientMatch = target.clientName && row.description.toLowerCase().includes(target.clientName.toLowerCase());
 
-  // Scoring Logic:
-  // 100% -> Exact amount + ref/cheque match + date within 3 days
   if (amountEqual && refMatch && dateEqual) return 100;
-  // 95% -> Exact amount + ref/cheque match OR Exact amount + exact/close date
   if (amountEqual && (refMatch || dateEqual)) return 95;
-  // 80% -> Exact amount + client match OR amount match within 7 days
   if (amountEqual && (clientMatch || dateClose)) return 80;
-  // Fallback match on amount only
   if (amountEqual) return 80;
 
   return 0;
@@ -234,7 +229,13 @@ export async function POST(req: NextRequest) {
 
   // 2. Unmatched validated journal entries on 512
   const journalEntries = await db.journalEntry.findMany({
-    where: { status: "VALIDATED", document: { companyId } },
+    where: {
+      status: "VALIDATED",
+      OR: [
+        { companyId },
+        { document: { companyId } },
+      ],
+    },
     select: {
       id: true,
       date: true,
@@ -303,26 +304,50 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  // Create BankTransaction records
+  // Create BankTransaction records with status & ReconciliationMatch
   const createdTransactions = await db.$transaction(
-    resultsData.map(({ row, matchedTarget, score }) =>
-      db.bankTransaction.create({
-        data: {
-          date: new Date(row.date),
-          description: row.description,
-          amount: row.amount,
-          chequeNumber: row.chequeNumber ?? null,
-          reference: row.reference ?? null,
-          senderName: row.senderName ?? null,
-          balance: row.balance ?? null,
-          matched: score >= 80,
-          matchScore: score,
-          companyId,
-          importId: bankImport.id,
-          journalEntryId: matchedTarget?.type === "entry" ? matchedTarget.id : undefined,
-        },
-      })
-    )
+    async (tx) => {
+      const txs = [];
+      for (const { row, matchedTarget, score } of resultsData) {
+        const isMatched = score >= 80;
+        const bTx = await tx.bankTransaction.create({
+          data: {
+            date: new Date(row.date),
+            description: row.description,
+            amount: row.amount,
+            chequeNumber: row.chequeNumber ?? null,
+            reference: row.reference ?? null,
+            senderName: row.senderName ?? null,
+            balance: row.balance ?? null,
+            matched: isMatched,
+            matchScore: score,
+            matchStatus: isMatched ? "MATCHED" : "BANK_ONLY",
+            matchReason: isMatched ? `Correspondance automatique (${score}%)` : "Non rapproché en comptabilité",
+            matchedAt: isMatched ? new Date() : null,
+            companyId,
+            importId: bankImport.id,
+            journalEntryId: matchedTarget?.type === "entry" ? matchedTarget.id : undefined,
+          },
+        });
+
+        // Create ReconciliationMatch record for full auditability
+        if (isMatched && matchedTarget?.type === "entry") {
+          await tx.reconciliationMatch.create({
+            data: {
+              bankTransactionId: bTx.id,
+              journalEntryId: matchedTarget.id,
+              status: "MATCHED",
+              score,
+              reason: `Rapprochement automatique (${score}%)`,
+              matchedById: user.userId,
+            },
+          });
+        }
+
+        txs.push(bTx);
+      }
+      return txs;
+    }
   );
 
   const results = resultsData.map(({ row, matchedTarget, score }, index) => ({
@@ -334,6 +359,7 @@ export async function POST(req: NextRequest) {
     reference: row.reference ?? null,
     matchScore: score,
     matched: score >= 80,
+    matchStatus: score >= 80 ? "MATCHED" : "BANK_ONLY",
     matchedTarget: matchedTarget
       ? {
           id: matchedTarget.id,

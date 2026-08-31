@@ -3,10 +3,10 @@ import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
 
 const SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET ?? "comptanova-secret-dev-key-change-in-production"
+  process.env.JWT_SECRET ?? "taysircompta-secret-dev-key-change-in-production"
 );
 
-const COOKIE_NAME = "comptanova_token";
+const COOKIE_NAME = "taysir_token";
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 7; // 7 jours
 
 // ─── Types ───────────────────────────────────────────────

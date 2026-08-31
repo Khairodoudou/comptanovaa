@@ -25,13 +25,18 @@ export default function Navbar({ dict, lang }: { dict: any; lang: string }) {
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-600 to-blue-700 flex items-center justify-center">
-              <span className="text-white font-bold text-sm">CN</span>
+          <Link href={`/${lang}`} className="flex items-center gap-2.5 group">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#0f172a] via-[#1e3a8a] to-[#0d9488] flex items-center justify-center shadow-md shadow-teal-900/10 group-hover:scale-105 transition-transform">
+              <span className="text-white font-black text-sm tracking-wider">TC</span>
             </div>
-            <span className="font-semibold text-gray-900 text-lg tracking-tight">
-              Compta<span className="text-blue-600">Nova</span>
-            </span>
+            <div className="flex flex-col">
+              <span className="font-extrabold text-[#0f172a] text-lg tracking-tight leading-none">
+                TAYSIR <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-teal-600">COMPTA</span>
+              </span>
+              <span className="text-[9px] font-medium text-slate-400 leading-tight">
+                {lang === "ar" ? "محاسبة أسهل، عمل أفضل" : "comptabilité simplifiée"}
+              </span>
+            </div>
           </Link>
 
           {/* Desktop nav */}

@@ -1,7 +1,6 @@
 import { getCurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { NextRequest } from "next/server";
-import type { Prisma } from "@prisma/client";
 
 export async function GET(req: NextRequest) {
   const user = await getCurrentUser();
@@ -14,7 +13,7 @@ export async function GET(req: NextRequest) {
 
   const company = await db.company.findFirst({
     where: { clientId: user.userId },
-    select: { id: true },
+    select: { id: true, name: true },
   });
 
   if (!company) {
@@ -22,8 +21,16 @@ export async function GET(req: NextRequest) {
     return Response.json([]);
   }
 
+  // ⚠️ CRITICAL: CLIENT ONLY ACCESSES VALIDATED AND SENT ENTRIES
   const entries = await db.journalEntry.findMany({
-    where: { document: { companyId: company.id } },
+    where: {
+      status: "VALIDATED",
+      sentToClient: true,
+      OR: [
+        { companyId: company.id },
+        { document: { companyId: company.id } },
+      ],
+    },
     orderBy: { date: "desc" },
     include: { document: { select: { originalName: true } } },
   });
@@ -34,7 +41,6 @@ export async function GET(req: NextRequest) {
       .map(
         (e) =>
           `${new Date(e.date).toLocaleDateString("fr-FR")},` +
-          // FIX #7: Sanitize description and filename to prevent CSV injection
           `"${(e.description ?? "").replace(/"/g, '""')}",` +
           `${e.debitAccount},` +
           `${e.creditAccount},` +
@@ -44,8 +50,7 @@ export async function GET(req: NextRequest) {
       )
       .join("\n");
 
-    // FIX #7: Sanitize filename — remove/replace characters invalid in HTTP headers
-    const safeName = user.name.replace(/[^\w\-\.]/g, "_").substring(0, 40);
+    const safeName = (company.name || user.name).replace(/[^\w\-\.]/g, "_").substring(0, 40);
 
     return new Response(header + rows, {
       headers: {
