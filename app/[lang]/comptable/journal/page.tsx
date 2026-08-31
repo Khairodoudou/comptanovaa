@@ -80,6 +80,10 @@ export default async function ComptableJournalPage({
     }),
   ]);
 
+  const totalOperations = new Set(
+    entries.map((e) => e.documentId || `manual-${e.id}`)
+  ).size;
+
   return (
     <div className="p-6 sm:p-8 max-w-7xl mx-auto space-y-6">
       {/* Header with New Entry Modal */}
@@ -88,7 +92,7 @@ export default async function ComptableJournalPage({
           <h1 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2.5">
             <span>{c.journal_title || (lang === "ar" ? "دفتر اليومية المحاسبي" : "Journal Général")}</span>
             <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-teal-50 text-teal-700 border border-teal-200">
-              {entries.length} écritures
+              {totalOperations} {totalOperations > 1 ? "écritures" : "écriture"}
             </span>
           </h1>
           <p className="text-xs text-slate-500 mt-1">

@@ -78,6 +78,10 @@ export default async function ClientJournalPage({
 
   const totalAmount = entries.reduce((sum, e) => sum + e.amount, 0);
 
+  const totalOperations = new Set(
+    entries.map((e) => e.documentId || `manual-${e.id}`)
+  ).size;
+
   return (
     <div className="p-6 sm:p-8 max-w-6xl mx-auto space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -90,7 +94,7 @@ export default async function ClientJournalPage({
             </span>
           </h1>
           <p className="text-xs text-slate-500 mt-1">
-            {entries.length} {entries.length !== 1 ? "écritures validées par votre expert-comptable" : "écriture validée"}
+            {totalOperations} {totalOperations > 1 ? "écritures validées par votre expert-comptable" : "écriture validée par votre expert-comptable"}
           </p>
         </div>
       </div>
