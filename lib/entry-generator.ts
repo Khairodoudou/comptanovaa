@@ -75,7 +75,7 @@ export function findSubAccount(
   label: string
 ): string {
   const matches = subAccounts.filter(s => s.parentAccount === parent);
-  if (matches.length === 0) return `${parent}.0`;
+  if (matches.length === 0) return parent;
   const exact = matches.find(
     s =>
       s.name.toLowerCase().includes(label.toLowerCase()) ||
@@ -83,9 +83,8 @@ export function findSubAccount(
   );
   const candidate = exact ?? matches[0];
   // Safety: never return a charge account (6xx) for stock/purchase accounts (380, 30)
-  // This prevents mis-configured sub-accounts from corrupting journal entries
   if ((parent === "380" || parent === "30") && /^6/.test(candidate.subAccount)) {
-    return `${parent}.0`;
+    return parent;
   }
   return candidate.subAccount;
 }

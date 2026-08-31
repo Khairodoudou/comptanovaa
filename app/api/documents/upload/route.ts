@@ -8,6 +8,8 @@ import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import { runOcr } from "@/lib/ocr/professional-ocr";
 import { generateEntries, TVA_RATE } from "@/lib/entry-generator";
+import fs from "fs";
+import path from "path";
 
 export const runtime = "nodejs"; // sharp + Tesseract
 
@@ -138,10 +140,22 @@ export async function POST(req: NextRequest) {
   const tvaForEntries = extracted.amountTVA ?? computedTVA;
   const refNumber: string | null = extracted.invoiceNumber ?? null;
 
+  // ── Persist file to disk (public/uploads) ──────────────────────────────────
+  const uniqueFilename = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+  try {
+    const uploadsDir = path.join(process.cwd(), "public", "uploads");
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+    fs.writeFileSync(path.join(uploadsDir, uniqueFilename), buffer);
+  } catch (fsErr) {
+    console.warn("Could not save physical file to disk:", fsErr);
+  }
+
   // ── Persist document with Full Traceability ─────────────────────────────────
   const document = await db.document.create({
     data: {
-      filename: `${Date.now()}_${file.name}`,
+      filename: uniqueFilename,
       originalName: file.name,
       mimeType: file.type || "application/octet-stream",
       size: file.size,
