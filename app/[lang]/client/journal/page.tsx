@@ -111,7 +111,7 @@ export default async function ClientJournalPage({
         <div>
           <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">{j.validated || "Écritures officielles"}</p>
           <p className="text-xl font-black text-teal-600 mt-0.5">
-            {entries.length}
+            {totalOperations}
           </p>
         </div>
       </div>
