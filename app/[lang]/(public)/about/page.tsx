@@ -25,14 +25,14 @@ export default async function AboutPage({ params }: { params: Promise<{ lang: st
   const Arrow = isRtl ? ArrowLeft : ArrowRight;
 
   return (
-    <main className="flex-1 pt-16 bg-slate-50/50 text-slate-900 overflow-x-hidden">
+    <main className="flex-1 pt-16 bg-white text-slate-900 overflow-x-hidden">
       {/* ─────────────────── HERO SECTION ─────────────────── */}
-      <section className="relative overflow-hidden pt-24 pb-20 sm:pt-32 sm:pb-28">
+      <section className="relative overflow-hidden pt-24 pb-20 sm:pt-32 sm:pb-28 bg-gradient-to-b from-slate-50/80 via-white to-white">
         {/* Ambient Gradient Blur */}
-        <div className="absolute -top-40 left-1/2 -translate-x-1/2 w-[800px] h-[450px] bg-gradient-to-tr from-teal-400/20 via-blue-600/20 to-sky-400/20 blur-[130px] rounded-full pointer-events-none -z-10" />
+        <div className="absolute -top-32 left-1/2 -translate-x-1/2 w-[850px] h-[450px] bg-gradient-to-tr from-sky-200/40 via-teal-100/40 to-blue-100/40 blur-[110px] rounded-full pointer-events-none -z-10" />
 
         <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 text-center space-y-6">
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-gradient-to-r from-blue-50 to-teal-50 border border-teal-200/80 shadow-sm text-xs font-bold text-slate-800">
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white border border-teal-200/80 shadow-sm text-xs font-bold text-slate-800">
             <Sparkles size={14} className="text-teal-600 animate-pulse" />
             <span>{dict.about.badge || "✨ NOTRE VISION & ENGAGEMENT"}</span>
           </div>

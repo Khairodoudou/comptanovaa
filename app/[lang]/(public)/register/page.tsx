@@ -145,17 +145,17 @@ export default function RegisterPage() {
         {/* Brand logo & tagline */}
         <div className="relative z-10">
           <div className="mb-6">
-            <Link href={`/${lang}`} className="inline-block">
+            <Link href={`/${lang}`} className="inline-block bg-white px-5 py-3 rounded-2xl shadow-2xl border border-white/90 hover:scale-105 transition-transform">
               <Image
                 src="/logo.png"
                 alt="TAYSIR COMPTA"
                 width={200}
                 height={60}
-                className="h-14 w-auto object-contain brightness-0 invert"
+                className="h-12 w-auto object-contain"
                 priority
               />
             </Link>
-            <p className="text-xs text-slate-300 font-medium mt-2">
+            <p className="text-xs text-slate-300 font-medium mt-3">
               {lang === "ar" ? "محاسبة أسهل، عمل أفضل" : "comptabilité simplifiée, travail optimisé."}
             </p>
           </div>
@@ -217,17 +217,21 @@ export default function RegisterPage() {
       {/* Right side form */}
       <div className="flex-1 flex items-center justify-center px-4 sm:px-8 py-10">
         <div className="w-full max-w-xl bg-white p-6 sm:p-10 rounded-2xl shadow-sm border border-slate-200/80">
-          <div className="flex justify-center mb-6 lg:hidden">
-            <Image
-              src="/logo.png"
-              alt="TAYSIR COMPTA"
-              width={160}
-              height={48}
-              className="h-10 w-auto object-contain"
-            />
+          <div className="flex justify-center mb-6">
+            <Link href={`/${lang}`} className="inline-block hover:opacity-90 transition-opacity">
+              <Image
+                src="/logo.png"
+                alt="TAYSIR COMPTA"
+                width={180}
+                height={54}
+                className="h-11 w-auto object-contain"
+                priority
+              />
+            </Link>
           </div>
           <div className="mb-6">
             <h1 className="text-2xl font-bold text-slate-900">
+
               {lang === "ar" ? "إنشاء حساب جديد" : "Créer un compte"}
             </h1>
             <p className="text-slate-500 text-sm mt-1">

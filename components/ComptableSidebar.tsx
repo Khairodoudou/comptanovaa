@@ -94,18 +94,18 @@ export function ComptableSidebar({
       }`}
     >
       {/* Brand Header */}
-      <div className="flex flex-col items-center gap-1.5 px-5 py-4 border-b border-slate-800/80 bg-slate-900/40">
-        <Link href={`/${lang}/comptable/dashboard`} className="block">
+      <div className="flex flex-col items-center gap-2 px-4 py-4 border-b border-slate-800/80 bg-slate-900/60">
+        <Link href={`/${lang}/comptable/dashboard`} className="block bg-white px-3 py-1.5 rounded-xl shadow-md border border-white/80 hover:scale-105 transition-transform">
           <Image
             src="/logo.png"
             alt="TAYSIR COMPTA"
-            width={160}
-            height={48}
-            className="h-10 w-auto object-contain brightness-0 invert opacity-90 hover:opacity-100 transition-opacity"
+            width={140}
+            height={42}
+            className="h-8 w-auto object-contain"
             priority
           />
         </Link>
-        <p className="text-[9px] text-teal-400/70 font-semibold tracking-widest uppercase">
+        <p className="text-[9px] text-teal-400/80 font-bold tracking-widest uppercase">
           {t.accountant_space || (lang === "ar" ? "مساحة المحاسب" : "Espace Comptable")}
         </p>
       </div>

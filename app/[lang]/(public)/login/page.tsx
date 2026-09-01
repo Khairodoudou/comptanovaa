@@ -55,14 +55,16 @@ export default function LoginPage() {
         <div className="hidden lg:flex w-1/2 bg-gradient-to-br from-[#0b132b] via-[#1e3a8a] to-[#0d9488] flex-col justify-center p-12">
           <div className="max-w-md mx-auto">
           <div className="mb-8">
-            <Image
-              src="/logo.png"
-              alt="TAYSIR COMPTA"
-              width={220}
-              height={66}
-              className="h-16 w-auto object-contain brightness-0 invert"
-              priority
-            />
+            <Link href={`/${lang}`} className="inline-block bg-white px-5 py-3 rounded-2xl shadow-2xl border border-white/90 hover:scale-105 transition-transform">
+              <Image
+                src="/logo.png"
+                alt="TAYSIR COMPTA"
+                width={220}
+                height={66}
+                className="h-12 w-auto object-contain"
+                priority
+              />
+            </Link>
           </div>
           <h2 className="text-3xl font-bold text-white mb-4 leading-tight">
             {dict.login.welcome}
@@ -89,14 +91,17 @@ export default function LoginPage() {
 
         <div className="flex-1 flex items-center justify-center px-6 py-12">
           <div className="w-full max-w-md">
-            <div className="flex justify-center mb-6 lg:hidden">
-              <Image
-                src="/logo.png"
-                alt="TAYSIR COMPTA"
-                width={160}
-                height={48}
-                className="h-12 w-auto object-contain"
-              />
+            <div className="flex justify-center mb-8">
+              <Link href={`/${lang}`} className="inline-block hover:opacity-90 transition-opacity">
+                <Image
+                  src="/logo.png"
+                  alt="TAYSIR COMPTA"
+                  width={200}
+                  height={60}
+                  className="h-12 w-auto object-contain"
+                  priority
+                />
+              </Link>
             </div>
             <h1 className="text-2xl font-bold text-gray-900 mb-1">
             {dict.login.title}
