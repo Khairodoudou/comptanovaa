@@ -56,7 +56,9 @@ export async function generateFiscalDeadlinesForCompany(
   const now = new Date();
 
   const getStatus = (dueDate: Date): "UPCOMING" | "OVERDUE" => {
-    return dueDate < now ? "OVERDUE" : "UPCOMING";
+    const endOfDueDay = new Date(dueDate);
+    endOfDueDay.setUTCHours(23, 59, 59, 999);
+    return endOfDueDay < now ? "OVERDUE" : "UPCOMING";
   };
 
   if (regime === "REEL") {
@@ -69,7 +71,7 @@ export async function generateFiscalDeadlinesForCompany(
       // e.g. for month 12, due Jan 20 of year + 1
       const dueYear = m === 12 ? year + 1 : year;
       const dueMonth = m === 12 ? 0 : m; // 0-indexed month: 0=Jan
-      const dueDate = new Date(Date.UTC(dueYear, dueMonth, 20, 23, 59, 59));
+      const dueDate = new Date(Date.UTC(dueYear, dueMonth, 20, 12, 0, 0));
 
       const tvaRule = rules.find((r) => r.taxType === "G50_TVA_MENSUEL");
       deadlinesToCreate.push({
@@ -100,7 +102,7 @@ export async function generateFiscalDeadlinesForCompany(
 
     // B. IBS Acomptes & Déclarations Annuelles
     // 1. Acompte 1: 20 Mars
-    const dMarch20 = new Date(Date.UTC(year, 2, 20, 23, 59, 59));
+    const dMarch20 = new Date(Date.UTC(year, 2, 20, 12, 0, 0));
     const acompte1Rule = rules.find((r) => r.taxType === "IBS_ACOMPTE1");
     deadlinesToCreate.push({
       companyId,
@@ -115,7 +117,7 @@ export async function generateFiscalDeadlinesForCompany(
     });
 
     // 2. G4 Liasse Fiscale: 30 Avril
-    const dApril30 = new Date(Date.UTC(year, 3, 30, 23, 59, 59));
+    const dApril30 = new Date(Date.UTC(year, 3, 30, 12, 0, 0));
     const g4Rule = rules.find((r) => r.taxType === "IBS_G4_LIASSE");
     deadlinesToCreate.push({
       companyId,
@@ -130,7 +132,7 @@ export async function generateFiscalDeadlinesForCompany(
     });
 
     // 3. Solde de liquidation: 20 Mai
-    const dMay20 = new Date(Date.UTC(year, 4, 20, 23, 59, 59));
+    const dMay20 = new Date(Date.UTC(year, 4, 20, 12, 0, 0));
     const soldeRule = rules.find((r) => r.taxType === "IBS_SOLDE");
     deadlinesToCreate.push({
       companyId,
@@ -145,7 +147,7 @@ export async function generateFiscalDeadlinesForCompany(
     });
 
     // 4. Acompte 2: 20 Juin
-    const dJune20 = new Date(Date.UTC(year, 5, 20, 23, 59, 59));
+    const dJune20 = new Date(Date.UTC(year, 5, 20, 12, 0, 0));
     const acompte2Rule = rules.find((r) => r.taxType === "IBS_ACOMPTE2");
     deadlinesToCreate.push({
       companyId,
@@ -160,7 +162,7 @@ export async function generateFiscalDeadlinesForCompany(
     });
 
     // 5. Acompte 3: 20 Novembre
-    const dNov20 = new Date(Date.UTC(year, 10, 20, 23, 59, 59));
+    const dNov20 = new Date(Date.UTC(year, 10, 20, 12, 0, 0));
     const acompte3Rule = rules.find((r) => r.taxType === "IBS_ACOMPTE3");
     deadlinesToCreate.push({
       companyId,
@@ -176,7 +178,7 @@ export async function generateFiscalDeadlinesForCompany(
   } else {
     // ──────────────── FORFAITAIRE — IFU ────────────────
     // 1. G12 Prévisionnelle: 30 Juin
-    const dJune30 = new Date(Date.UTC(year, 5, 30, 23, 59, 59));
+    const dJune30 = new Date(Date.UTC(year, 5, 30, 12, 0, 0));
     const g12Rule = rules.find((r) => r.taxType === "G12_PREVISIONNELLE");
     deadlinesToCreate.push({
       companyId,
@@ -191,7 +193,7 @@ export async function generateFiscalDeadlinesForCompany(
     });
 
     // 2. Tranche 2 (25%): 15 Septembre
-    const dSept15 = new Date(Date.UTC(year, 8, 15, 23, 59, 59));
+    const dSept15 = new Date(Date.UTC(year, 8, 15, 12, 0, 0));
     const ifu2Rule = rules.find((r) => r.taxType === "IFU_TRANCHE2");
     deadlinesToCreate.push({
       companyId,
@@ -206,7 +208,7 @@ export async function generateFiscalDeadlinesForCompany(
     });
 
     // 3. Tranche 3 (25%): 15 Décembre
-    const dDec15 = new Date(Date.UTC(year, 11, 15, 23, 59, 59));
+    const dDec15 = new Date(Date.UTC(year, 11, 15, 12, 0, 0));
     const ifu3Rule = rules.find((r) => r.taxType === "IFU_TRANCHE3");
     deadlinesToCreate.push({
       companyId,
@@ -221,7 +223,7 @@ export async function generateFiscalDeadlinesForCompany(
     });
 
     // 4. G12 Bis Définitive: 20 Janvier N+1
-    const dJan20Next = new Date(Date.UTC(year + 1, 0, 20, 23, 59, 59));
+    const dJan20Next = new Date(Date.UTC(year + 1, 0, 20, 12, 0, 0));
     const g12BisRule = rules.find((r) => r.taxType === "G12_BIS_DEFINITIVE");
     deadlinesToCreate.push({
       companyId,
@@ -237,10 +239,10 @@ export async function generateFiscalDeadlinesForCompany(
 
     // 5. G50 IRG Salaires Trimestriel
     const quarters = [
-      { q: "T1", label: "T1 (Janvier - Mars)", due: new Date(Date.UTC(year, 3, 20, 23, 59, 59)) },
-      { q: "T2", label: "T2 (Avril - Juin)", due: new Date(Date.UTC(year, 6, 20, 23, 59, 59)) },
-      { q: "T3", label: "T3 (Juillet - Septembre)", due: new Date(Date.UTC(year, 9, 20, 23, 59, 59)) },
-      { q: "T4", label: "T4 (Octobre - Décembre)", due: new Date(Date.UTC(year + 1, 0, 20, 23, 59, 59)) },
+      { q: "T1", label: "T1 (Janvier - Mars)", due: new Date(Date.UTC(year, 3, 20, 12, 0, 0)) },
+      { q: "T2", label: "T2 (Avril - Juin)", due: new Date(Date.UTC(year, 6, 20, 12, 0, 0)) },
+      { q: "T3", label: "T3 (Juillet - Septembre)", due: new Date(Date.UTC(year, 9, 20, 12, 0, 0)) },
+      { q: "T4", label: "T4 (Octobre - Décembre)", due: new Date(Date.UTC(year + 1, 0, 20, 12, 0, 0)) },
     ];
     const irgTrimRule = rules.find((r) => r.taxType === "G50_IRG_TRIMESTRIEL");
     for (const q of quarters) {
@@ -258,7 +260,7 @@ export async function generateFiscalDeadlinesForCompany(
     }
   }
 
-  // Insert deadlines without duplicates
+  // Insert or refresh deadlines without duplicates
   const created: any[] = [];
   for (const item of deadlinesToCreate) {
     const existing = await db.fiscalDeadline.findFirst({
@@ -274,7 +276,18 @@ export async function generateFiscalDeadlinesForCompany(
       const c = await db.fiscalDeadline.create({ data: item });
       created.push(c);
     } else {
-      created.push(existing);
+      // Keep dueDate normalized and synced if changed
+      const updated = await db.fiscalDeadline.update({
+        where: { id: existing.id },
+        data: {
+          dueDate: item.dueDate,
+          label: item.label,
+          form: item.form,
+          fiscalRuleId: item.fiscalRuleId,
+          ...(existing.status === "COMPLETED" ? {} : { status: item.status }),
+        },
+      });
+      created.push(updated);
     }
   }
 

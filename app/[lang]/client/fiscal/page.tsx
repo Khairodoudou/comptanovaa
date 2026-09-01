@@ -2,6 +2,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { generateFiscalDeadlinesForCompany } from "@/lib/fiscal-generator";
+import { formatFiscalDate } from "@/lib/fiscal-rules";
 import {
   CalendarDays,
   FileSpreadsheet,
@@ -208,8 +209,8 @@ export default async function ClientFiscalPage({
 
                     <td className="px-4 py-4">
                       <p className="font-bold text-slate-900">
-                        {dueDateObj.toLocaleDateString(locale, {
-                          day: "2-digit",
+                        {formatFiscalDate(item.dueDate, locale, {
+                          day: "numeric",
                           month: "long",
                           year: "numeric",
                         })}

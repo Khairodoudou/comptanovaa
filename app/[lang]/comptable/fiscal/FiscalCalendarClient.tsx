@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { formatFiscalDate } from "@/lib/fiscal-rules";
 import {
   CalendarDays,
   Building2,
@@ -318,22 +319,36 @@ export function FiscalCalendarClient({
 
                     {/* Due Date */}
                     <td className="px-4 py-4">
-                      <div>
-                        <p className="font-bold text-slate-900">
-                          {dueDateObj.toLocaleDateString(locale, {
-                            day: "2-digit",
-                            month: "long",
-                            year: "numeric",
-                          })}
-                        </p>
-                        <p className="text-[10px] text-slate-400">
-                          {Math.ceil((dueDateObj.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)) > 0
-                            ? `Dans ${Math.ceil((dueDateObj.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))} j`
-                            : isCompleted
-                            ? "Déclaré"
-                            : "Délai dépassé"}
-                        </p>
-                      </div>
+                      {(() => {
+                        const nowMs = Date.now();
+                        const dueEndMs = new Date(dueDateObj).setUTCHours(23, 59, 59, 999);
+                        const daysLeft = Math.ceil((dueEndMs - nowMs) / (1000 * 60 * 60 * 24));
+
+                        return (
+                          <div>
+                            <p className="font-bold text-slate-900">
+                              {formatFiscalDate(item.dueDate, locale, {
+                                day: "numeric",
+                                month: "long",
+                                year: "numeric",
+                              })}
+                            </p>
+                            <p className="text-[10px] text-slate-400">
+                              {daysLeft > 0
+                                ? lang === "ar"
+                                  ? `خلال ${daysLeft} يوم`
+                                  : `Dans ${daysLeft} j`
+                                : isCompleted
+                                ? lang === "ar"
+                                  ? "تم التصريح"
+                                  : "Déclarée"
+                                : lang === "ar"
+                                ? "تجاوزت الأجل"
+                                : "Délai dépassé"}
+                            </p>
+                          </div>
+                        );
+                      })()}
                     </td>
 
                     {/* Statut Badge */}

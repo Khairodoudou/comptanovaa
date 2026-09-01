@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { Users, FileText, CheckSquare, Clock, CalendarDays, AlertTriangle, MessageCircle, ArrowRight } from "lucide-react";
 import { ComptableDashboardCharts } from "./DashboardCharts";
 import { getDictionary } from "@/get-dictionary";
+import { formatFiscalDate } from "@/lib/fiscal-rules";
 import type { Locale } from "@/i18n-config";
 import Link from "next/link";
 
@@ -193,7 +194,8 @@ export default async function ComptableDashboardPage({
                 </div>
                 <p className="text-[11px] text-slate-600 truncate">{d.label}</p>
                 <p className="text-[10px] text-amber-700 font-bold">
-                  Limite : {new Date(d.dueDate).toLocaleDateString(locale, { day: "2-digit", month: "short" })}
+                  {lang === "ar" ? "آخر أجل : " : "Limite : "}
+                  {formatFiscalDate(d.dueDate, locale, { day: "numeric", month: "short" })}
                 </p>
               </div>
             ))}

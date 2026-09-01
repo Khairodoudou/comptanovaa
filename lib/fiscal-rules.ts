@@ -142,3 +142,26 @@ export const DEFAULT_FISCAL_RULES: DefaultFiscalRuleConfig[] = [
     dueMonth: 11, // 20 Novembre N
   },
 ];
+
+/**
+ * Formats a fiscal deadline date reliably regardless of server/browser timezone.
+ * Uses UTC to avoid offset shifting the calendar day (e.g. 20th becoming 21st in UTC+1/UTC+2).
+ */
+export function formatFiscalDate(
+  dateInput: string | Date | number | null | undefined,
+  locale: string = "fr-FR",
+  options?: Intl.DateTimeFormatOptions
+): string {
+  if (!dateInput) return "";
+  const d = typeof dateInput === "string" || typeof dateInput === "number" ? new Date(dateInput) : dateInput;
+  if (isNaN(d.getTime())) return "";
+
+  return d.toLocaleDateString(locale, {
+    timeZone: "UTC",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    ...options,
+  });
+}
+
