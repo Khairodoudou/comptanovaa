@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useState } from "react";
 import { Menu, X, Globe, ChevronDown } from "lucide-react";
 import { usePathname } from "next/navigation";
@@ -25,18 +26,15 @@ export default function Navbar({ dict, lang }: { dict: any; lang: string }) {
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <Link href={`/${lang}`} className="flex items-center gap-2.5 group">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#0f172a] via-[#1e3a8a] to-[#0d9488] flex items-center justify-center shadow-md shadow-teal-900/10 group-hover:scale-105 transition-transform">
-              <span className="text-white font-black text-sm tracking-wider">TC</span>
-            </div>
-            <div className="flex flex-col">
-              <span className="font-extrabold text-[#0f172a] text-lg tracking-tight leading-none">
-                TAYSIR <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-teal-600">COMPTA</span>
-              </span>
-              <span className="text-[9px] font-medium text-slate-400 leading-tight">
-                {lang === "ar" ? "محاسبة أسهل، عمل أفضل" : "comptabilité simplifiée"}
-              </span>
-            </div>
+          <Link href={`/${lang}`} className="flex items-center group">
+            <Image
+              src="/logo.png"
+              alt="TAYSIR COMPTA"
+              width={160}
+              height={48}
+              className="h-10 w-auto object-contain group-hover:opacity-90 transition-opacity"
+              priority
+            />
           </Link>
 
           {/* Desktop nav */}

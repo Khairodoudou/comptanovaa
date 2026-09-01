@@ -16,100 +16,141 @@
     "rights": "© 2026 TAYSIR COMPTA"
   },
   "home": {
+    "badge": "✨ La 1ère plateforme intelligente de comptabilité & fiscalité en Algérie",
     "hero": {
-      "title_1": "L'Expert-Comptable",
-      "title_2": "Digital",
-      "subtitle": "La première plateforme SaaS en Algérie qui automatise la saisie comptable via l'IA et connecte en temps réel les PME à leur expert-comptable.",
-      "cta_primary": "Commencer gratuitement",
-      "cta_secondary": "Espace Client"
+      "title_1": "L'Expert-Comptable & la PME",
+      "title_2": "en Parfaite Synergie",
+      "subtitle": "La plateforme SaaS de référence en Algérie qui automatise la saisie comptable par IA (OCR), sécurise vos échéances fiscales (G50, IBS, IFU) et simplifie la réconciliation bancaire en temps réel.",
+      "cta_primary": "Démarrer gratuitement",
+      "cta_secondary": "Espace Connexion",
+      "trusted_by": "Adopté par plus de 500+ entreprises et experts-comptables à travers l'Algérie"
     },
-    "stats": [
-      { "value": "90%", "label": "Réduction de la saisie manuelle" },
-      { "value": "2 rôles", "label": "Comptable & Client PME" },
-      { "value": "3 langues", "label": "Français, Arabe, Anglais" }
+    "trust_badges": [
+      { "label": "Conforme SCF & DGI Algérie" },
+      { "label": "Extraction OCR Haute Précision" },
+      { "label": "Sécurité & Chiffrement Cloud" },
+      { "label": "Rapprochement Bancaire & Audit" }
     ],
+    "stats": [
+      { "value": "85%", "label": "De temps de saisie manuelle économisé" },
+      { "value": "< 3s", "label": "Pour numériser et imputer une facture" },
+      { "value": "100%", "label": "Conforme aux normes fiscales algériennes" },
+      { "value": "24/7", "label": "Traçabilité et collaboration en temps réel" }
+    ],
+    "deep_features": {
+      "ocr": {
+        "tag": "INTELLIGENCE ARTIFICIELLE APPLIQUÉE",
+        "title": "Numérisation & Imputation OCR Instantanée",
+        "desc": "Glissez-déposez vos factures, reçus et bons d'achat. Notre moteur d'IA identifie automatiquement le fournisseur, les identifiants fiscaux (NIF/NIS), le montant HT, les taux de TVA et génère l'écriture équilibrée (comptes 607, 4456, 401) selon le PCG algérien.",
+        "bullets": [
+          "Extraction optique instantanée sans saisie manuelle",
+          "Détection intelligente de la TVA et des montants en Dinars Algériens (DA)",
+          "Pré-affectation automatique prête pour validation comptable"
+        ]
+      },
+      "fiscal": {
+        "tag": "PILOTAGE FISCAL & DGI",
+        "title": "Calendrier & Déclarations Fiscales Algériennes",
+        "desc": "Fini le stress des pénalités de retard. TAYSIR COMPTA calcule et suit automatiquement toutes vos échéances légales : G50 mensuel (TVA & IRG Salaires), les 3 acomptes IBS, la liasse annuelle G4, ainsi que les déclarations IFU G12 et G12 Bis.",
+        "bullets": [
+          "Prise en charge intégrale des régimes RÉEL et FORFAITAIRE (IFU)",
+          "Alertes proactives et suivi du statut des déclarations",
+          "Synchronisation infaillible entre l'entreprise et son cabinet comptable"
+        ]
+      },
+      "bank": {
+        "tag": "COLLABORATION & TRÉSORERIE",
+        "title": "Rapprochement Bancaire & Traçabilité Certifiée",
+        "desc": "Importez vos relevés bancaires au format CSV et profitez d'un matching algorithmique de haute précision entre vos flux de trésorerie et vos écritures du grand livre. Chaque validation est tracée pour un audit infaillible.",
+        "bullets": [
+          "Lettrage automatique des encaissements et décaissements",
+          "Génération de journaux d'audit conformes et exportables",
+          "Espace documentaire sécurisé et zéro papier"
+        ]
+      }
+    },
     "features_section": {
-      "title": "Tout ce dont vous avez besoin",
-      "subtitle": "Une plateforme complète pour digitaliser votre cabinet comptable ou votre PME.",
+      "title": "Une Suite Complète pour Votre Finance",
+      "subtitle": "Tous les outils indispensables pour moderniser votre cabinet d'expertise comptable ou piloter votre entreprise.",
       "items": [
         {
-          "title": "Centralisation des documents",
-          "description": "Uploadez vos factures, bons de livraison et relevés bancaires en un seul endroit. Fini les documents éparpillés."
+          "title": "Centralisation Intelligente des Pièces",
+          "description": "Stockez, classez et retrouvez instantanément toutes vos factures d'achat, de vente et relevés dans un coffre-fort numérique sécurisé."
         },
         {
-          "title": "Extraction automatique OCR",
-          "description": "Notre système lit automatiquement vos documents et extrait la date, le montant, le fournisseur et le type."
+          "title": "Extraction Automatique par IA (OCR)",
+          "description": "Reconnaissance optique avancée des montants, dates, mentions légales et TVA algérienne en quelques secondes."
         },
         {
-          "title": "Écritures comptables automatiques",
-          "description": "À partir des données extraites, TAYSIR COMPTA génère les écritures comptables selon les règles du PCG algérien."
+          "title": "Génération d'Écritures SCF / PCG",
+          "description": "Préparation automatique des écritures comptables débit/crédit conformément aux règles du Système Comptable Financier."
         },
         {
-          "title": "Validation par le comptable",
-          "description": "Le comptable vérifie, modifie et valide chaque écriture proposée avant qu'elle soit définitivement enregistrée."
+          "title": "Validation en 1 Clic par l'Expert",
+          "description": "L'expert-comptable supervise, ajuste et valide chaque ligne d'écriture en un clic avec historique certifié."
         },
         {
-          "title": "Rapprochement bancaire",
-          "description": "Importez votre relevé CSV et laissez l'algorithme matcher automatiquement vos transactions avec vos écritures."
+          "title": "Rapprochement Bancaire Automatisé",
+          "description": "Importation de relevés bancaires et réconciliation automatique avec les mouvements de factures et règlements."
         },
         {
-          "title": "Notifications en temps réel",
-          "description": "Restez informé à chaque étape : nouveau document reçu, écriture validée, rapprochement terminé."
+          "title": "Suivi & Calendrier Fiscal Algérien",
+          "description": "Gestion automatisée des échéances fiscales (G50, IBS, IFU, G4) avec alertes pour ne manquer aucune date limite."
         }
       ]
     },
     "how_section": {
-      "title": "Comment ça marche ?",
-      "subtitle": "Un flux de travail simple et efficace entre le client et son comptable.",
+      "title": "Comment Fonctionne TAYSIR COMPTA ?",
+      "subtitle": "Un flux de travail fluide, collaboratif et transparent en 4 étapes simples.",
       "items": [
         {
-          "title": "Le client uploade ses documents",
-          "description": "Factures PDF, images de chèques, bons de livraison — tout est centralisé dans l'espace client."
+          "title": "1. Dépôt des Documents",
+          "description": "Le client téléverse ses factures PDF ou photos depuis son ordinateur ou son mobile."
         },
         {
-          "title": "L'OCR extrait les données",
-          "description": "Le système lit automatiquement chaque document et propose une écriture comptable correspondante."
+          "title": "2. Analyse & Extraction IA",
+          "description": "L'OCR analyse le document, lit les informations clés et pré-remplit l'écriture comptable correspondante."
         },
         {
-          "title": "Le comptable valide",
-          "description": "Le comptable vérifie les écritures proposées, les modifie si besoin, puis les valide en un clic."
+          "title": "3. Validation par l'Expert",
+          "description": "L'expert-comptable vérifie la proposition, valide l'écriture et alimente le journal général."
         },
         {
-          "title": "Journal et rapprochement",
-          "description": "Les écritures validées alimentent le journal. Le relevé bancaire est réconcilié automatiquement."
+          "title": "4. Rapprochement & Fiscalité",
+          "description": "Les flux bancaires sont lettrés et les déclarations fiscales sont prêtes à temps sans retard."
         }
       ]
     },
     "roles_section": {
-      "title": "Deux rôles, une plateforme",
+      "title": "Une Solution Conçue pour Chaque Acteur",
       "accountant": {
-        "title": "Comptable",
-        "subtitle": "Gérez plusieurs clients depuis un tableau de bord unifié.",
+        "title": "Cabinet d'Expertise Comptable",
+        "subtitle": "Décuplez votre productivité et gérez tous vos dossiers clients sur un tableau de bord unifié.",
         "list": [
-          "Valider ou rejeter les écritures proposées",
-          "Journal consolidé multi-clients",
-          "Configurer les règles comptables",
-          "Notifications en temps réel"
+          "Validation rapide des écritures proposées par l'IA",
+          "Grand livre, journal et balance interactifs multi-dossiers",
+          "Suivi fiscal automatisé et alertes G50 / IBS pour tous vos clients",
+          "Traçabilité complète avec journal d'audit certifié"
         ],
-        "link": "Créer un compte comptable"
+        "link": "Rejoindre en tant qu'Expert-Comptable"
       },
       "client": {
-        "title": "Client / PME",
-        "subtitle": "Gérez vos documents et suivez votre comptabilité simplement.",
+        "title": "Entreprise & Dirigeant de PME",
+        "subtitle": "Gardez une visibilité claire sur vos finances et collaborez sans friction avec votre comptable.",
         "list": [
-          "Uploader factures et relevés bancaires",
-          "Suivre l'état de ses documents",
-          "Consulter son journal validé",
-          "Rapprochement bancaire automatique"
+          "Téléversement ultra-rapide des factures et pièces",
+          "Suivi en temps réel de la validation de vos documents",
+          "Calendrier fiscal en lecture directe pour anticiper vos impôts",
+          "Rapprochement et suivi de vos règlements clients/fournisseurs"
         ],
-        "link": "Créer un compte client"
+        "link": "Créer mon Espace Entreprise"
       }
     },
     "cta_section": {
-      "title": "Prêt à digitaliser votre comptabilité ?",
-      "subtitle": "Rejoignez TAYSIR COMPTA et automatisez vos tâches comptables dès aujourd'hui.",
-      "button_primary": "Créer mon compte",
-      "button_secondary": "Nous contacter"
+      "title": "Prêt à Révolutionner Votre Gestion Comptable ?",
+      "subtitle": "Rejoignez dès aujourd'hui la plateforme qui transforme la comptabilité en Algérie. Configuration en moins de 2 minutes.",
+      "button_primary": "Créer un Compte Gratuit",
+      "button_secondary": "Consulter nos Experts"
     }
   },
   "login": {
@@ -161,42 +202,63 @@
     "terms": "En créant un compte, vous acceptez nos conditions d'utilisation."
   },
   "about": {
+    "badge": "✨ NOTRE VISION & ENGAGEMENT",
     "hero": {
-      "title_1": "Repenser la comptabilité",
-      "title_2": "pour les PME algériennes",
-      "subtitle": "TAYSIR COMPTA est née d'une vision simple : éliminer la saisie manuelle et redonner aux experts-comptables leur véritable rôle de conseiller stratégique."
+      "title_1": "Bâtir le Futur de la Finance",
+      "title_2": "et de la Comptabilité en Algérie",
+      "subtitle": "TAYSIR COMPTA est née avec une mission claire : libérer les experts-comptables et les dirigeants d'entreprises des tâches répétitives pour leur permettre de se concentrer sur la croissance et la prise de décision stratégique."
     },
     "story": {
-      "title": "Notre Histoire",
-      "p1": "Face à la lenteur des processus comptables traditionnels et aux tas de factures papier, nous avons conçu une plateforme capable d'automatiser le traitement des données grâce à l'intelligence artificielle (OCR).",
-      "p2": "En tant que projet académique MVP, TAYSIR COMPTA vise à prouver qu'il est possible de créer un écosystème collaboratif et fluide entre le comptable et son client, tout en respectant strictement le Plan Comptable Général (PCG) algérien."
+      "title": "Notre Histoire & Raison d'Être",
+      "p1": "Face à la complexité des obligations déclaratives, à la lenteur de la saisie manuelle et aux montagnes de factures papier, nous avons développé une technologie adaptée aux réalités du marché algérien.",
+      "p2": "Alliant la puissance de l'Intelligence Artificielle (OCR haute précision) au respect scrupuleux du Système Comptable Financier (SCF) et des directives de la DGI, TAYSIR COMPTA crée un pont numérique sécurisé entre les entreprises et leurs experts-comptables."
     },
     "goal": {
-      "title": "Notre Objectif",
-      "subtitle": "Zéro papier, 100% de traçabilité et une réconciliation bancaire instantanée."
+      "title": "Notre Ambition",
+      "subtitle": "Zéro papier, 100% de traçabilité, conformité fiscale absolue et réconciliation bancaire instantanée."
     },
+    "stats": [
+      { "value": "100%", "label": "Adapté au Système Comptable Financier (SCF)" },
+      { "value": "1/10", "label": "Du temps habituel pour traiter un dossier comptable" },
+      { "value": "0", "label": "Perte de document grâce au coffre-fort cloud" },
+      { "value": "24/7", "label": "Accès sécurisé pour le cabinet et ses clients" }
+    ],
     "values": {
-      "title": "Nos valeurs",
-      "subtitle": "Les principes qui guident le développement de TAYSIR COMPTA au quotidien.",
+      "title": "Nos Valeurs Fondatrices",
+      "subtitle": "Les principes fondamentaux qui guident l'innovation technologique de TAYSIR COMPTA au quotidien.",
       "items": {
         "innovation": {
-          "title": "Innovation",
-          "desc": "L'utilisation de technologies modernes (OCR, Next.js) pour résoudre des problèmes concrets."
+          "title": "Innovation Utile & IA",
+          "desc": "Développer des outils d'intelligence artificielle concrets et performants qui résolvent les vraies douleurs de la comptabilité quotidienne."
         },
         "reliability": {
-          "title": "Fiabilité",
-          "desc": "Une architecture sécurisée et des calculs comptables précis, conformes aux normes."
+          "title": "Rigueur & Conformité SCF",
+          "desc": "Garantir une précision mathématique totale et une parfaite conformité avec la réglementation fiscale et comptable algérienne."
         },
         "collaboration": {
-          "title": "Collaboration",
-          "desc": "Une plateforme qui réunit tous les acteurs (clients, comptables) sur une interface commune."
+          "title": "Synergie & Proximité Humaine",
+          "desc": "Renforcer la relation de confiance entre le client et son expert-comptable grâce à une plateforme partagée, fluide et intuitive."
         }
       }
     },
+    "pillars": [
+      {
+        "title": "Souveraineté & Sécurité des Données",
+        "desc": "Vos pièces comptables et données financières sont cryptées de bout en bout et protégées selon les normes de cybersécurité les plus strictes."
+      },
+      {
+        "title": "Expérience Utilisateur d'Excellence",
+        "desc": "Une interface claire, rapide et pensée aussi bien pour les spécialistes du chiffre que pour les chefs d'entreprise."
+      },
+      {
+        "title": "Support Trilingue Dédié",
+        "desc": "Une plateforme nativement conçue en Français, Arabe et Anglais pour s'adapter à toutes les équipes de travail en Algérie."
+      }
+    ],
     "cta": {
-      "title": "Prêt à franchir le pas de la digitalisation ?",
-      "subtitle": "Rejoignez les PME et les comptables qui utilisent déjà TAYSIR COMPTA pour gagner un temps précieux chaque jour.",
-      "button": "Créer mon compte gratuit"
+      "title": "Rejoignez l'Ère de la Comptabilité Intelligente",
+      "subtitle": "Faites comme les cabinets et PME qui gagnent des heures précieuses chaque semaine grâce à TAYSIR COMPTA.",
+      "button": "Créer un Compte Gratuit"
     }
   },
   "contact": {

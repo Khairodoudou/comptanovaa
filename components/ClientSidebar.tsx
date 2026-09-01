@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
@@ -91,18 +92,20 @@ export function ClientSidebar({
       }`}
     >
       {/* Brand Header */}
-      <div className="flex items-center gap-3 px-5 py-5 border-b border-slate-800/80 bg-slate-900/40">
-        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#0d9488] via-[#0284c7] to-[#1e3a8a] flex items-center justify-center shadow-lg shadow-teal-950/30 shrink-0">
-          <span className="text-white font-black text-sm tracking-wider">TC</span>
-        </div>
-        <div className="min-w-0 flex-1">
-          <span className="text-white font-extrabold text-base tracking-tight block truncate">
-            TAYSIR <span className="text-transparent bg-clip-text bg-gradient-to-r from-teal-400 to-sky-400">COMPTA</span>
-          </span>
-          <p className="text-[10px] text-teal-400/80 font-medium -mt-0.5 truncate uppercase tracking-wide">
-            {companyName ?? (lang === "ar" ? "مساحة العميل" : "Espace Entreprise")}
-          </p>
-        </div>
+      <div className="flex flex-col items-center gap-1.5 px-5 py-4 border-b border-slate-800/80 bg-slate-900/40">
+        <Link href={`/${lang}/client/dashboard`} className="block">
+          <Image
+            src="/logo.png"
+            alt="TAYSIR COMPTA"
+            width={160}
+            height={48}
+            className="h-10 w-auto object-contain brightness-0 invert opacity-90 hover:opacity-100 transition-opacity"
+            priority
+          />
+        </Link>
+        <p className="text-[9px] text-teal-400/70 font-semibold tracking-widest uppercase truncate max-w-full px-2 text-center">
+          {companyName ?? (lang === "ar" ? "مساحة العميل" : "Espace Entreprise")}
+        </p>
       </div>
 
       {/* Navigation Sections */}

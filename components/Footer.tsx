@@ -1,16 +1,18 @@
 import Link from "next/link";
+import Image from "next/image";
 
 export default function Footer({ dict, lang }: { dict: any; lang: string }) {
   return (
     <footer className="border-t border-gray-100 py-10 px-4">
       <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#0f172a] via-[#1e3a8a] to-[#0d9488] flex items-center justify-center shadow-sm">
-            <span className="text-white font-bold text-xs">TC</span>
-          </div>
-          <span className="font-bold text-gray-900">
-            TAYSIR <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-teal-600">COMPTA</span>
-          </span>
+          <Image
+            src="/logo.png"
+            alt="TAYSIR COMPTA"
+            width={130}
+            height={40}
+            className="h-8 w-auto object-contain opacity-80 hover:opacity-100 transition-opacity"
+          />
         </div>
         <p className="text-sm text-gray-400">
           {dict.rights}

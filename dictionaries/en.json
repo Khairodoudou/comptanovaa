@@ -16,100 +16,141 @@
     "rights": "© 2026 TAYSIR COMPTA"
   },
   "home": {
+    "badge": "✨ The #1 Intelligent Accounting & Tax Compliance Platform in Algeria",
     "hero": {
-      "title_1": "The Digital",
-      "title_2": "Accountant",
-      "subtitle": "The first SaaS platform in Algeria that automates accounting entry via AI and connects SMEs in real-time to their accountant.",
-      "cta_primary": "Start for free",
-      "cta_secondary": "Client Area"
+      "title_1": "Accountant & Enterprise",
+      "title_2": "in Perfect Digital Harmony",
+      "subtitle": "Algeria's benchmark fintech SaaS platform that automates invoice data entry via AI (OCR), secures legal fiscal deadlines (G50, IBS, IFU), and simplifies bank reconciliation in real-time.",
+      "cta_primary": "Get Started Free",
+      "cta_secondary": "Sign In",
+      "trusted_by": "Trusted by over 500+ enterprises and certified accounting firms across Algeria"
     },
-    "stats": [
-      { "value": "90%", "label": "Reduction in manual entry" },
-      { "value": "2 roles", "label": "Accountant & SME Client" },
-      { "value": "3 languages", "label": "English, Arabic, French" }
+    "trust_badges": [
+      { "label": "Compliant with Algerian SCF & DGI" },
+      { "label": "High-Accuracy AI OCR Extraction" },
+      { "label": "Cloud Bank-Grade Security & Encryption" },
+      { "label": "Automated Reconciliation & Audit Trail" }
     ],
+    "stats": [
+      { "value": "85%", "label": "Manual data entry time saved" },
+      { "value": "< 3s", "label": "To scan and assign accounting entries" },
+      { "value": "100%", "label": "Compliant with Algerian tax standards" },
+      { "value": "24/7", "label": "Real-time sync and audit traceability" }
+    ],
+    "deep_features": {
+      "ocr": {
+        "tag": "APPLIED ARTIFICIAL INTELLIGENCE",
+        "title": "Instant AI-Powered OCR Scanning & Journaling",
+        "desc": "Drag and drop your invoices and receipts in PDF or image format. Our AI engine automatically recognizes the vendor, tax ID (NIF/NIS), net amount, VAT rates, and balances debit/credit accounts (607, 4456, 401) under Algerian SCF regulations.",
+        "bullets": [
+          "Instant optical extraction without tedious manual typing",
+          "Smart detection of Algerian Dinar (DA) amounts and VAT brackets",
+          "Automated draft journal entries ready for accountant sign-off"
+        ]
+      },
+      "fiscal": {
+        "tag": "ALGERIAN TAX COMPLIANCE & DGI",
+        "title": "Automated Algerian Tax Calendar & Declarations",
+        "desc": "Eliminate the fear of late tax penalties. TAYSIR COMPTA automatically tracks and schedules all your statutory deadlines: monthly G50 (VAT & salary IRG), the 3 IBS installments, annual G4 tax packages, and IFU G12 / G12 Bis declarations.",
+        "bullets": [
+          "Full support for both RÉEL and FORFAITAIRE (IFU) tax regimes",
+          "Proactive notifications and real-time status tracking",
+          "Seamless synchronization between the business and its accounting firm"
+        ]
+      },
+      "bank": {
+        "tag": "FINANCIAL COLLABORATION & BANKING",
+        "title": "Smart Bank Reconciliation & Certified Audit",
+        "desc": "Import bank statements in CSV format and enjoy high-precision automated matching between your cash flow and ledger entries. Every validation step is immutably timestamped for effortless audits.",
+        "bullets": [
+          "Automated matching for incoming and outgoing payments",
+          "Compliant, exportable general ledger and balance sheets",
+          "Paperless, secure digital document vault"
+        ]
+      }
+    },
     "features_section": {
-      "title": "Everything you need",
-      "subtitle": "A complete platform to digitalize your accounting firm or your SME.",
+      "title": "A Complete Suite for Your Financial Operations",
+      "subtitle": "All the essential tools to modernize your accounting firm or scale your business.",
       "items": [
         {
-          "title": "Document Centralization",
-          "description": "Upload your invoices, delivery notes, and bank statements in one place. No more scattered documents."
+          "title": "Smart Document Centralization",
+          "description": "Store, organize, and instantly retrieve all your purchase invoices, sales bills, and bank statements in a secure cloud vault."
         },
         {
-          "title": "Automatic OCR Extraction",
-          "description": "Our system automatically reads your documents and extracts the date, amount, supplier, and type."
+          "title": "Automated AI OCR Extraction",
+          "description": "Advanced optical recognition of numbers, dates, legal IDs, and Algerian VAT in seconds."
         },
         {
-          "title": "Automatic Accounting Entries",
-          "description": "Based on the extracted data, TAYSIR COMPTA generates accounting entries according to the Algerian PCG rules."
+          "title": "SCF & PCG Entry Generation",
+          "description": "Automatic draft generation of debit/credit entries in strict compliance with Algerian financial standards."
         },
         {
-          "title": "Validation by Accountant",
-          "description": "The accountant checks, modifies, and validates each proposed entry before it is definitively recorded."
+          "title": "1-Click Expert Validation",
+          "description": "Accountants review, adjust, and approve entries in one click with certified history logs."
         },
         {
-          "title": "Bank Reconciliation",
-          "description": "Import your CSV statement and let the algorithm automatically match your transactions with your entries."
+          "title": "Automated Bank Reconciliation",
+          "description": "Import CSV statements and reconcile bank transactions with invoices automatically."
         },
         {
-          "title": "Real-time Notifications",
-          "description": "Stay informed at every step: new document received, entry validated, reconciliation completed."
+          "title": "Algerian Tax Deadline Calendar",
+          "description": "Automated tracking of G50, IBS, IFU, and G4 deadlines with smart alerts to avoid late fees."
         }
       ]
     },
     "how_section": {
-      "title": "How does it work?",
-      "subtitle": "A simple and efficient workflow between the client and their accountant.",
+      "title": "How Does TAYSIR COMPTA Work?",
+      "subtitle": "A smooth, transparent, and collaborative 4-step workflow.",
       "items": [
         {
-          "title": "The client uploads documents",
-          "description": "PDF invoices, check images, delivery notes — everything is centralized in the client area."
+          "title": "1. Upload Documents",
+          "description": "The client uploads invoices or receipts via web or mobile in PDF or photo format."
         },
         {
-          "title": "OCR extracts the data",
-          "description": "The system automatically reads each document and proposes a corresponding accounting entry."
+          "title": "2. AI Analysis & Extraction",
+          "description": "OCR scans the document, extracts key data, and drafts the matching accounting entry."
         },
         {
-          "title": "The accountant validates",
-          "description": "The accountant verifies the proposed entries, modifies them if necessary, then validates them in one click."
+          "title": "3. Accountant Verification",
+          "description": "The certified accountant verifies the entry, approves it, and feeds the general journal."
         },
         {
-          "title": "Journal and reconciliation",
-          "description": "Validated entries feed the journal. The bank statement is reconciled automatically."
+          "title": "4. Reconciliation & Tax Ready",
+          "description": "Bank statements are reconciled, and tax filing packages are ready on time without stress."
         }
       ]
     },
     "roles_section": {
-      "title": "Two roles, one platform",
+      "title": "A Solution Tailored for Every Stakeholder",
       "accountant": {
-        "title": "Accountant",
-        "subtitle": "Manage multiple clients from a unified dashboard.",
+        "title": "Certified Accounting Firm",
+        "subtitle": "Supercharge your productivity and manage all your client files from one unified dashboard.",
         "list": [
-          "Validate or reject proposed entries",
-          "Multi-client consolidated journal",
-          "Configure accounting rules",
-          "Real-time notifications"
+          "Rapid validation of AI-proposed accounting entries",
+          "Interactive multi-client general ledger, journal, and trial balance",
+          "Automated tax tracking and G50 / IBS alerts for all clients",
+          "Full traceability with immutable audit trail logs"
         ],
-        "link": "Create an accountant account"
+        "link": "Join as a Certified Accountant"
       },
       "client": {
-        "title": "Client / SME",
-        "subtitle": "Manage your documents and track your accounting simply.",
+        "title": "Enterprise & SME Executive",
+        "subtitle": "Gain crystal-clear visibility into your finances and collaborate seamlessly with your accountant.",
         "list": [
-          "Upload invoices and bank statements",
-          "Track the status of documents",
-          "Consult the validated journal",
-          "Automatic bank reconciliation"
+          "Ultra-fast document and invoice uploads",
+          "Real-time status updates on document processing",
+          "Clear fiscal calendar to anticipate tax payments",
+          "Bank reconciliation and customer/supplier payment tracking"
         ],
-        "link": "Create a client account"
+        "link": "Create My Business Account"
       }
     },
     "cta_section": {
-      "title": "Ready to digitalize your accounting?",
-      "subtitle": "Join TAYSIR COMPTA and automate your accounting tasks today.",
-      "button_primary": "Create my account",
-      "button_secondary": "Contact us"
+      "title": "Ready to Transform Your Accounting Management?",
+      "subtitle": "Join the platform that is redefining accounting in Algeria today. Setup in under 2 minutes.",
+      "button_primary": "Create a Free Account",
+      "button_secondary": "Talk to Our Experts"
     }
   },
   "login": {
@@ -161,42 +202,63 @@
     "terms": "By creating an account, you accept our terms of service."
   },
   "about": {
+    "badge": "✨ OUR VISION & COMMITMENT",
     "hero": {
-      "title_1": "Rethinking accounting",
-      "title_2": "for Algerian SMEs",
-      "subtitle": "TAYSIR COMPTA was born from a simple vision: eliminate manual data entry and restore accountants to their true role as strategic advisors."
+      "title_1": "Building the Future of Finance",
+      "title_2": "and Accounting in Algeria",
+      "subtitle": "TAYSIR COMPTA was founded with a clear mission: free certified accountants and business executives from repetitive manual tasks so they can focus on strategic growth and value creation."
     },
     "story": {
-      "title": "Our Story",
-      "p1": "Faced with slow traditional accounting processes and piles of paper invoices, we designed a platform capable of automating data processing using artificial intelligence (OCR).",
-      "p2": "As an academic MVP project, TAYSIR COMPTA aims to prove that it is possible to create a smooth, collaborative ecosystem between the accountant and their client, while strictly adhering to the Algerian General Accounting Plan (PCG)."
+      "title": "Our Story & Purpose",
+      "p1": "Challenged by the complexity of tax compliance, the slowness of manual entry, and endless stacks of paper documents, we built a fintech platform tailored to the realities of the Algerian market.",
+      "p2": "Combining the power of artificial intelligence (high-accuracy OCR) with strict compliance to the Algerian Financial Accounting System (SCF) and DGI directives, TAYSIR COMPTA bridges the digital gap between enterprises and their accounting partners."
     },
     "goal": {
-      "title": "Our Goal",
-      "subtitle": "Zero paper, 100% traceability, and instant bank reconciliation."
+      "title": "Our Ambition",
+      "subtitle": "Zero paper, 100% audit traceability, flawless tax compliance, and instantaneous bank reconciliation."
     },
+    "stats": [
+      { "value": "100%", "label": "Aligned with the Algerian Financial Accounting System (SCF)" },
+      { "value": "1/10", "label": "Of usual time spent processing accounting records" },
+      { "value": "0", "label": "Lost documents thanks to the secure cloud vault" },
+      { "value": "24/7", "label": "Secure access for both the firm and its clients" }
+    ],
     "values": {
-      "title": "Our values",
-      "subtitle": "The principles that guide the daily development of TAYSIR COMPTA.",
+      "title": "Our Core Values",
+      "subtitle": "The foundational principles driving TAYSIR COMPTA's technological innovation every day.",
       "items": {
         "innovation": {
-          "title": "Innovation",
-          "desc": "Using modern technologies (OCR, Next.js) to solve concrete problems."
+          "title": "Practical Innovation & AI",
+          "desc": "Developing actionable, high-performance artificial intelligence tools that solve real-world daily accounting challenges."
         },
         "reliability": {
-          "title": "Reliability",
-          "desc": "A secure architecture and precise accounting calculations, compliant with standards."
+          "title": "Rigor & SCF Compliance",
+          "desc": "Ensuring total mathematical accuracy and strict alignment with Algerian tax laws and accounting standards."
         },
         "collaboration": {
-          "title": "Collaboration",
-          "desc": "A platform that brings all actors (clients, accountants) together on a common interface."
+          "title": "Synergy & Human Trust",
+          "desc": "Strengthening trust between businesses and their accountants through a shared, intuitive, and fluid platform."
         }
       }
     },
+    "pillars": [
+      {
+        "title": "Data Sovereignty & Enterprise Security",
+        "desc": "Your accounting records and financial data are end-to-end encrypted and safeguarded under top-tier cybersecurity standards."
+      },
+      {
+        "title": "World-Class User Experience",
+        "desc": "A fast, clean, and intuitive interface designed equally for accounting experts and business executives."
+      },
+      {
+        "title": "Native Trilingual Support",
+        "desc": "Built from the ground up in French, Arabic, and English to suit all business teams across Algeria."
+      }
+    ],
     "cta": {
-      "title": "Ready to take the step towards digitalization?",
-      "subtitle": "Join the SMEs and accountants who already use TAYSIR COMPTA to save precious time every day.",
-      "button": "Create my free account"
+      "title": "Join the Era of Intelligent Accounting",
+      "subtitle": "Join the firms and SMEs saving hours every week with TAYSIR COMPTA.",
+      "button": "Create a Free Account"
     }
   },
   "contact": {

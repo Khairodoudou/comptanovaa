@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter, useParams } from "next/navigation";
-import { Eye, EyeOff, ArrowRight, BookOpen } from "lucide-react";
+import { Eye, EyeOff, ArrowRight } from "lucide-react";
 import { useDictionary } from "@/components/DictionaryProvider";
 
 type Role = "COMPTABLE" | "CLIENT";
@@ -51,10 +52,17 @@ export default function LoginPage() {
   return (
       <div className="flex-1 flex pt-16">
         {/* Left panel */}
-        <div className="hidden lg:flex w-1/2 bg-gradient-to-br from-blue-600 to-blue-800 flex-col justify-center p-12">
+        <div className="hidden lg:flex w-1/2 bg-gradient-to-br from-[#0b132b] via-[#1e3a8a] to-[#0d9488] flex-col justify-center p-12">
           <div className="max-w-md mx-auto">
-          <div className="w-14 h-14 rounded-2xl bg-white/10 flex items-center justify-center mb-6">
-            <BookOpen size={28} className="text-white" />
+          <div className="mb-8">
+            <Image
+              src="/logo.png"
+              alt="TAYSIR COMPTA"
+              width={220}
+              height={66}
+              className="h-16 w-auto object-contain brightness-0 invert"
+              priority
+            />
           </div>
           <h2 className="text-3xl font-bold text-white mb-4 leading-tight">
             {dict.login.welcome}
@@ -79,9 +87,17 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* Right panel */}
         <div className="flex-1 flex items-center justify-center px-6 py-12">
           <div className="w-full max-w-md">
+            <div className="flex justify-center mb-6 lg:hidden">
+              <Image
+                src="/logo.png"
+                alt="TAYSIR COMPTA"
+                width={160}
+                height={48}
+                className="h-12 w-auto object-contain"
+              />
+            </div>
             <h1 className="text-2xl font-bold text-gray-900 mb-1">
             {dict.login.title}
           </h1>

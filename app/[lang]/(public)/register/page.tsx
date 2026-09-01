@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter, useParams } from "next/navigation";
 import {
   Eye,
@@ -143,18 +144,20 @@ export default function RegisterPage() {
 
         {/* Brand logo & tagline */}
         <div className="relative z-10">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-teal-400 flex items-center justify-center shadow-xl">
-              <span className="text-white font-black text-xl">TC</span>
-            </div>
-            <div>
-              <span className="text-2xl font-black tracking-tight block text-white">
-                TAYSIR <span className="text-teal-400">COMPTA</span>
-              </span>
-              <p className="text-xs text-slate-300 font-medium">
-                {lang === "ar" ? "محاسبة أسهل، عمل أفضل" : "comptabilité simplifiée, travail optimisé."}
-              </p>
-            </div>
+          <div className="mb-6">
+            <Link href={`/${lang}`} className="inline-block">
+              <Image
+                src="/logo.png"
+                alt="TAYSIR COMPTA"
+                width={200}
+                height={60}
+                className="h-14 w-auto object-contain brightness-0 invert"
+                priority
+              />
+            </Link>
+            <p className="text-xs text-slate-300 font-medium mt-2">
+              {lang === "ar" ? "محاسبة أسهل، عمل أفضل" : "comptabilité simplifiée, travail optimisé."}
+            </p>
           </div>
 
           <h2 className="text-3xl font-extrabold leading-tight mb-4 text-white">
@@ -214,6 +217,15 @@ export default function RegisterPage() {
       {/* Right side form */}
       <div className="flex-1 flex items-center justify-center px-4 sm:px-8 py-10">
         <div className="w-full max-w-xl bg-white p-6 sm:p-10 rounded-2xl shadow-sm border border-slate-200/80">
+          <div className="flex justify-center mb-6 lg:hidden">
+            <Image
+              src="/logo.png"
+              alt="TAYSIR COMPTA"
+              width={160}
+              height={48}
+              className="h-10 w-auto object-contain"
+            />
+          </div>
           <div className="mb-6">
             <h1 className="text-2xl font-bold text-slate-900">
               {lang === "ar" ? "إنشاء حساب جديد" : "Créer un compte"}
