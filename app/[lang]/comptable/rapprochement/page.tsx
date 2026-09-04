@@ -91,8 +91,16 @@ export default async function RapprochementPage({
         where: {
           status: "VALIDATED",
           date: { gte: startOfMonth, lt: endOfMonth },
-          OR: [{ debitAccount: "512" }, { creditAccount: "512" }],
-          document: { companyId: selectedCompanyId },
+          OR: [
+            {
+              OR: [{ debitAccount: "512" }, { creditAccount: "512" }],
+              document: { companyId: selectedCompanyId },
+            },
+            {
+              OR: [{ debitAccount: "512" }, { creditAccount: "512" }],
+              companyId: selectedCompanyId,
+            },
+          ],
         },
         orderBy: { date: "asc" },
         select: {
@@ -145,13 +153,11 @@ export default async function RapprochementPage({
     }
 
     try {
-      if ("bankStatementImport" in db && typeof (db as any).bankStatementImport?.findMany === "function") {
-        importHistory = await (db as any).bankStatementImport.findMany({
-          where: { companyId: selectedCompanyId },
-          orderBy: { importedAt: "desc" },
-          take: 10,
-        });
-      }
+      importHistory = await db.bankStatementImport.findMany({
+        where: { companyId: selectedCompanyId },
+        orderBy: { importedAt: "desc" },
+        take: 10,
+      });
     } catch (e) {
       console.error("importHistory error:", e);
     }
