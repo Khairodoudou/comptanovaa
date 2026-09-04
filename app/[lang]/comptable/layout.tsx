@@ -27,7 +27,7 @@ export default async function ComptableLayout({
   const dir = lang === "ar" ? "rtl" : "ltr";
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] flex" dir={dir}>
+    <div className="min-h-screen bg-[#f8fafc] flex flex-col lg:flex-row w-full overflow-x-hidden" dir={dir}>
       <ComptableSidebar
         lang={lang}
         dir={dir}
@@ -36,8 +36,8 @@ export default async function ComptableLayout({
         t={dict.dashboard.sidebar}
       />
       <main
-        className={`flex-1 min-h-screen ${
-          dir === "rtl" ? "mr-64" : "ml-64"
+        className={`flex-1 min-w-0 max-w-full min-h-screen overflow-x-hidden w-full ${
+          dir === "rtl" ? "mr-0 lg:mr-64" : "ml-0 lg:ml-64"
         }`}
       >
         {children}

@@ -634,36 +634,31 @@ export function RapprochementClient({
   // ─── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div style={{ fontFamily: "'Inter', sans-serif", color: "#0f172a" }}>
+    <div className="w-full min-w-0 max-w-full" style={{ fontFamily: "'Inter', sans-serif", color: "#0f172a" }}>
       {/* ── TOP HEADER ── */}
-      <div style={{
-        background: "linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 50%, #2563eb 100%)",
-        borderRadius: "16px",
-        padding: "24px 28px",
-        marginBottom: "24px",
-        color: "#fff",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        gap: "16px",
-        flexWrap: "wrap",
-      }}>
+      <div
+        className="rounded-2xl p-4 sm:p-6 mb-6 text-white flex flex-col md:flex-row items-start md:items-center justify-between gap-4"
+        style={{
+          background: "linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 50%, #2563eb 100%)",
+        }}
+      >
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "4px" }}>
-            <ArrowRightLeft size={22} />
-            <h1 style={{ fontSize: "20px", fontWeight: 700, margin: 0 }}>Rapprochement Bancaire</h1>
+            <ArrowRightLeft size={22} className="shrink-0" />
+            <h1 className="text-lg sm:text-xl font-bold m-0">Rapprochement Bancaire</h1>
           </div>
-          <p style={{ fontSize: "13px", opacity: 0.8, margin: 0 }}>
+          <p className="text-xs sm:text-sm opacity-80 m-0">
             Compte 512 — Comparaison comptabilité ↔ relevé bancaire
           </p>
         </div>
-        <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
+        <div className="flex flex-wrap gap-2.5 items-center w-full md:w-auto">
           {/* Company selector */}
           <select
             value={selectedCompanyId}
             onChange={(e) =>
               router.push(`/${lang}/comptable/rapprochement?companyId=${e.target.value}&month=${selectedMonth}&year=${selectedYear}`)
             }
+            className="flex-1 md:flex-initial"
             style={{
               background: "rgba(255,255,255,0.15)",
               border: "1px solid rgba(255,255,255,0.3)",
@@ -673,6 +668,7 @@ export function RapprochementClient({
               fontSize: "13px",
               cursor: "pointer",
               backdropFilter: "blur(8px)",
+              maxWidth: "260px",
             }}
           >
             {companies.map((c) => (
@@ -705,21 +701,9 @@ export function RapprochementClient({
         </div>
       </div>
 
-      {/* ── BARRE DE NAVIGATION RAPIDE (4 SECTIONS) ── */}
-      <div style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        gap: "12px",
-        background: "#fff",
-        border: "1px solid #e2e8f0",
-        borderRadius: "14px",
-        padding: "12px 18px",
-        marginBottom: "28px",
-        boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
-        flexWrap: "wrap",
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+      {/* ── BARRE DE NAVIGATION RAPIDE (5 SECTIONS) ── */}
+      <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3 bg-white border border-slate-200 rounded-2xl p-3 sm:p-4 mb-7 shadow-sm">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
           <span style={{
             background: "linear-gradient(135deg, #1d4ed8, #2563eb)",
             color: "#fff",
@@ -731,11 +715,11 @@ export function RapprochementClient({
           }}>
             5 SECTIONS PRINCIPALES
           </span>
-          <span style={{ fontSize: "13px", color: "#64748b", fontWeight: 500 }}>
+          <span className="text-xs sm:text-sm text-slate-500 font-medium">
             Toutes les sections sont regroupées ci-dessous sur cette même page :
           </span>
         </div>
-        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+        <div className="flex flex-wrap gap-2 w-full lg:w-auto">
           {[
             { id: "section-situation", label: "1. Situation 512", icon: <FileText size={13} />, count: journalEntries512.length },
             { id: "section-import", label: "2. Import Relevé", icon: <Upload size={13} />, count: importHistory.length },
@@ -799,12 +783,7 @@ export function RapprochementClient({
       ══════════════════════════════════════════════ */}
       <section id="section-situation" style={{ marginBottom: "36px", scrollMarginTop: "20px" }}>
         {/* Section Header */}
-        <div style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          marginBottom: "16px",
-        }}>
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
             <div style={{
               width: "32px", height: "32px", borderRadius: "8px",
@@ -836,7 +815,7 @@ export function RapprochementClient({
         </div>
 
         {/* ── STAT CARDS ── */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "14px", marginBottom: "16px" }}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3.5 mb-4">
           {[
             {
               label: "Solde Initial",
@@ -938,7 +917,7 @@ export function RapprochementClient({
             </div>
           ) : (
             <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+              <table style={{ width: "100%", minWidth: "680px", borderCollapse: "collapse", fontSize: "13px" }}>
                 <thead>
                   <tr style={{ background: "#f8fafc" }}>
                     {["Date", "N° Pièce / Réf.", "Libellé", "Débit", "Crédit", "Solde", "Statut"].map((h) => (
@@ -1176,7 +1155,7 @@ export function RapprochementClient({
                   Import réussi — {importResult.total} opérations importées
                 </span>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px" }}>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {[
                   { label: "Rapprochées auto.", value: importResult.matched, color: "#16a34a" },
                   { label: "Non rapprochées", value: importResult.unmatched, color: "#d97706" },
@@ -1223,7 +1202,7 @@ export function RapprochementClient({
                 </h3>
               </div>
               <div style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+                <table style={{ width: "100%", minWidth: "540px", borderCollapse: "collapse", fontSize: "13px" }}>
                   <thead>
                     <tr style={{ background: "#f8fafc" }}>
                       {["Fichier", "Format", "Lignes", "Rapprochées", "Date d'import"].map((h) => (
@@ -1261,7 +1240,7 @@ export function RapprochementClient({
       </section>
 
       {/* ══════════════════════════════════════════════
-          SECTION 3 — Tableau de Rapprochement
+          SECTION 3 — Tableau de Rapprochement (Comparaison)
       ══════════════════════════════════════════════ */}
       <section id="section-rapprochement" style={{ marginBottom: "36px", scrollMarginTop: "20px" }}>
         {/* Section Header */}
@@ -1315,11 +1294,7 @@ export function RapprochementClient({
         <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
           {/* Summary Dashboard */}
           {comparisonSummary && (
-            <div style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(4, 1fr)",
-              gap: "12px",
-            }}>
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
               {[
                 {
                   label: "Rapprochées",
@@ -1377,7 +1352,7 @@ export function RapprochementClient({
           )}
 
           {/* Filter Bar */}
-          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+          <div className="flex flex-wrap gap-2 items-center">
             <Filter size={14} color="#64748b" />
             {(["ALL", "MATCHED", "ACCOUNTING_ONLY", "BANK_ONLY"] as const).map((f) => {
               const labels: Record<string, string> = {
@@ -1431,13 +1406,15 @@ export function RapprochementClient({
               </p>
             </div>
           ) : (
-            <div style={{
-              background: "#fff",
-              borderRadius: "14px",
-              border: "1px solid #e2e8f0",
-              overflowX: "auto",
-              boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
-            }}>
+            <div
+              className="w-full max-w-full overflow-x-auto"
+              style={{
+                background: "#fff",
+                borderRadius: "14px",
+                border: "1px solid #e2e8f0",
+                boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
+              }}
+            >
               <div style={{ minWidth: "1060px" }}>
                 {/* Table header */}
                 <div style={{
@@ -1778,7 +1755,7 @@ export function RapprochementClient({
           </div>
 
           {/* Sub-tabs */}
-          <div style={{ display: "flex", gap: "6px", background: "#f1f5f9", padding: "4px", borderRadius: "10px" }}>
+          <div className="flex flex-wrap gap-1.5 bg-slate-100 p-1 rounded-xl">
             {[
               { id: "ALL", label: `Tous (${totalChequesCount})` },
               { id: "EMIS", label: `📤 Chèques émis (${chequesEmis.length})` },
@@ -1848,7 +1825,7 @@ export function RapprochementClient({
                 </div>
               ) : (
                 <div style={{ overflowX: "auto" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+                  <table style={{ width: "100%", minWidth: "680px", borderCollapse: "collapse", fontSize: "13px" }}>
                     <thead>
                       <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
                         {["N° Chèque", "Date", "Bénéficiaire", "Montant", "Écriture comptable correspondante", "Statut"].map((h, i) => (
@@ -1960,7 +1937,7 @@ export function RapprochementClient({
                 </div>
               ) : (
                 <div style={{ overflowX: "auto" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+                  <table style={{ width: "100%", minWidth: "680px", borderCollapse: "collapse", fontSize: "13px" }}>
                     <thead>
                       <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
                         {["N° Chèque", "Date", "Émetteur", "Montant", "Écriture correspondante", "Statut"].map((h, i) => (
@@ -2037,7 +2014,7 @@ export function RapprochementClient({
           SECTION 5 — Résumé Final du Rapprochement
       ══════════════════════════════════════════════ */}
       <section id="section-resume" style={{ marginBottom: "36px", scrollMarginTop: "20px" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
             <div style={{
               width: "32px", height: "32px", borderRadius: "8px",
@@ -2070,7 +2047,7 @@ export function RapprochementClient({
 
         <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
           {/* Operations summary */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "14px" }}>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
             {[
               {
                 emoji: "🟢",
@@ -2123,7 +2100,7 @@ export function RapprochementClient({
               <h3 style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a", margin: "0 0 18px" }}>
                 Comparaison des Soldes
               </h3>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "16px", marginBottom: "20px" }}>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5">
                 {[
                   {
                     label: "Solde Comptable (Compte 512)",
@@ -2352,14 +2329,16 @@ export function RapprochementClient({
           background: "rgba(15,23,42,0.5)",
           backdropFilter: "blur(4px)",
           display: "flex", alignItems: "center", justifyContent: "center",
-          padding: "20px",
+          padding: "16px",
         }}>
           <div style={{
             background: "#fff",
             borderRadius: "16px",
-            padding: "28px",
+            padding: "24px",
             width: "100%",
             maxWidth: "520px",
+            maxHeight: "90vh",
+            overflowY: "auto",
             boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
           }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px" }}>
@@ -2467,14 +2446,16 @@ export function RapprochementClient({
           background: "rgba(15,23,42,0.5)",
           backdropFilter: "blur(4px)",
           display: "flex", alignItems: "center", justifyContent: "center",
-          padding: "20px",
+          padding: "16px",
         }}>
           <div style={{
             background: "#fff",
             borderRadius: "16px",
-            padding: "28px",
+            padding: "24px",
             width: "100%",
             maxWidth: "540px",
+            maxHeight: "90vh",
+            overflowY: "auto",
             boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
           }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px" }}>
@@ -2626,7 +2607,7 @@ export function RapprochementClient({
           background: "rgba(15,23,42,0.5)",
           backdropFilter: "blur(4px)",
           display: "flex", alignItems: "center", justifyContent: "center",
-          padding: "20px",
+          padding: "16px",
         }}>
           <div style={{
             background: "#fff",

@@ -194,10 +194,10 @@ export default async function RapprochementPage({
   const selectedCompany = companies.find((c) => c.id === selectedCompanyId) || null;
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-6">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6 w-full min-w-0">
       <div>
-        <h1 className="text-2xl font-bold text-[#0f172a] tracking-tight">{t.title || "Rapprochement Bancaire"}</h1>
-        <p className="text-sm text-[#64748b] mt-1">{t.subtitle || "Gestion et rapprochement bancaire"}</p>
+        <h1 className="text-xl sm:text-2xl font-bold text-[#0f172a] tracking-tight">{t.title || "Rapprochement Bancaire"}</h1>
+        <p className="text-xs sm:text-sm text-[#64748b] mt-1">{t.subtitle || "Gestion et rapprochement bancaire"}</p>
       </div>
 
       <RapprochementClient

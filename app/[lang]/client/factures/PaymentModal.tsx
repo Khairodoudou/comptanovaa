@@ -69,12 +69,12 @@ export function PaymentModal({ invoice, locale, onClose, onSuccess }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-y-auto">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl overflow-hidden my-8 animate-in fade-in zoom-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[90vh] flex flex-col overflow-hidden my-auto animate-in fade-in zoom-in duration-200">
         {/* Header */}
-        <div className="px-6 py-5 bg-[#0f172a] text-white flex items-center justify-between">
+        <div className="px-5 sm:px-6 py-4 sm:py-5 bg-[#0f172a] text-white flex items-center justify-between shrink-0">
           <div>
-            <h2 className="text-lg font-bold">Règlement Facture</h2>
+            <h2 className="text-base sm:text-lg font-bold">Règlement Facture</h2>
             <p className="text-xs text-slate-300 mt-0.5">
               {invoice.invoiceNumber ? `N° ${invoice.invoiceNumber}` : `Réf: ${invoice.id}`}
             </p>
@@ -88,7 +88,7 @@ export function PaymentModal({ invoice, locale, onClose, onSuccess }: Props) {
         </div>
 
         {submitted ? (
-          <div className="p-8 text-center space-y-4">
+          <div className="p-6 sm:p-8 text-center space-y-4 overflow-y-auto">
             <div className="w-16 h-16 rounded-full bg-green-50 text-[#2d8f5e] flex items-center justify-center mx-auto border border-green-200">
               <CheckCircle2 size={36} />
             </div>
@@ -110,7 +110,7 @@ export function PaymentModal({ invoice, locale, onClose, onSuccess }: Props) {
             </button>
           </div>
         ) : (
-          <div className="p-6 space-y-6">
+          <div className="p-4 sm:p-6 space-y-5 sm:space-y-6 overflow-y-auto">
             {/* Bank details card */}
             <div className="bg-[#f8fafc] border border-slate-200/80 rounded-xl p-4 space-y-3">
               <div className="flex items-center gap-2 text-xs font-semibold text-[#1a6fbf] uppercase tracking-wide">

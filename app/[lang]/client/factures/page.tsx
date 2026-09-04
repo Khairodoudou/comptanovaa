@@ -112,21 +112,21 @@ export default function ClientInvoicesPage() {
   }
 
   return (
-    <div className="p-8 max-w-6xl mx-auto space-y-8">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto space-y-6 sm:space-y-8 w-full min-w-0">
       {/* Page Header */}
       <div>
-        <h1 className="text-2xl font-bold text-[#0f172a] tracking-tight flex items-center gap-2">
-          <Receipt size={24} className="text-[#2d8f5e]" />
+        <h1 className="text-xl sm:text-2xl font-bold text-[#0f172a] tracking-tight flex items-center gap-2">
+          <Receipt size={24} className="text-[#2d8f5e] shrink-0" />
           Mes Factures & Réglements
         </h1>
-        <p className="text-sm text-[#64748b] mt-1">
+        <p className="text-xs sm:text-sm text-[#64748b] mt-1">
           Consultez vos factures et déclarez vos paiements par virement bancaire. Tout règlement sera validé après rapprochement bancaire.
         </p>
       </div>
 
       {/* Main List */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden w-full">
+        <div className="px-4 sm:px-6 py-4 border-b border-slate-100 flex items-center justify-between">
           <h2 className="font-semibold text-[#0f172a] text-sm">
             Factures ({invoices.length})
           </h2>
@@ -142,8 +142,8 @@ export default function ClientInvoicesPage() {
             <p>Aucune facture enregistrée pour le moment.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+          <div className="overflow-x-auto w-full">
+            <table className="w-full text-sm min-w-[720px]">
               <thead>
                 <tr className="border-b border-slate-100 bg-[#f8fafc] text-xs text-slate-500 font-semibold uppercase tracking-wider">
                   <th className="px-6 py-3.5 text-left">N° / Description</th>

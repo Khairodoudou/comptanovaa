@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
@@ -15,6 +16,8 @@ import {
   LogOut,
   ChevronRight,
   ChevronLeft,
+  Menu,
+  X,
 } from "lucide-react";
 
 interface SidebarT {
@@ -49,6 +52,7 @@ export function ClientSidebar({
   const pathname = usePathname();
   const router = useRouter();
   const isRtl = dir === "rtl";
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   const SECTIONS = [
     {
@@ -86,27 +90,85 @@ export function ClientSidebar({
   const Chevron = isRtl ? ChevronLeft : ChevronRight;
 
   return (
-    <aside
-      className={`fixed inset-y-0 z-40 w-64 bg-[#0b132b] flex flex-col shadow-2xl ${
-        isRtl ? "right-0 border-l border-slate-800" : "left-0 border-r border-slate-800"
-      }`}
-    >
-      {/* Brand Header */}
-      <div className="flex flex-col items-center gap-2 px-4 py-4 border-b border-slate-800/80 bg-slate-900/60">
-        <Link href={`/${lang}/client/dashboard`} className="block bg-white px-3 py-1.5 rounded-xl shadow-md border border-white/80 hover:scale-105 transition-transform">
-          <Image
-            src="/logo.png"
-            alt="TAYSIR COMPTA"
-            width={140}
-            height={42}
-            className="h-8 w-auto object-contain"
-            priority
-          />
-        </Link>
-        <p className="text-[9px] text-teal-400/80 font-bold tracking-widest uppercase truncate max-w-full px-2 text-center">
-          {companyName ?? (lang === "ar" ? "مساحة العميل" : "Espace Entreprise")}
-        </p>
+    <>
+      {/* Mobile Top Header Bar */}
+      <div className="lg:hidden sticky top-0 z-30 flex items-center justify-between px-4 py-3 bg-[#0b132b] text-white border-b border-slate-800 shadow-sm w-full">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setMobileOpen(true)}
+            className="p-2 rounded-lg bg-slate-800/80 text-slate-300 hover:text-white hover:bg-slate-700 transition-colors"
+            aria-label="Open navigation menu"
+          >
+            <Menu size={20} />
+          </button>
+          <Link href={`/${lang}/client/dashboard`} className="bg-white px-2.5 py-1 rounded-lg">
+            <Image
+              src="/logo.png"
+              alt="TAYSIR COMPTA"
+              width={90}
+              height={26}
+              className="h-5 w-auto object-contain"
+              priority
+            />
+          </Link>
+        </div>
+        <div className="flex items-center gap-2">
+          {notifCount > 0 && (
+            <Link href={`/${lang}/client/notifications`} className="relative p-1.5 text-slate-300 hover:text-white">
+              <Bell size={18} />
+              <span className="absolute top-1 right-1 w-2 h-2 bg-rose-500 rounded-full animate-pulse" />
+            </Link>
+          )}
+          <div className="w-7 h-7 rounded-full bg-gradient-to-br from-teal-500 to-blue-600 flex items-center justify-center text-white text-[11px] font-black">
+            {user.name.charAt(0).toUpperCase()}
+          </div>
+        </div>
       </div>
+
+      {/* Mobile Backdrop Overlay */}
+      {mobileOpen && (
+        <div
+          className="lg:hidden fixed inset-0 z-40 bg-black/60 backdrop-blur-sm transition-opacity"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
+
+      <aside
+        className={`fixed inset-y-0 z-50 w-64 bg-[#0b132b] flex flex-col shadow-2xl transition-transform duration-300 ease-in-out ${
+          isRtl
+            ? `right-0 border-l border-slate-800 ${mobileOpen ? "translate-x-0" : "translate-x-full lg:translate-x-0"}`
+            : `left-0 border-r border-slate-800 ${mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`
+        }`}
+      >
+        {/* Brand Header */}
+        <div className="relative flex flex-col items-center gap-2 px-4 py-4 border-b border-slate-800/80 bg-slate-900/60">
+          <button
+            type="button"
+            onClick={() => setMobileOpen(false)}
+            className="lg:hidden absolute top-3 right-3 p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            aria-label="Close menu"
+          >
+            <X size={18} />
+          </button>
+          <Link
+            href={`/${lang}/client/dashboard`}
+            onClick={() => setMobileOpen(false)}
+            className="block bg-white px-3 py-1.5 rounded-xl shadow-md border border-white/80 hover:scale-105 transition-transform"
+          >
+            <Image
+              src="/logo.png"
+              alt="TAYSIR COMPTA"
+              width={140}
+              height={42}
+              className="h-8 w-auto object-contain"
+              priority
+            />
+          </Link>
+          <p className="text-[9px] text-teal-400/80 font-bold tracking-widest uppercase truncate max-w-full px-2 text-center">
+            {companyName ?? (lang === "ar" ? "مساحة العميل" : "Espace Entreprise")}
+          </p>
+        </div>
 
       {/* Navigation Sections */}
       <nav className="flex-1 px-3 py-4 space-y-5 overflow-y-auto custom-scrollbar">
@@ -122,6 +184,7 @@ export function ClientSidebar({
                 <Link
                   key={item.href}
                   href={`/${lang}/client/${item.href}`}
+                  onClick={() => setMobileOpen(false)}
                   className={`flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-semibold transition-all group ${
                     active
                       ? "bg-gradient-to-r from-teal-600 to-blue-600 text-white shadow-md shadow-teal-900/20"
@@ -146,6 +209,7 @@ export function ClientSidebar({
         {/* Notifications */}
         <Link
           href={`/${lang}/client/notifications`}
+          onClick={() => setMobileOpen(false)}
           className="flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium text-slate-400 hover:bg-slate-800/60 hover:text-white transition-all group"
         >
           <div className="relative shrink-0">
@@ -170,6 +234,7 @@ export function ClientSidebar({
             <Link
               key={l}
               href={pathname.replace(`/${lang}`, `/${l}`)}
+              onClick={() => setMobileOpen(false)}
               className={`flex-1 text-center text-[10px] py-1 rounded-md font-bold transition-all ${
                 lang === l
                   ? "bg-gradient-to-r from-teal-600 to-blue-600 text-white shadow-sm"
@@ -200,5 +265,6 @@ export function ClientSidebar({
         </div>
       </div>
     </aside>
+    </>
   );
 }
