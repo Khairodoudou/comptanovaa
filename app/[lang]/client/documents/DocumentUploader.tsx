@@ -712,7 +712,8 @@ export function DocumentUploader({
                     )}
                   </div>
 
-                  {/* Accounting entry */}
+                  {/* Accounting entry - Masqué pour le client (en commentaire temporaire) */}
+                  {/*
                   <div className="bg-[#f8fafc] rounded-xl p-3 grid grid-cols-3 gap-3 border border-gray-100">
                     <div>
                       <p className="text-[10px] text-[#64748b] uppercase tracking-wide mb-0.5">{t.debit}</p>
@@ -727,6 +728,7 @@ export function DocumentUploader({
                       <p className="text-xs font-semibold text-[#0f172a]">{formatAmount(entryAmount)} DA</p>
                     </div>
                   </div>
+                  */}
                 </div>
               );
             })}
@@ -833,6 +835,8 @@ export function DocumentUploader({
                 </div>
               </div>
 
+              {/* Masqué pour le client (DÉBIT / CRÉDIT / MONTANT) - En commentaire temporaire */}
+              {/*
               <div className="bg-[#f8fafc] rounded-xl p-4 grid grid-cols-3 gap-4">
                 <div>
                   <p className="text-[10px] text-[#64748b] uppercase tracking-wide mb-1">{t.debit}</p>
@@ -849,6 +853,7 @@ export function DocumentUploader({
                   </p>
                 </div>
               </div>
+              */}
               <p className="text-xs text-[#64748b]">✓ {t.entry_pending}</p>
             </div>
           ))}
