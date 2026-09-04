@@ -150,15 +150,25 @@ export default async function ClientProfilePage({
                 <Building2 size={15} className="text-teal-600" />
                 <span>{lang === "ar" ? "الهوية القانونية والجبائية للمؤسسة" : "Fiche Signalétique Entreprise"}</span>
               </h2>
-              <span
-                className={`px-2.5 py-0.5 rounded-full text-xs font-extrabold ${
+              <a
+                href="#regime-fiscal-section"
+                title={lang === "ar" ? "انقر لتعديل النظام الجبائي" : "Cliquez pour modifier le régime fiscal"}
+                className={`px-3 py-1 rounded-full text-xs font-extrabold inline-flex items-center gap-1.5 transition-all hover:scale-105 active:scale-95 cursor-pointer shadow-xs ${
                   company.regimeFiscal === "FORFAITAIRE"
-                    ? "bg-amber-50 text-amber-700 border border-amber-200"
-                    : "bg-teal-50 text-teal-700 border border-teal-200"
+                    ? "bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100"
+                    : "bg-teal-50 text-teal-700 border border-teal-200 hover:bg-teal-100"
                 }`}
               >
-                {company.regimeFiscal === "FORFAITAIRE" ? "Régime Forfaitaire (IFU)" : "Régime Réel (SCF)"}
-              </span>
+                <span
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    company.regimeFiscal === "FORFAITAIRE" ? "bg-amber-500" : "bg-teal-500"
+                  }`}
+                />
+                <span>{company.regimeFiscal === "FORFAITAIRE" ? "Régime Forfaitaire (IFU)" : "Régime Réel (SCF)"}</span>
+                <span className="text-[10px] font-semibold opacity-70 underline ml-1">
+                  {lang === "ar" ? "تعديل" : "Modifier"}
+                </span>
+              </a>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">

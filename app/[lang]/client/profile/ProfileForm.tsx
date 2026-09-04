@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Save, Loader2, CheckCircle2, Building2, UserCheck, Landmark } from "lucide-react";
+import { Save, Loader2, CheckCircle2, Building2, UserCheck, Landmark, Scale } from "lucide-react";
 
 interface ProfileFormProps {
   user: {
@@ -40,6 +40,9 @@ export function ProfileForm({ user, company, t, lang }: ProfileFormProps) {
   // Enterprise details
   const [raisonSociale, setRaisonSociale] = useState(company?.raisonSociale || company?.name || "");
   const [formeJuridique, setFormeJuridique] = useState(company?.formeJuridique || "SARL");
+  const [regimeFiscal, setRegimeFiscal] = useState<"REEL" | "FORFAITAIRE">(
+    company?.regimeFiscal === "FORFAITAIRE" ? "FORFAITAIRE" : "REEL"
+  );
   const [nrc, setNrc] = useState(company?.nrc || "");
   const [nif, setNif] = useState(company?.nif || "");
   const [secteurActivite, setSecteurActivite] = useState(company?.secteurActivite || "");
@@ -69,6 +72,7 @@ export function ProfileForm({ user, company, t, lang }: ProfileFormProps) {
           preferredLang,
           raisonSociale,
           formeJuridique,
+          regimeFiscal,
           nrc,
           nif,
           secteurActivite,
@@ -223,6 +227,128 @@ export function ProfileForm({ user, company, t, lang }: ProfileFormProps) {
               <option value="PERSONNE_PHYSIQUE">Personne physique (Commerçant)</option>
               <option value="AUTRE">Autre</option>
             </select>
+          </div>
+
+          {/* Régime Fiscal Selector */}
+          <div
+            id="regime-fiscal-section"
+            className="sm:col-span-3 bg-gradient-to-b from-slate-50 to-slate-50/40 border border-slate-200/90 rounded-2xl p-4 sm:p-5 space-y-3.5 transition-all scroll-mt-6"
+          >
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200/60 pb-3">
+              <div>
+                <label className="block text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                  <Scale size={15} className="text-teal-600" />
+                  <span>{lang === "ar" ? "النظام الجبائي (Régime Fiscal) *" : "Régime fiscal d'imposition *"}</span>
+                </label>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  {lang === "ar"
+                    ? "حدد النظام الجبائي لمؤسستك لتحديد نوع الإقرارات (G50، G12، IBS) والتقويم الضريبي"
+                    : "Détermine les déclarations obligatoires (G50 mensuel/trimestriel, G12, IBS) et vos échéances fiscales"}
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-[10px] uppercase font-bold text-slate-400">
+                  {lang === "ar" ? "الحالة :" : "Statut :"}
+                </span>
+                <span
+                  className={`px-2.5 py-1 rounded-full text-[11px] font-extrabold flex items-center gap-1.5 shadow-xs ${
+                    regimeFiscal === "FORFAITAIRE"
+                      ? "bg-amber-100 text-amber-800 border border-amber-300"
+                      : "bg-teal-100 text-teal-800 border border-teal-300"
+                  }`}
+                >
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full animate-pulse ${
+                      regimeFiscal === "FORFAITAIRE" ? "bg-amber-600" : "bg-teal-600"
+                    }`}
+                  />
+                  {regimeFiscal === "FORFAITAIRE"
+                    ? (lang === "ar" ? "النظام الجزافي (IFU)" : "Forfaitaire (IFU)")
+                    : (lang === "ar" ? "النظام الحقيقي (RÉEL)" : "Régime Réel (SCF)")}
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
+              {/* Option 1: Régime RÉEL */}
+              <label
+                onClick={() => setRegimeFiscal("REEL")}
+                className={`relative flex items-start gap-3.5 p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 ${
+                  regimeFiscal === "REEL"
+                    ? "bg-white border-teal-600 shadow-md ring-4 ring-teal-500/10"
+                    : "bg-white/80 border-slate-200 hover:border-slate-300 hover:bg-white text-slate-600"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="regimeFiscal"
+                  value="REEL"
+                  checked={regimeFiscal === "REEL"}
+                  onChange={() => setRegimeFiscal("REEL")}
+                  className="mt-1 text-teal-600 focus:ring-teal-500 w-4 h-4 cursor-pointer shrink-0"
+                />
+                <div className="space-y-1.5 select-none w-full">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-extrabold text-xs sm:text-sm text-slate-900">
+                      {lang === "ar" ? "النظام الحقيقي (RÉEL)" : "Régime RÉEL"}
+                    </span>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-teal-50 text-teal-700 border border-teal-200 shrink-0">
+                      SCF
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 leading-relaxed">
+                    {lang === "ar"
+                      ? "نظام المحاسبة المالية (SCF)، التصريح الشهري بالرسم على القيمة المضافة (G50)، 3 تسبيقات IBS، والملف الجبائي السنوي (Liasse G4)."
+                      : "Système Comptable Financier (SCF), G50 mensuel (TVA & IRG Salaires), 3 acomptes provisionnels IBS et Liasse fiscale annuelle (G4)."}
+                  </p>
+                </div>
+              </label>
+
+              {/* Option 2: FORFAITAIRE (IFU) */}
+              <label
+                onClick={() => setRegimeFiscal("FORFAITAIRE")}
+                className={`relative flex items-start gap-3.5 p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 ${
+                  regimeFiscal === "FORFAITAIRE"
+                    ? "bg-white border-teal-600 shadow-md ring-4 ring-teal-500/10"
+                    : "bg-white/80 border-slate-200 hover:border-slate-300 hover:bg-white text-slate-600"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="regimeFiscal"
+                  value="FORFAITAIRE"
+                  checked={regimeFiscal === "FORFAITAIRE"}
+                  onChange={() => setRegimeFiscal("FORFAITAIRE")}
+                  className="mt-1 text-teal-600 focus:ring-teal-500 w-4 h-4 cursor-pointer shrink-0"
+                />
+                <div className="space-y-1.5 select-none w-full">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-extrabold text-xs sm:text-sm text-slate-900">
+                      {lang === "ar" ? "الجزافي FORFAITAIRE (IFU)" : "FORFAITAIRE (IFU)"}
+                    </span>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-amber-50 text-amber-700 border border-amber-200 shrink-0">
+                      IFU
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 leading-relaxed">
+                    {lang === "ar"
+                      ? "الضريبة الجزافية الوحيدة (IFU)، التصريح التقديري (G12 بنسبة 50% + قسطين 25%)، التصريح النهائي (G12 Bis)، وتصريح G50 ثلاثي."
+                      : "Impôt Forfaitaire Unique (IFU), déclaration prévisionnelle G12 (50% + 2 tranches 25%), déclaration définitive G12 Bis et G50 trimestriel."}
+                  </p>
+                </div>
+              </label>
+            </div>
+
+            {/* Explanatory Banner */}
+            <div className="flex items-start gap-2.5 text-[11px] text-slate-600 bg-white/90 rounded-xl p-3 border border-slate-200/80 shadow-xs">
+              <span className="text-teal-600 text-sm mt-0.5">⚡</span>
+              <p className="leading-relaxed">
+                {lang === "ar"
+                  ? "ملاحظة: عند الحفظ، ستقوم المنصة تلقائياً بإعادة تهيئة التزاماتك الجبائية وفق النظام الجديد ومزامنة جدول الاستحقاقات الجبائية."
+                  : "Synchronisation automatique : Dès l'enregistrement, ComptaNova recalcule automatiquement vos obligations déclaratives pour l'exercice en cours et adapte votre calendrier fiscal DGI."}
+              </p>
+            </div>
           </div>
 
           <div>
