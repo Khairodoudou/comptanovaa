@@ -489,13 +489,35 @@ export function GrandLivreClient({
     fetchData(cid, m, y);
   }
 
-  // Auto-load on first render
+  // Auto-load on first render — if current month is empty, jump to most recent period with data
   useEffect(() => {
-    if (companyId) {
-      fetchData(companyId, month, year);
-    }
+    if (!companyId) return;
+
+    fetchData(companyId, month, year).then(() => {
+      // fetchData already sets accounts & availableMonths
+    });
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // When accounts are loaded and the current month is empty but there are available months,
+  // auto-jump to the most recent available period (only on the very first load)
+  const hasAutoJumped = useState(false);
+  useEffect(() => {
+    if (
+      accounts !== null &&
+      accounts.length === 0 &&
+      availableMonths.length > 0 &&
+      !hasAutoJumped[0]
+    ) {
+      hasAutoJumped[1](true);
+      const latest = availableMonths[0]; // already sorted desc from API
+      setMonth(latest.month);
+      setYear(latest.year);
+      fetchData(companyId, latest.month, latest.year);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accounts, availableMonths]);
 
   function prevMonth() {
     let m = month - 1;
