@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { StatusBadge } from "@/components/StatusBadge";
 import { DocumentUploader } from "./DocumentUploader";
 import { DocumentDeleteButton } from "./DocumentDeleteButton";
+import { DocumentPreviewButton } from "./DocumentPreviewButton";
 import { getDictionary } from "@/get-dictionary";
 import type { Locale } from "@/i18n-config";
 
@@ -142,13 +143,19 @@ export default async function ClientDocumentsPage({
                     )}
                   </td>
                   <td className="px-3 py-3.5">
-                    <DocumentDeleteButton
-                      documentId={doc.id}
-                      documentName={doc.originalName}
-                      hasValidatedEntries={doc.journalEntries.some(
-                        (e: any) => e.status === "VALIDATED"
-                      )}
-                    />
+                    <div className="flex items-center gap-1">
+                      <DocumentPreviewButton
+                        documentId={doc.id}
+                        documentName={doc.originalName}
+                      />
+                      <DocumentDeleteButton
+                        documentId={doc.id}
+                        documentName={doc.originalName}
+                        hasValidatedEntries={doc.journalEntries.some(
+                          (e: any) => e.status === "VALIDATED"
+                        )}
+                      />
+                    </div>
                   </td>
                 </tr>
               );

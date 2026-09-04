@@ -3,6 +3,7 @@
 import { useRef, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Upload, FileText, X, CheckCircle, AlertCircle, Zap, Brain, Eye, Cpu, Edit3, Layers, Receipt, CreditCard, Check, Edit2, Loader2 } from "lucide-react";
+import { DocumentPreviewButton } from "./DocumentPreviewButton";
 
 interface UploaderT {
   drop: string;
@@ -640,9 +641,17 @@ export function DocumentUploader({
                         </p>
                       </div>
                     </div>
-                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium border ${confidence >= 70 ? "bg-green-100 text-green-700 border-green-200" : "bg-orange-100 text-orange-700 border-orange-200"}`}>
-                      {confidence >= 70 ? `Lecture réussie ${confidence}%` : `À vérifier ${confidence}%`}
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      {sub?.document?.id && (
+                        <DocumentPreviewButton
+                          documentId={sub.document.id}
+                          documentName={doc.nom_fichier}
+                        />
+                      )}
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium border ${confidence >= 70 ? "bg-green-100 text-green-700 border-green-200" : "bg-orange-100 text-orange-700 border-orange-200"}`}>
+                        {confidence >= 70 ? `Lecture réussie ${confidence}%` : `À vérifier ${confidence}%`}
+                      </span>
+                    </div>
                   </div>
 
                   {/* Fields */}
@@ -754,6 +763,10 @@ export function DocumentUploader({
                   <h3 className="font-semibold text-[#0f172a]">{result.document.originalName}</h3>
                 </div>
                 <div className="flex items-center gap-2">
+                  <DocumentPreviewButton
+                    documentId={result.document.id}
+                    documentName={result.document.originalName}
+                  />
                   {result.ocrResult.method === "manual" ? (
                     <span className="text-[10px] px-2 py-0.5 bg-blue-100 text-blue-700 border border-blue-200 rounded-full font-medium">
                       Saisie manuelle
