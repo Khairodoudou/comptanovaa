@@ -231,6 +231,7 @@ export function RapprochementClient({
 
   // Filter
   const [statusFilter, setStatusFilter] = useState<"ALL" | "MATCHED" | "ACCOUNTING_ONLY" | "BANK_ONLY" | "IGNORED">("ALL");
+  const [chequeTab, setChequeTab] = useState<"ALL" | "EMIS" | "RECUS">("ALL");
 
   // ─── Navigation ────────────────────────────────────────────────────────────
 
@@ -535,8 +536,100 @@ export function RapprochementClient({
     return { ...e, runningBalance };
   });
 
-  // Cheques from bank transactions
-  const cheques = bankTransactions.filter((bt) => bt.chequeNumber);
+  // Cheques from bank transactions and accounting entries (Compte 512)
+  const chequesEmis = [
+    // 1. From bank: negative amount (décaissement) with chequeNumber
+    ...bankTransactions
+      .filter((bt) => bt.chequeNumber && bt.amount < 0)
+      .map((bt) => {
+        const linkedEntry = journalEntries512.find(
+          (e) => e.bankTransaction?.id === bt.id || (bt.chequeNumber && e.reference?.includes(bt.chequeNumber))
+        );
+        return {
+          id: bt.id,
+          chequeNumber: bt.chequeNumber!,
+          date: bt.date,
+          beneficiaire: bt.senderName || bt.description,
+          amount: Math.abs(bt.amount),
+          ecriture: linkedEntry ? `${linkedEntry.description} (${fmtDate(linkedEntry.date)})` : null,
+          status: linkedEntry ? "MATCHED" : bt.matchStatus || "BANK_ONLY",
+          bankTxId: bt.id,
+        };
+      }),
+    // 2. From accounting entries: credit 512 with reference CHQ / Chèque not already linked
+    ...journalEntries512
+      .filter(
+        (e) =>
+          e.creditAccount === "512" &&
+          (e.reference?.toUpperCase().includes("CHQ") ||
+            e.description.toUpperCase().includes("CHQ") ||
+            e.description.toUpperCase().includes("CHÈQUE"))
+      )
+      .filter(
+        (e) =>
+          !bankTransactions.some(
+            (bt) => bt.chequeNumber && (e.bankTransaction?.id === bt.id || (e.reference && e.reference.includes(bt.chequeNumber)))
+          )
+      )
+      .map((e) => ({
+        id: e.id,
+        chequeNumber: e.reference?.replace(/[^0-9]/g, "") || e.reference || "CHQ",
+        date: e.date,
+        beneficiaire: e.description,
+        amount: e.amount,
+        ecriture: `${e.description} (${fmtDate(e.date)})`,
+        status: e.bankTransaction ? "MATCHED" : "ACCOUNTING_ONLY",
+        bankTxId: null,
+      })),
+  ];
+
+  const chequesRecus = [
+    // 1. From bank: positive amount (encaissement) with chequeNumber
+    ...bankTransactions
+      .filter((bt) => bt.chequeNumber && bt.amount >= 0)
+      .map((bt) => {
+        const linkedEntry = journalEntries512.find(
+          (e) => e.bankTransaction?.id === bt.id || (bt.chequeNumber && e.reference?.includes(bt.chequeNumber))
+        );
+        return {
+          id: bt.id,
+          chequeNumber: bt.chequeNumber!,
+          date: bt.date,
+          emetteur: bt.senderName || bt.description,
+          amount: bt.amount,
+          ecriture: linkedEntry ? `${linkedEntry.description} (${fmtDate(linkedEntry.date)})` : null,
+          status: linkedEntry ? "MATCHED" : bt.matchStatus || "BANK_ONLY",
+          bankTxId: bt.id,
+        };
+      }),
+    // 2. From accounting entries: debit 512 with reference CHQ / Chèque not already linked
+    ...journalEntries512
+      .filter(
+        (e) =>
+          e.debitAccount === "512" &&
+          (e.reference?.toUpperCase().includes("CHQ") ||
+            e.description.toUpperCase().includes("CHQ") ||
+            e.description.toUpperCase().includes("CHÈQUE"))
+      )
+      .filter(
+        (e) =>
+          !bankTransactions.some(
+            (bt) => bt.chequeNumber && (e.bankTransaction?.id === bt.id || (e.reference && e.reference.includes(bt.chequeNumber)))
+          )
+      )
+      .map((e) => ({
+        id: e.id,
+        chequeNumber: e.reference?.replace(/[^0-9]/g, "") || e.reference || "CHQ",
+        date: e.date,
+        emetteur: e.description,
+        amount: e.amount,
+        ecriture: `${e.description} (${fmtDate(e.date)})`,
+        status: e.bankTransaction ? "MATCHED" : "ACCOUNTING_ONLY",
+        bankTxId: null,
+      })),
+  ];
+
+  const totalChequesCount = chequesEmis.length + chequesRecus.length;
 
   // ─── Render ────────────────────────────────────────────────────────────────
 
@@ -636,7 +729,7 @@ export function RapprochementClient({
             borderRadius: "6px",
             letterSpacing: "0.03em",
           }}>
-            4 SECTIONS PRINCIPALES
+            5 SECTIONS PRINCIPALES
           </span>
           <span style={{ fontSize: "13px", color: "#64748b", fontWeight: 500 }}>
             Toutes les sections sont regroupées ci-dessous sur cette même page :
@@ -647,7 +740,7 @@ export function RapprochementClient({
             { id: "section-situation", label: "1. Situation 512", icon: <FileText size={13} />, count: journalEntries512.length },
             { id: "section-import", label: "2. Import Relevé", icon: <Upload size={13} />, count: importHistory.length },
             { id: "section-rapprochement", label: "3. Rapprochement", icon: <ArrowRightLeft size={13} />, count: comparisonRows.length },
-            { id: "section-cheques", label: "4. Chèques", icon: <FileSpreadsheet size={13} />, count: cheques.length },
+            { id: "section-cheques", label: "4. Chèques", icon: <FileSpreadsheet size={13} />, count: totalChequesCount },
             { id: "section-resume", label: "5. Résumé final", icon: <BarChart3 size={13} />, count: null },
           ].map((s) => (
             <button
@@ -1654,7 +1747,7 @@ export function RapprochementClient({
       </section>
 
       {/* ══════════════════════════════════════════════
-          SECTION 4 — Chèques du Mois
+          SECTION 4 — Chèques du Mois (Émis & Reçus)
       ══════════════════════════════════════════════ */}
       <section id="section-cheques" style={{ marginBottom: "36px", scrollMarginTop: "20px" }}>
         {/* Section Header */}
@@ -1663,6 +1756,8 @@ export function RapprochementClient({
           alignItems: "center",
           justifyContent: "space-between",
           marginBottom: "16px",
+          flexWrap: "wrap",
+          gap: "12px",
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
             <div style={{
@@ -1674,112 +1769,265 @@ export function RapprochementClient({
             </div>
             <div>
               <h2 style={{ fontSize: "16px", fontWeight: 700, margin: 0, color: "#0f172a" }}>
-                4. Chèques Émis du Mois
+                4. Chèques du Mois
               </h2>
               <p style={{ fontSize: "12px", color: "#64748b", margin: "2px 0 0" }}>
-                Suivi et rapprochement des chèques tirés sur le compte 512
+                Suivi distinct des chèques émis (paiements) et chèques reçus (encaissements) — {MONTHS_FR[selectedMonth - 1]} {selectedYear}
               </p>
             </div>
           </div>
-          <span style={{
-            background: "#f5f3ff",
-            color: "#7c3aed",
-            borderRadius: "20px",
-            padding: "4px 12px",
-            fontSize: "12px",
-            fontWeight: 600,
-            border: "1px solid #ddd6fe",
-          }}>
-            {cheques.length} chèque(s)
-          </span>
+
+          {/* Sub-tabs */}
+          <div style={{ display: "flex", gap: "6px", background: "#f1f5f9", padding: "4px", borderRadius: "10px" }}>
+            {[
+              { id: "ALL", label: `Tous (${totalChequesCount})` },
+              { id: "EMIS", label: `📤 Chèques émis (${chequesEmis.length})` },
+              { id: "RECUS", label: `📥 Chèques reçus (${chequesRecus.length})` },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setChequeTab(tab.id as any)}
+                style={{
+                  padding: "6px 12px",
+                  borderRadius: "7px",
+                  border: "none",
+                  background: chequeTab === tab.id ? "#fff" : "transparent",
+                  color: chequeTab === tab.id ? "#0f172a" : "#64748b",
+                  fontWeight: chequeTab === tab.id ? 700 : 500,
+                  fontSize: "12px",
+                  cursor: "pointer",
+                  boxShadow: chequeTab === tab.id ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
+                  transition: "all 0.15s",
+                }}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
         </div>
 
-        <div style={{
-          background: "#fff",
-          borderRadius: "14px",
-          border: "1px solid #e2e8f0",
-          overflow: "hidden",
-          boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
-        }}>
-          <div style={{ padding: "16px 24px", borderBottom: "1px solid #e2e8f0" }}>
-            <h2 style={{ fontSize: "15px", fontWeight: 600, margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
-              <FileSpreadsheet size={16} color="#8b5cf6" />
-              Chèques du mois — {MONTHS_FR[selectedMonth - 1]} {selectedYear}
-            </h2>
-          </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+          {/* ── SOUS-SECTION: CHÈQUES ÉMIS ── */}
+          {(chequeTab === "ALL" || chequeTab === "EMIS") && (
+            <div style={{
+              background: "#fff",
+              borderRadius: "14px",
+              border: "1px solid #e2e8f0",
+              overflow: "hidden",
+              boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
+            }}>
+              <div style={{
+                padding: "14px 20px",
+                borderBottom: "1px solid #e2e8f0",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                background: "#fdf4ff",
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <span style={{ fontSize: "16px" }}>📤</span>
+                  <h3 style={{ fontSize: "14px", fontWeight: 700, margin: 0, color: "#86198f" }}>
+                    Chèques Émis (Paiements Fournisseurs / Dépenses)
+                  </h3>
+                </div>
+                <span style={{
+                  background: "#fae8ff",
+                  color: "#a21caf",
+                  borderRadius: "12px",
+                  padding: "2px 10px",
+                  fontSize: "11px",
+                  fontWeight: 700,
+                }}>
+                  {chequesEmis.length} chèque(s) émis
+                </span>
+              </div>
 
-          {cheques.length === 0 ? (
-            <div style={{ padding: "48px", textAlign: "center", color: "#94a3b8" }}>
-              <FileSpreadsheet size={32} style={{ marginBottom: "12px", opacity: 0.4 }} />
-              <p style={{ margin: 0 }}>Aucun chèque identifié pour cette période</p>
-              <p style={{ margin: "8px 0 0", fontSize: "12px" }}>Importez un relevé bancaire pour identifier les chèques</p>
-            </div>
-          ) : (
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
-                <thead>
-                  <tr style={{ background: "#f8fafc" }}>
-                    {["N° Chèque", "Date", "Libellé", "Montant", "Statut", "Actions"].map((h) => (
-                      <th key={h} style={{
-                        padding: "10px 16px", textAlign: "left",
-                        fontWeight: 600, color: "#64748b",
-                        fontSize: "11px", textTransform: "uppercase",
-                      }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {cheques.map((c, i) => {
-                    const badge = statusBadge(c.matchStatus);
-                    return (
-                      <tr key={c.id} style={{
-                        background: i % 2 === 0 ? "#fff" : "#fafafa",
-                        borderTop: "1px solid #f1f5f9",
-                      }}>
-                        <td style={{ padding: "10px 16px" }}>
-                          <span style={{
-                            fontFamily: "monospace", fontWeight: 700, fontSize: "13px",
-                            background: "#f5f3ff", color: "#7c3aed",
-                            borderRadius: "6px", padding: "2px 8px",
-                          }}>
-                            {c.chequeNumber}
-                          </span>
-                        </td>
-                        <td style={{ padding: "10px 16px", color: "#475569" }}>{fmtDate(c.date)}</td>
-                        <td style={{ padding: "10px 16px", color: "#1e293b" }}>{c.description}</td>
-                        <td style={{ padding: "10px 16px", fontFamily: "monospace", fontWeight: 600, color: c.amount >= 0 ? "#10b981" : "#f43f5e" }}>
-                          {c.amount >= 0 ? "+" : ""}{fmt(c.amount, locale)} DZD
-                        </td>
-                        <td style={{ padding: "10px 16px" }}>
-                          <span style={{
-                            display: "inline-flex", alignItems: "center", gap: "4px",
-                            background: badge.bg, color: badge.color,
-                            borderRadius: "20px", padding: "3px 8px",
-                            fontSize: "11px", fontWeight: 600,
-                          }}>
-                            {badge.icon} {badge.label}
-                          </span>
-                        </td>
-                        <td style={{ padding: "10px 16px" }}>
-                          {c.matchStatus !== "MATCHED" && c.matchStatus !== "MANUAL_MATCH" && (
-                            <button
-                              onClick={() => handleIgnore(c.id)}
-                              style={{
-                                display: "flex", alignItems: "center", gap: "4px",
-                                padding: "4px 10px", borderRadius: "6px",
-                                border: "1px solid #e2e8f0", background: "#fff",
-                                color: "#94a3b8", cursor: "pointer", fontSize: "11px",
-                              }}
-                            >
-                              <Ban size={11} /> Ignorer
-                            </button>
-                          )}
-                        </td>
+              {chequesEmis.length === 0 ? (
+                <div style={{ padding: "32px", textAlign: "center", color: "#94a3b8", fontSize: "13px" }}>
+                  Aucun chèque émis enregistré ou identifié sur le relevé pour ce mois.
+                </div>
+              ) : (
+                <div style={{ overflowX: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+                    <thead>
+                      <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
+                        {["N° Chèque", "Date", "Bénéficiaire", "Montant", "Écriture comptable correspondante", "Statut"].map((h, i) => (
+                          <th key={h} style={{
+                            padding: "10px 16px",
+                            textAlign: i === 3 ? "right" : i >= 4 ? "center" : "left",
+                            fontWeight: 700,
+                            color: "#475569",
+                            fontSize: "11px",
+                            textTransform: "uppercase",
+                            letterSpacing: "0.04em",
+                          }}>{h}</th>
+                        ))}
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                    </thead>
+                    <tbody>
+                      {chequesEmis.map((c, i) => {
+                        const badge = statusBadge(c.status);
+                        return (
+                          <tr key={c.id || i} style={{
+                            background: i % 2 === 0 ? "#fff" : "#fafafa",
+                            borderTop: "1px solid #f1f5f9",
+                          }}>
+                            <td style={{ padding: "12px 16px" }}>
+                              <span style={{
+                                fontFamily: "monospace", fontWeight: 700, fontSize: "12px",
+                                background: "#f5f3ff", color: "#7c3aed",
+                                borderRadius: "6px", padding: "3px 8px", border: "1px solid #ddd6fe",
+                              }}>
+                                CHQ {c.chequeNumber}
+                              </span>
+                            </td>
+                            <td style={{ padding: "12px 16px", color: "#475569", whiteSpace: "nowrap" }}>
+                              {fmtDate(c.date)}
+                            </td>
+                            <td style={{ padding: "12px 16px", fontWeight: 600, color: "#1e293b" }}>
+                              {c.beneficiaire}
+                            </td>
+                            <td style={{ padding: "12px 16px", textAlign: "right", fontFamily: "monospace", fontWeight: 700, color: "#f43f5e" }}>
+                              -{fmt(c.amount, locale)} DA
+                            </td>
+                            <td style={{ padding: "12px 16px", textAlign: "center", color: c.ecriture ? "#1e293b" : "#94a3b8", fontSize: "12px" }}>
+                              {c.ecriture ? (
+                                <span style={{ background: "#eff6ff", color: "#1d4ed8", padding: "3px 8px", borderRadius: "6px", fontWeight: 500 }}>
+                                  {c.ecriture}
+                                </span>
+                              ) : (
+                                <span style={{ fontStyle: "italic", color: "#94a3b8" }}>— Non comptabilisé</span>
+                              )}
+                            </td>
+                            <td style={{ padding: "12px 16px", textAlign: "center" }}>
+                              <span style={{
+                                display: "inline-flex", alignItems: "center", gap: "4px",
+                                background: badge.bg, color: badge.color,
+                                borderRadius: "20px", padding: "3px 10px",
+                                fontSize: "11px", fontWeight: 700,
+                              }}>
+                                {badge.icon} {badge.label}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── SOUS-SECTION: CHÈQUES REÇUS ── */}
+          {(chequeTab === "ALL" || chequeTab === "RECUS") && (
+            <div style={{
+              background: "#fff",
+              borderRadius: "14px",
+              border: "1px solid #e2e8f0",
+              overflow: "hidden",
+              boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
+            }}>
+              <div style={{
+                padding: "14px 20px",
+                borderBottom: "1px solid #e2e8f0",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                background: "#f0fdf4",
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <span style={{ fontSize: "16px" }}>📥</span>
+                  <h3 style={{ fontSize: "14px", fontWeight: 700, margin: 0, color: "#166534" }}>
+                    Chèques Reçus (Encaissements Clients)
+                  </h3>
+                </div>
+                <span style={{
+                  background: "#dcfce7",
+                  color: "#15803d",
+                  borderRadius: "12px",
+                  padding: "2px 10px",
+                  fontSize: "11px",
+                  fontWeight: 700,
+                }}>
+                  {chequesRecus.length} chèque(s) reçu(s)
+                </span>
+              </div>
+
+              {chequesRecus.length === 0 ? (
+                <div style={{ padding: "32px", textAlign: "center", color: "#94a3b8", fontSize: "13px" }}>
+                  Aucun chèque reçu enregistré ou identifié sur le relevé pour ce mois.
+                </div>
+              ) : (
+                <div style={{ overflowX: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+                    <thead>
+                      <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
+                        {["N° Chèque", "Date", "Émetteur", "Montant", "Écriture correspondante", "Statut"].map((h, i) => (
+                          <th key={h} style={{
+                            padding: "10px 16px",
+                            textAlign: i === 3 ? "right" : i >= 4 ? "center" : "left",
+                            fontWeight: 700,
+                            color: "#475569",
+                            fontSize: "11px",
+                            textTransform: "uppercase",
+                            letterSpacing: "0.04em",
+                          }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {chequesRecus.map((c, i) => {
+                        const badge = statusBadge(c.status);
+                        return (
+                          <tr key={c.id || i} style={{
+                            background: i % 2 === 0 ? "#fff" : "#fafafa",
+                            borderTop: "1px solid #f1f5f9",
+                          }}>
+                            <td style={{ padding: "12px 16px" }}>
+                              <span style={{
+                                fontFamily: "monospace", fontWeight: 700, fontSize: "12px",
+                                background: "#ecfdf5", color: "#059669",
+                                borderRadius: "6px", padding: "3px 8px", border: "1px solid #a7f3d0",
+                              }}>
+                                CHQ {c.chequeNumber}
+                              </span>
+                            </td>
+                            <td style={{ padding: "12px 16px", color: "#475569", whiteSpace: "nowrap" }}>
+                              {fmtDate(c.date)}
+                            </td>
+                            <td style={{ padding: "12px 16px", fontWeight: 600, color: "#1e293b" }}>
+                              {c.emetteur}
+                            </td>
+                            <td style={{ padding: "12px 16px", textAlign: "right", fontFamily: "monospace", fontWeight: 700, color: "#10b981" }}>
+                              +{fmt(c.amount, locale)} DA
+                            </td>
+                            <td style={{ padding: "12px 16px", textAlign: "center", color: c.ecriture ? "#1e293b" : "#94a3b8", fontSize: "12px" }}>
+                              {c.ecriture ? (
+                                <span style={{ background: "#eff6ff", color: "#1d4ed8", padding: "3px 8px", borderRadius: "6px", fontWeight: 500 }}>
+                                  {c.ecriture}
+                                </span>
+                              ) : (
+                                <span style={{ fontStyle: "italic", color: "#94a3b8" }}>— Non comptabilisé</span>
+                              )}
+                            </td>
+                            <td style={{ padding: "12px 16px", textAlign: "center" }}>
+                              <span style={{
+                                display: "inline-flex", alignItems: "center", gap: "4px",
+                                background: badge.bg, color: badge.color,
+                                borderRadius: "20px", padding: "3px 10px",
+                                fontSize: "11px", fontWeight: 700,
+                              }}>
+                                {badge.icon} {badge.label}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           )}
         </div>
