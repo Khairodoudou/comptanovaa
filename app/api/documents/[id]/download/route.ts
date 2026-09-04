@@ -34,7 +34,20 @@ export async function GET(
     return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
   }
 
-  // Look for physical file on disk
+  // 1. If stored in database (base64) - Works on Vercel and serverless clouds
+  if ((document as any).fileBase64) {
+    const fileBuffer = Buffer.from((document as any).fileBase64, "base64");
+    const mime = document.mimeType || "application/octet-stream";
+
+    return new NextResponse(fileBuffer, {
+      headers: {
+        "Content-Type": mime,
+        "Content-Disposition": `attachment; filename="${encodeURIComponent(document.originalName)}"`,
+      },
+    });
+  }
+
+  // 2. Look for physical file on disk (local dev environment)
   const possiblePaths = [
     path.join(/*turbopackIgnore: true*/ process.cwd(), "public", "uploads", document.filename),
     path.join(/*turbopackIgnore: true*/ process.cwd(), "uploads", document.filename),

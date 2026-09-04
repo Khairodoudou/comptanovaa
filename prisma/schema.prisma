@@ -202,6 +202,7 @@ model Document {
   uploadedAt     DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
   ocrData        String?
+  fileBase64     String?
 
   companyId      String
   company        Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)

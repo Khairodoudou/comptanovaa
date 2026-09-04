@@ -94,7 +94,9 @@ export async function POST(req: NextRequest) {
   const chequeDate = result.cheque_data.date ?? factureDate;
 
   try {
-    // Persistance atomique via transaction Prisma
+    const factureBuffer = Buffer.from(await factureOriginalFile.arrayBuffer());
+    const chequeBuffer = Buffer.from(await chequeOriginalFile.arrayBuffer());
+
     // Persistance atomique via transaction Prisma
     const savedDocs = await db.$transaction(async (tx) => {
       // Sauvegarder la facture avec ses écritures inchangées
@@ -107,6 +109,7 @@ export async function POST(req: NextRequest) {
           type: docTypeFacture,
           status: factureOcrResult.needsManualReview ? "UPLOADED" : "REVIEWED",
           companyId,
+          fileBase64: factureBuffer.toString("base64"),
           ocrData: JSON.stringify({
             rawText: factureOcrResult.rawText.substring(0, 2000),
             extracted: result.facture_data,
@@ -144,6 +147,7 @@ export async function POST(req: NextRequest) {
           type: "CHEQUE",
           status: chequeOcrResult.needsManualReview ? "UPLOADED" : "REVIEWED",
           companyId,
+          fileBase64: chequeBuffer.toString("base64"),
           ocrData: JSON.stringify({
             rawText: chequeOcrResult.rawText.substring(0, 2000),
             extracted: result.cheque_data,

@@ -167,6 +167,7 @@ export async function POST(req: NextRequest) {
       ocrStartedAt,
       ocrFinishedAt,
       aiProposedAt,
+      fileBase64: buffer.toString("base64"),
       ocrData: JSON.stringify({
         rawText: ocrResult.rawText.substring(0, 2000),
         extracted,
