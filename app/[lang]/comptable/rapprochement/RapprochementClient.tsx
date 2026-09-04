@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   Upload, Loader2, RefreshCw, CheckCircle2, XCircle, AlertCircle,
@@ -171,7 +171,6 @@ export function RapprochementClient({
 
   // ─── State ─────────────────────────────────────────────────────────────────
 
-  const [activeSection, setActiveSection] = useState<"situation" | "import" | "comparison" | "cheques">("situation");
   const [isDragging, setIsDragging] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importing, setImporting] = useState(false);
@@ -236,6 +235,7 @@ export function RapprochementClient({
       if (!res.ok) throw new Error(data.error ?? "Erreur d'import");
       setImportResult(data);
       setImportFile(null);
+      await loadComparison();
       router.refresh();
     } catch (err: any) {
       setImportError(err.message);
@@ -244,20 +244,26 @@ export function RapprochementClient({
     }
   }
 
+  // Auto-load comparison on mount or when company/period changes
+  useEffect(() => {
+    if (selectedCompanyId) {
+      loadComparison();
+    }
+  }, [selectedCompanyId, selectedMonth, selectedYear]);
+
   // ─── Load Comparison ───────────────────────────────────────────────────────
 
   async function loadComparison() {
     if (!selectedCompanyId) return;
     setLoadingComparison(true);
-    setActiveSection("comparison");
     try {
       const res = await fetch(
         `/api/bank/reconcile/comparison?companyId=${selectedCompanyId}&month=${selectedMonth}&year=${selectedYear}`
       );
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Erreur");
-      setComparisonRows(data.rows);
-      setComparisonSummary(data.summary);
+      setComparisonRows(data.rows || []);
+      setComparisonSummary(data.summary || null);
     } catch (err: any) {
       console.error(err);
     } finally {
@@ -443,123 +449,199 @@ export function RapprochementClient({
         </div>
       </div>
 
-      {/* ── STAT CARDS ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "14px", marginBottom: "24px" }}>
-        {[
-          {
-            label: "Solde Initial",
-            value: fmt(accountSummary512.soldeInitial, locale),
-            icon: <BarChart3 size={18} />,
-            color: "#3b82f6",
-            bg: "#eff6ff",
-          },
-          {
-            label: "Total Débit",
-            value: fmt(accountSummary512.totalDebit, locale),
-            icon: <TrendingUp size={18} />,
-            color: "#10b981",
-            bg: "#f0fdf4",
-          },
-          {
-            label: "Total Crédit",
-            value: fmt(accountSummary512.totalCredit, locale),
-            icon: <TrendingDown size={18} />,
-            color: "#f43f5e",
-            bg: "#fff1f2",
-          },
-          {
-            label: "Solde Final",
-            value: fmt(accountSummary512.soldeFinal, locale),
-            icon: <Zap size={18} />,
-            color: "#8b5cf6",
-            bg: "#f5f3ff",
-          },
-        ].map((card) => (
-          <div
-            key={card.label}
-            style={{
-              background: "#fff",
-              border: `1px solid ${card.color}22`,
-              borderRadius: "12px",
-              padding: "16px 20px",
-              display: "flex",
-              alignItems: "center",
-              gap: "12px",
-              boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
-            }}
-          >
-            <div style={{
-              width: "40px", height: "40px", borderRadius: "10px",
-              background: card.bg,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              color: card.color, flexShrink: 0,
-            }}>
-              {card.icon}
-            </div>
-            <div>
-              <div style={{ fontSize: "11px", color: "#94a3b8", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                {card.label}
-              </div>
-              <div style={{ fontSize: "18px", fontWeight: 700, color: "#0f172a", marginTop: "2px" }}>
-                {card.value} DZD
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* ── SECTION TABS ── */}
+      {/* ── BARRE DE NAVIGATION RAPIDE (5 SECTIONS) ── */}
       <div style={{
         display: "flex",
-        gap: "4px",
-        background: "#f1f5f9",
-        borderRadius: "12px",
-        padding: "4px",
-        marginBottom: "20px",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: "12px",
+        background: "#fff",
+        border: "1px solid #e2e8f0",
+        borderRadius: "14px",
+        padding: "12px 18px",
+        marginBottom: "28px",
+        boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+        flexWrap: "wrap",
       }}>
-        {[
-          { key: "situation", label: "Situation 512", icon: <FileText size={15} /> },
-          { key: "import", label: "Import Relevé", icon: <Upload size={15} /> },
-          { key: "comparison", label: "Rapprochement", icon: <ArrowRightLeft size={15} /> },
-          { key: "cheques", label: "Chèques", icon: <FileSpreadsheet size={15} /> },
-        ].map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => {
-              if (tab.key === "comparison") {
-                loadComparison();
-              } else {
-                setActiveSection(tab.key as any);
-              }
-            }}
-            style={{
-              flex: 1,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "6px",
-              padding: "10px 16px",
-              borderRadius: "8px",
-              border: "none",
-              cursor: "pointer",
-              fontSize: "13px",
-              fontWeight: 500,
-              transition: "all 0.2s",
-              background: activeSection === tab.key ? "#fff" : "transparent",
-              color: activeSection === tab.key ? "#1d4ed8" : "#64748b",
-              boxShadow: activeSection === tab.key ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
-            }}
-          >
-            {tab.icon}
-            {tab.label}
-          </button>
-        ))}
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <span style={{
+            background: "linear-gradient(135deg, #1d4ed8, #2563eb)",
+            color: "#fff",
+            fontSize: "11px",
+            fontWeight: 700,
+            padding: "4px 10px",
+            borderRadius: "6px",
+            letterSpacing: "0.03em",
+          }}>
+            5 SECTIONS PRINCIPALES
+          </span>
+          <span style={{ fontSize: "13px", color: "#64748b", fontWeight: 500 }}>
+            Toutes les sections sont regroupées ci-dessous sur cette même page :
+          </span>
+        </div>
+        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+          {[
+            { id: "section-situation", label: "1. Situation 512", icon: <FileText size={13} />, count: journalEntries512.length },
+            { id: "section-import", label: "2. Import Relevé", icon: <Upload size={13} />, count: importHistory.length },
+            { id: "section-rapprochement", label: "3. Rapprochement", icon: <ArrowRightLeft size={13} />, count: comparisonRows.length },
+            { id: "section-cheques", label: "4. Chèques", icon: <FileSpreadsheet size={13} />, count: cheques.length },
+          ].map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => {
+                const el = document.getElementById(s.id);
+                if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+              }}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                padding: "7px 12px",
+                borderRadius: "8px",
+                border: "1px solid #e2e8f0",
+                background: "#f8fafc",
+                color: "#1e293b",
+                fontSize: "12px",
+                fontWeight: 600,
+                cursor: "pointer",
+                transition: "all 0.15s",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "#eff6ff";
+                e.currentTarget.style.borderColor = "#3b82f6";
+                e.currentTarget.style.color = "#1d4ed8";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "#f8fafc";
+                e.currentTarget.style.borderColor = "#e2e8f0";
+                e.currentTarget.style.color = "#1e293b";
+              }}
+            >
+              {s.icon}
+              {s.label}
+              <span style={{
+                background: "#e2e8f0",
+                color: "#475569",
+                borderRadius: "10px",
+                padding: "1px 6px",
+                fontSize: "10px",
+                fontWeight: 700,
+              }}>
+                {s.count}
+              </span>
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* ══════════════════════════════════════════════
           SECTION 1 — Situation Comptable 512
       ══════════════════════════════════════════════ */}
-      {activeSection === "situation" && (
+      <section id="section-situation" style={{ marginBottom: "36px", scrollMarginTop: "20px" }}>
+        {/* Section Header */}
+        <div style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: "16px",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <div style={{
+              width: "32px", height: "32px", borderRadius: "8px",
+              background: "#eff6ff", color: "#1d4ed8",
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+              <FileText size={18} />
+            </div>
+            <div>
+              <h2 style={{ fontSize: "16px", fontWeight: 700, margin: 0, color: "#0f172a" }}>
+                1. Situation Comptable du Compte 512
+              </h2>
+              <p style={{ fontSize: "12px", color: "#64748b", margin: "2px 0 0" }}>
+                Soldes et écritures comptables enregistrées — {MONTHS_FR[selectedMonth - 1]} {selectedYear}
+              </p>
+            </div>
+          </div>
+          <span style={{
+            background: "#eff6ff",
+            color: "#1d4ed8",
+            borderRadius: "20px",
+            padding: "4px 12px",
+            fontSize: "12px",
+            fontWeight: 600,
+            border: "1px solid #bfdbfe",
+          }}>
+            {journalEntries512.length} écriture(s)
+          </span>
+        </div>
+
+        {/* ── STAT CARDS ── */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "14px", marginBottom: "16px" }}>
+          {[
+            {
+              label: "Solde Initial",
+              value: fmt(accountSummary512.soldeInitial, locale),
+              icon: <BarChart3 size={18} />,
+              color: "#3b82f6",
+              bg: "#eff6ff",
+            },
+            {
+              label: "Total Débit",
+              value: fmt(accountSummary512.totalDebit, locale),
+              icon: <TrendingUp size={18} />,
+              color: "#10b981",
+              bg: "#f0fdf4",
+            },
+            {
+              label: "Total Crédit",
+              value: fmt(accountSummary512.totalCredit, locale),
+              icon: <TrendingDown size={18} />,
+              color: "#f43f5e",
+              bg: "#fff1f2",
+            },
+            {
+              label: "Solde Final",
+              value: fmt(accountSummary512.soldeFinal, locale),
+              icon: <Zap size={18} />,
+              color: "#8b5cf6",
+              bg: "#f5f3ff",
+            },
+          ].map((card) => (
+            <div
+              key={card.label}
+              style={{
+                background: "#fff",
+                border: `1px solid ${card.color}22`,
+                borderRadius: "12px",
+                padding: "16px 20px",
+                display: "flex",
+                alignItems: "center",
+                gap: "12px",
+                boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
+              }}
+            >
+              <div style={{
+                width: "40px", height: "40px", borderRadius: "10px",
+                background: card.bg,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                color: card.color, flexShrink: 0,
+              }}>
+                {card.icon}
+              </div>
+              <div>
+                <div style={{ fontSize: "11px", color: "#94a3b8", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  {card.label}
+                </div>
+                <div style={{ fontSize: "18px", fontWeight: 700, color: "#0f172a", marginTop: "2px" }}>
+                  {card.value} DZD
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Entries Table Container */}
         <div style={{
           background: "#fff",
           borderRadius: "14px",
@@ -670,12 +752,49 @@ export function RapprochementClient({
             </div>
           )}
         </div>
-      )}
+      </section>
 
       {/* ══════════════════════════════════════════════
           SECTION 2 — Import Relevé Bancaire
       ══════════════════════════════════════════════ */}
-      {activeSection === "import" && (
+      <section id="section-import" style={{ marginBottom: "36px", scrollMarginTop: "20px" }}>
+        {/* Section Header */}
+        <div style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: "16px",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <div style={{
+              width: "32px", height: "32px", borderRadius: "8px",
+              background: "#ecfdf5", color: "#059669",
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+              <Upload size={18} />
+            </div>
+            <div>
+              <h2 style={{ fontSize: "16px", fontWeight: 700, margin: 0, color: "#0f172a" }}>
+                2. Importation du Relevé Bancaire
+              </h2>
+              <p style={{ fontSize: "12px", color: "#64748b", margin: "2px 0 0" }}>
+                Importez votre relevé bancaire (PDF, Excel, CSV ou photo) pour le comparer à la comptabilité
+              </p>
+            </div>
+          </div>
+          <span style={{
+            background: "#ecfdf5",
+            color: "#059669",
+            borderRadius: "20px",
+            padding: "4px 12px",
+            fontSize: "12px",
+            fontWeight: 600,
+            border: "1px solid #a7f3d0",
+          }}>
+            {importHistory.length} import(s) archivé(s)
+          </span>
+        </div>
+
         <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
           {/* Drop Zone */}
           <div
@@ -880,12 +999,60 @@ export function RapprochementClient({
             </div>
           )}
         </div>
-      )}
+      </section>
 
       {/* ══════════════════════════════════════════════
           SECTION 3 — Tableau de Rapprochement
       ══════════════════════════════════════════════ */}
-      {activeSection === "comparison" && (
+      <section id="section-rapprochement" style={{ marginBottom: "36px", scrollMarginTop: "20px" }}>
+        {/* Section Header */}
+        <div style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: "16px",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <div style={{
+              width: "32px", height: "32px", borderRadius: "8px",
+              background: "#e0e7ff", color: "#4338ca",
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+              <ArrowRightLeft size={18} />
+            </div>
+            <div>
+              <h2 style={{ fontSize: "16px", fontWeight: 700, margin: 0, color: "#0f172a" }}>
+                3. Tableau de Rapprochement (Comptabilité ↔ Banque)
+              </h2>
+              <p style={{ fontSize: "12px", color: "#64748b", margin: "2px 0 0" }}>
+                Comparaison ligne par ligne du compte 512 avec le relevé bancaire et détection des écarts
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={loadComparison}
+            disabled={loadingComparison}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+              padding: "6px 14px",
+              borderRadius: "8px",
+              border: "1px solid #e2e8f0",
+              background: "#fff",
+              color: "#334155",
+              fontSize: "12px",
+              fontWeight: 600,
+              cursor: "pointer",
+              boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
+            }}
+          >
+            <RefreshCw size={12} className={loadingComparison ? "animate-spin" : ""} />
+            {loadingComparison ? "Chargement..." : "Rafraîchir"}
+          </button>
+        </div>
+
         <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
           {/* Summary Dashboard */}
           {comparisonSummary && (
@@ -1192,12 +1359,49 @@ export function RapprochementClient({
             </div>
           )}
         </div>
-      )}
+      </section>
 
       {/* ══════════════════════════════════════════════
-          SECTION 4 — Chèques
+          SECTION 4 — Chèques du Mois
       ══════════════════════════════════════════════ */}
-      {activeSection === "cheques" && (
+      <section id="section-cheques" style={{ marginBottom: "36px", scrollMarginTop: "20px" }}>
+        {/* Section Header */}
+        <div style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: "16px",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <div style={{
+              width: "32px", height: "32px", borderRadius: "8px",
+              background: "#f5f3ff", color: "#7c3aed",
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+              <FileSpreadsheet size={18} />
+            </div>
+            <div>
+              <h2 style={{ fontSize: "16px", fontWeight: 700, margin: 0, color: "#0f172a" }}>
+                4. Chèques Émis du Mois
+              </h2>
+              <p style={{ fontSize: "12px", color: "#64748b", margin: "2px 0 0" }}>
+                Suivi et rapprochement des chèques tirés sur le compte 512
+              </p>
+            </div>
+          </div>
+          <span style={{
+            background: "#f5f3ff",
+            color: "#7c3aed",
+            borderRadius: "20px",
+            padding: "4px 12px",
+            fontSize: "12px",
+            fontWeight: 600,
+            border: "1px solid #ddd6fe",
+          }}>
+            {cheques.length} chèque(s)
+          </span>
+        </div>
+
         <div style={{
           background: "#fff",
           borderRadius: "14px",
@@ -1287,7 +1491,7 @@ export function RapprochementClient({
             </div>
           )}
         </div>
-      )}
+      </section>
 
       {/* ══════════════════════════════════════════════
           MODAL — Rapprocher manuellement
