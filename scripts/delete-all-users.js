@@ -1,49 +1,75 @@
-const { PrismaClient } = require('@prisma/client');
-const { PrismaLibSql } = require('@prisma/adapter-libsql');
+require("dotenv").config();
+const { createClient } = require("@libsql/client");
 
-const adapter = new PrismaLibSql({ url: 'file:./prisma/dev.db' });
-const db = new PrismaClient({ adapter });
+const url = process.env.DATABASE_URL;
+const authToken = process.env.DATABASE_AUTH_TOKEN;
+
+if (!url) {
+  console.error("❌ DATABASE_URL non trouvée dans .env");
+  process.exit(1);
+}
+
+const client = createClient({
+  url,
+  authToken,
+});
 
 async function main() {
-  // Afficher les utilisateurs avant suppression
-  const users = await db.user.findMany({
-    select: { id: true, name: true, email: true, role: true }
-  });
+  console.log("🔗 Connexion à la base de données Turso :", url);
 
-  console.log(`\nUtilisateurs trouvés : ${users.length}`);
-  if (users.length === 0) {
-    console.log('Aucun utilisateur à supprimer.');
+  // Lister les utilisateurs actuels
+  const resUsers = await client.execute("SELECT id, name, email, role FROM User");
+  console.log(`\n📋 Utilisateurs trouvés dans la table User : ${resUsers.rows.length}`);
+  
+  for (const row of resUsers.rows) {
+    console.log(` - [${row.role}] ${row.name} (${row.email}) | ID: ${row.id}`);
+  }
+
+  if (resUsers.rows.length === 0) {
+    console.log("\n✅ La table User est déjà vide !");
     return;
   }
-  users.forEach(u => console.log(` - [${u.role}] ${u.name} | ${u.email}`));
 
-  // Supprimer dans l'ordre FK (enfants d'abord)
-  console.log('\nSuppression en cours...');
-  const n1 = await db.notification.deleteMany({});
-  console.log(` ✓ Notifications supprimées : ${n1.count}`);
+  console.log("\n🧹 Suppression de toutes les données et utilisateurs en cours...");
 
-  const b1 = await db.bankTransaction.deleteMany({});
-  console.log(` ✓ BankTransactions supprimées : ${b1.count}`);
+  await client.execute("PRAGMA foreign_keys = OFF;");
 
-  const ab = await db.accountBalance.deleteMany({});
-  console.log(` ✓ AccountBalances supprimées : ${ab.count}`);
+  const tablesToClear = [
+    "Notification",
+    "AuditLog",
+    "ComptableInvitation",
+    "PaymentDeclaration",
+    "ReconciliationMatch",
+    "FiscalDeadline",
+    "JournalEntryVersion",
+    "SubAccount",
+    "JournalEntry",
+    "Invoice",
+    "BankTransaction",
+    "AccountBalance",
+    "Document",
+    "Company",
+    "User",
+  ];
 
-  const je = await db.journalEntry.deleteMany({});
-  console.log(` ✓ JournalEntries supprimées : ${je.count}`);
+  for (const table of tablesToClear) {
+    try {
+      const res = await client.execute(`DELETE FROM "${table}"`);
+      console.log(` ✓ Table ${table} vidée (${res.rowsAffected} lignes supprimées)`);
+    } catch (err) {
+      console.warn(` ⚠️ Table ${table} : ${err.message}`);
+    }
+  }
 
-  const d1 = await db.document.deleteMany({});
-  console.log(` ✓ Documents supprimés : ${d1.count}`);
+  await client.execute("PRAGMA foreign_keys = ON;");
 
-  const c1 = await db.company.deleteMany({});
-  console.log(` ✓ Entreprises supprimées : ${c1.count}`);
-
-  const u1 = await db.user.deleteMany({});
-  console.log(` ✓ Utilisateurs supprimés : ${u1.count}`);
-
-  const remaining = await db.user.count();
-  console.log(`\n✅ Terminé. Utilisateurs restants : ${remaining}`);
+  const verify = await client.execute("SELECT COUNT(*) as count FROM User");
+  console.log(`\n🎉 Opération réussie ! Utilisateurs restants dans la table User : ${verify.rows[0].count}`);
 }
 
 main()
-  .catch(e => { console.error('❌ Erreur :', e.message); process.exit(1); })
-  .finally(() => db.$disconnect());
+  .catch((err) => {
+    console.error("❌ Erreur :", err);
+    process.exit(1);
+  });
+

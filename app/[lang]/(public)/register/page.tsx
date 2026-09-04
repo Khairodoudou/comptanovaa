@@ -618,49 +618,43 @@ export default function RegisterPage() {
 
                     <div className="grid grid-cols-2 gap-2.5">
                       <label
-                        className={`flex flex-col p-3 rounded-xl border cursor-pointer transition-all ${
+                        className={`flex items-center justify-between px-3.5 py-3 rounded-xl border cursor-pointer transition-all ${
                           regimeFiscal === "REEL"
-                            ? "bg-teal-50/80 border-teal-500 text-teal-900 shadow-sm"
-                            : "bg-white border-slate-200 hover:border-slate-300"
+                            ? "bg-teal-50/80 border-teal-500 text-teal-900 shadow-sm ring-1 ring-teal-500/20"
+                            : "bg-white border-slate-200 hover:border-slate-300 text-slate-700"
                         }`}
                       >
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="font-extrabold text-xs">Régime RÉEL</span>
-                          <input
-                            type="radio"
-                            name="regimeFiscal"
-                            value="REEL"
-                            checked={regimeFiscal === "REEL"}
-                            onChange={() => setRegimeFiscal("REEL")}
-                            className="text-teal-600 focus:ring-teal-500"
-                          />
-                        </div>
-                        <span className="text-[10px] text-slate-500 leading-tight">
-                          TVA mensuelle (G50), IRG mensuel, IBS 3 acomptes & G4 liasse.
+                        <span className="font-extrabold text-xs sm:text-sm">
+                          {lang === "ar" ? "النظام الحقيقي (RÉEL)" : "Régime RÉEL"}
                         </span>
+                        <input
+                          type="radio"
+                          name="regimeFiscal"
+                          value="REEL"
+                          checked={regimeFiscal === "REEL"}
+                          onChange={() => setRegimeFiscal("REEL")}
+                          className="text-teal-600 focus:ring-teal-500 w-4 h-4 cursor-pointer shrink-0"
+                        />
                       </label>
 
                       <label
-                        className={`flex flex-col p-3 rounded-xl border cursor-pointer transition-all ${
+                        className={`flex items-center justify-between px-3.5 py-3 rounded-xl border cursor-pointer transition-all ${
                           regimeFiscal === "FORFAITAIRE"
-                            ? "bg-teal-50/80 border-teal-500 text-teal-900 shadow-sm"
-                            : "bg-white border-slate-200 hover:border-slate-300"
+                            ? "bg-teal-50/80 border-teal-500 text-teal-900 shadow-sm ring-1 ring-teal-500/20"
+                            : "bg-white border-slate-200 hover:border-slate-300 text-slate-700"
                         }`}
                       >
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="font-extrabold text-xs">FORFAITAIRE (IFU)</span>
-                          <input
-                            type="radio"
-                            name="regimeFiscal"
-                            value="FORFAITAIRE"
-                            checked={regimeFiscal === "FORFAITAIRE"}
-                            onChange={() => setRegimeFiscal("FORFAITAIRE")}
-                            className="text-teal-600 focus:ring-teal-500"
-                          />
-                        </div>
-                        <span className="text-[10px] text-slate-500 leading-tight">
-                          G12 (50% + 2 tranches 25%), G12 Bis, G50 trimestriel.
+                        <span className="font-extrabold text-xs sm:text-sm">
+                          {lang === "ar" ? "الجزافي FORFAITAIRE (IFU)" : "FORFAITAIRE (IFU)"}
                         </span>
+                        <input
+                          type="radio"
+                          name="regimeFiscal"
+                          value="FORFAITAIRE"
+                          checked={regimeFiscal === "FORFAITAIRE"}
+                          onChange={() => setRegimeFiscal("FORFAITAIRE")}
+                          className="text-teal-600 focus:ring-teal-500 w-4 h-4 cursor-pointer shrink-0"
+                        />
                       </label>
                     </div>
                   </div>

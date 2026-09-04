@@ -153,7 +153,11 @@ export async function computeOpeningBalance(
       status: "VALIDATED",
       date: dateFilter,
       OR: [{ debitAccount: account }, { creditAccount: account }],
-      document: { companyId },
+      AND: [
+        {
+          OR: [{ companyId }, { document: { companyId } }],
+        },
+      ],
     },
     select: { debitAccount: true, creditAccount: true, amount: true },
   });

@@ -1,3 +1,4 @@
+
 import Link from "next/link";
 import Image from "next/image";
 import Navbar from "@/components/Navbar";
@@ -44,6 +45,8 @@ export default async function HomePage({ params }: { params: Promise<{ lang: str
     number: `0${index + 1}`,
   }));
 
+  const badgeText = (dict.home?.badge || "La 1ère plateforme intelligente de comptabilité & fiscalité en Algérie").replace(/^[✨\s]+/, "");
+
   return (
     <div className="min-h-screen bg-white text-slate-900 overflow-x-hidden">
       <Navbar dict={dict.navbar} lang={lang} />
@@ -55,10 +58,30 @@ export default async function HomePage({ params }: { params: Promise<{ lang: str
 
         <div className="max-w-6xl mx-auto">
           {/* Top Pill / Badge */}
-          <div className="text-center max-w-4xl mx-auto space-y-6">
-            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white border border-teal-200/80 shadow-sm text-xs font-bold text-slate-800">
-              <Sparkles size={14} className="text-teal-600 animate-pulse" />
-              <span>{dict.home.badge || "✨ La 1ère plateforme intelligente de comptabilité & fiscalité en Algérie"}</span>
+          <div className="text-center max-w-4xl mx-auto space-y-6 sm:space-y-8">
+            <div className="inline-flex justify-center items-center">
+              <Link
+                href="#features"
+                className="group relative inline-flex items-center gap-2.5 sm:gap-3.5 py-2 sm:py-2.5 px-3.5 sm:px-5 rounded-full bg-white/95 hover:bg-white backdrop-blur-md border border-teal-200/90 hover:border-teal-400 shadow-[0_2px_15px_-3px_rgba(13,148,136,0.12)] hover:shadow-[0_8px_25px_-4px_rgba(13,148,136,0.22)] hover:-translate-y-0.5 active:translate-y-0 transition-all duration-300 max-w-[95vw] sm:max-w-none"
+              >
+                {/* Ambient Glow */}
+                <div className="absolute -inset-1 rounded-full bg-gradient-to-r from-teal-400/30 via-emerald-400/20 to-sky-400/30 blur-md opacity-40 group-hover:opacity-100 transition-opacity duration-500 -z-10" />
+
+                {/* Left Icon Badge */}
+                <span className="flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-gradient-to-br from-teal-500 via-teal-600 to-emerald-500 text-white shadow-md shadow-teal-600/25 shrink-0 group-hover:scale-105 group-hover:rotate-6 transition-all duration-300">
+                  <Sparkles size={16} className="fill-white/25 animate-pulse" />
+                </span>
+
+                {/* Badge Text */}
+                <span className="text-xs sm:text-sm md:text-base font-extrabold text-slate-800 group-hover:text-slate-950 tracking-tight leading-snug text-left rtl:text-right transition-colors">
+                  {badgeText}
+                </span>
+
+                {/* Right Arrow */}
+                <span className="flex items-center justify-center w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-teal-50 text-teal-700 group-hover:bg-teal-600 group-hover:text-white transition-all duration-300 shrink-0 shadow-xs">
+                  <Arrow size={14} className="group-hover:translate-x-0.5 rtl:group-hover:-translate-x-0.5 transition-transform duration-300" />
+                </span>
+              </Link>
             </div>
 
             {/* Hero Main Heading */}
@@ -485,4 +508,4 @@ export default async function HomePage({ params }: { params: Promise<{ lang: str
       <Footer dict={dict.footer} lang={lang} />
     </div>
   );
-}
+}

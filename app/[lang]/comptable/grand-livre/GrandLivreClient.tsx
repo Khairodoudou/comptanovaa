@@ -453,6 +453,7 @@ export function GrandLivreClient({
   const [month, setMonth] = useState(selectedMonth);
   const [year, setYear] = useState(selectedYear);
   const [accounts, setAccounts] = useState<TAccount[] | null>(null);
+  const [availableMonths, setAvailableMonths] = useState<{ year: number; month: number }[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -471,6 +472,9 @@ export function GrandLivreClient({
         }
         const data = await res.json();
         setAccounts(data.accounts);
+        if (data.availableMonths) {
+          setAvailableMonths(data.availableMonths);
+        }
       } catch (err: unknown) {
         setError(err instanceof Error ? err.message : "Erreur inconnue");
       } finally {
@@ -611,10 +615,46 @@ export function GrandLivreClient({
         </div>
       )}
 
-      {/* Empty month */}
+      {/* Empty month with active periods suggestions */}
       {accounts !== null && accounts.length === 0 && (
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-12 text-center">
-          <p className="text-sm text-[#64748b]">{t.no_entries}</p>
+        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-10 text-center space-y-4 max-w-xl mx-auto">
+          <div className="w-12 h-12 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto">
+            <Landmark size={22} />
+          </div>
+          <div>
+            <p className="text-base font-bold text-slate-800">{t.no_entries}</p>
+            <p className="text-xs text-slate-500 mt-1">
+              {lang === "ar"
+                ? `لا توجد عمليات محاسبية مؤكدة لشهر ${MONTH_NAMES_FR[month - 1]} ${year}.`
+                : `Aucune écriture comptable validée pour ${MONTH_NAMES_FR[month - 1]} ${year}.`}
+            </p>
+          </div>
+
+          {availableMonths.length > 0 && (
+            <div className="pt-3 border-t border-slate-100">
+              <p className="text-xs font-semibold text-slate-600 mb-2.5">
+                {lang === "ar"
+                  ? "توجد قيود محاسبية مسجلة في الفترات التالية :"
+                  : "Des écritures validées existent pour les périodes suivantes :"}
+              </p>
+              <div className="flex flex-wrap justify-center gap-2">
+                {availableMonths.map((p) => (
+                  <button
+                    key={`${p.year}-${p.month}`}
+                    onClick={() => {
+                      setMonth(p.month);
+                      setYear(p.year);
+                      load(companyId, p.month, p.year);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-800 text-xs font-extrabold border border-teal-200/80 shadow-xs hover:shadow transition-all group cursor-pointer"
+                  >
+                    <span>📅 {MONTH_NAMES_FR[p.month - 1]} {p.year}</span>
+                    <span className="text-teal-600 group-hover:translate-x-0.5 transition-transform">→</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
