@@ -134,6 +134,7 @@ interface TargetItem {
   reference: string | null;
   clientName?: string;
   invoiceNumber?: string;
+  declarationData?: any;
 }
 
 function calculateScore(
@@ -256,6 +257,7 @@ export async function POST(req: NextRequest) {
       reference: d.reference,
       clientName: d.invoice.company.client.name,
       invoiceNumber: d.invoice.invoiceNumber || undefined,
+      declarationData: d,
     })),
     ...journalEntries
       .filter((e) => !e.bankTransaction)
@@ -310,6 +312,54 @@ export async function POST(req: NextRequest) {
       const txs = [];
       for (const { row, matchedTarget, score } of resultsData) {
         const isMatched = score >= 80;
+        let entryId: string | undefined = undefined;
+
+        if (isMatched && matchedTarget?.type === "declaration") {
+          const decl = matchedTarget.declarationData;
+          // Create the JournalEntry 512 in Comptabilité for this payment
+          const isCredit = row.amount < 0;
+          const newEntry = await tx.journalEntry.create({
+            data: {
+              date: new Date(row.date),
+              description: `Règlement client Facture ${decl.invoice?.invoiceNumber || decl.invoiceId} - ${row.description}`,
+              debitAccount: isCredit ? "411" : "512",
+              creditAccount: isCredit ? "512" : "411",
+              amount: Math.abs(row.amount),
+              reference: row.reference || decl.reference || row.chequeNumber || null,
+              status: "VALIDATED",
+              source: "BANQUE",
+              journalType: "BANQUE",
+              companyId,
+              validatedById: user.userId,
+              validatedAt: new Date(),
+            },
+          });
+          entryId = newEntry.id;
+
+          // Update declaration to VALIDATED
+          await tx.paymentDeclaration.update({
+            where: { id: decl.id },
+            data: { status: "VALIDATED" },
+          });
+
+          // Check invoice total payments and update invoice status
+          const inv = await tx.invoice.findUnique({
+            where: { id: decl.invoiceId },
+            include: { payments: true },
+          });
+          if (inv) {
+            const currentPaid = (inv.payments || []).reduce((s: number, p: any) => s + p.amount, 0);
+            const totalPaid = currentPaid + Math.abs(row.amount);
+            const newStatus = totalPaid >= inv.amount ? "PAID" : "PARTIALLY_PAID";
+            await tx.invoice.update({
+              where: { id: decl.invoiceId },
+              data: { status: newStatus },
+            });
+          }
+        } else if (isMatched && matchedTarget?.type === "entry") {
+          entryId = matchedTarget.id;
+        }
+
         const bTx = await tx.bankTransaction.create({
           data: {
             date: new Date(row.date),
@@ -326,19 +376,34 @@ export async function POST(req: NextRequest) {
             matchedAt: isMatched ? new Date() : null,
             companyId,
             importId: bankImport.id,
-            journalEntryId: matchedTarget?.type === "entry" ? matchedTarget.id : undefined,
+            journalEntryId: entryId,
           },
         });
 
+        // Create InvoicePayment if matched to declaration
+        if (isMatched && matchedTarget?.type === "declaration") {
+          const decl = matchedTarget.declarationData;
+          await tx.invoicePayment.create({
+            data: {
+              invoiceId: decl.invoiceId,
+              bankTransactionId: bTx.id,
+              declarationId: decl.id,
+              amount: Math.abs(row.amount),
+            },
+          });
+        }
+
         // Create ReconciliationMatch record for full auditability
-        if (isMatched && matchedTarget?.type === "entry") {
+        if (isMatched && entryId) {
           await tx.reconciliationMatch.create({
             data: {
               bankTransactionId: bTx.id,
-              journalEntryId: matchedTarget.id,
+              journalEntryId: entryId,
               status: "MATCHED",
               score,
-              reason: `Rapprochement automatique (${score}%)`,
+              reason: matchedTarget?.type === "declaration"
+                ? `Rapprochement automatique sur déclaration (${score}%)`
+                : `Rapprochement automatique (${score}%)`,
               matchedById: user.userId,
             },
           });

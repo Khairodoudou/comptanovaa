@@ -8,6 +8,7 @@ import {
   FileText, ArrowRightLeft, PlusCircle, Check, Camera, GitMerge,
   Minus, BarChart3, TrendingUp, TrendingDown, Clock, Ban,
   ChevronDown, Info, Zap, AlertTriangle, Search, Filter,
+  Edit3, Printer, ExternalLink,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -67,8 +68,12 @@ interface ImportHistoryItem {
 
 interface ComparisonRow {
   id: string;
+  date?: string;
   source: "ACCOUNTING" | "BANK";
-  status: "MATCHED" | "ACCOUNTING_ONLY" | "BANK_ONLY";
+  status: "MATCHED" | "ACCOUNTING_ONLY" | "BANK_ONLY" | "IGNORED";
+  correspondance?: string;
+  amountAccounting?: number | null;
+  amountBank?: number | null;
   accounting: {
     id: string;
     date: string;
@@ -76,6 +81,10 @@ interface ComparisonRow {
     debit: number;
     credit: number;
     reference?: string | null;
+    documentId?: string | null;
+    originalName?: string | null;
+    hasFile?: boolean;
+    invoiceNumber?: string | null;
   } | null;
   bank: {
     id: string;
@@ -87,7 +96,10 @@ interface ComparisonRow {
     senderName?: string | null;
     balance?: number | null;
     matchStatus: string;
+    matchReason?: string | null;
     importFile?: string | null;
+    invoiceNumber?: string | null;
+    justificatif?: string | null;
   } | null;
 }
 
@@ -95,9 +107,13 @@ interface ComparisonSummary {
   matched: number;
   accountingOnly: number;
   bankOnly: number;
+  ignored?: number;
   total: number;
-  totalAccounting: number;
-  totalBank: number;
+  soldeInitial512: number;
+  totalDebit512: number;
+  totalCredit512: number;
+  soldeComptable: number;
+  soldeBancaire: number;
   ecart: number;
 }
 
@@ -139,13 +155,13 @@ function statusBadge(status: string) {
   switch (status) {
     case "MATCHED":
     case "MANUAL_MATCH":
-      return { label: "Rapproché", color: "#10b981", bg: "#d1fae5", icon: <CheckCircle2 size={12} /> };
+      return { label: "🟢 Rapproché", color: "#10b981", bg: "#d1fae5", icon: <CheckCircle2 size={12} /> };
     case "ACCOUNTING_ONLY":
-      return { label: "Non trouvé banque", color: "#f59e0b", bg: "#fef3c7", icon: <AlertTriangle size={12} /> };
+      return { label: "🟠 Non trouvé", color: "#d97706", bg: "#fef3c7", icon: <AlertTriangle size={12} /> };
     case "BANK_ONLY":
-      return { label: "Banque uniquement", color: "#8b5cf6", bg: "#ede9fe", icon: <Info size={12} /> };
+      return { label: "🔴 Banque uniquement", color: "#ef4444", bg: "#fee2e2", icon: <Info size={12} /> };
     case "IGNORED":
-      return { label: "Ignoré", color: "#94a3b8", bg: "#f1f5f9", icon: <Ban size={12} /> };
+      return { label: "⚪ Ignoré", color: "#64748b", bg: "#f1f5f9", icon: <Ban size={12} /> };
     default:
       return { label: "En attente", color: "#64748b", bg: "#f8fafc", icon: <Clock size={12} /> };
   }
@@ -185,6 +201,8 @@ export function RapprochementClient({
   // Action modals
   const [matchModal, setMatchModal] = useState<ComparisonRow | null>(null);
   const [createEntryModal, setCreateEntryModal] = useState<ComparisonRow | null>(null);
+  const [editModal, setEditModal] = useState<{ type: "accounting" | "bank"; row: ComparisonRow } | null>(null);
+  const [justificatifModal, setJustificatifModal] = useState<ComparisonRow | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -196,11 +214,23 @@ export function RapprochementClient({
     reference: "",
   });
 
-  // Match form
+  // Edit form (Corriger)
+  const [editForm, setEditForm] = useState({
+    date: "",
+    description: "",
+    debitAccount: "512",
+    creditAccount: "411",
+    amount: "",
+    reference: "",
+    chequeNumber: "",
+  });
+
+  // Match form selection
   const [selectedEntryId, setSelectedEntryId] = useState("");
+  const [selectedBankTxId, setSelectedBankTxId] = useState("");
 
   // Filter
-  const [statusFilter, setStatusFilter] = useState<"ALL" | "MATCHED" | "ACCOUNTING_ONLY" | "BANK_ONLY">("ALL");
+  const [statusFilter, setStatusFilter] = useState<"ALL" | "MATCHED" | "ACCOUNTING_ONLY" | "BANK_ONLY" | "IGNORED">("ALL");
 
   // ─── Navigation ────────────────────────────────────────────────────────────
 
@@ -294,18 +324,68 @@ export function RapprochementClient({
     }
   }
 
-  async function handleMatch() {
-    if (!matchModal?.bank?.id || !selectedEntryId) return;
+  async function handleUnignore(bankTxId: string) {
     setActionLoading(true);
     setActionError(null);
     try {
       const res = await fetch("/api/bank/reconcile/action", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "unignore", bankTransactionId: bankTxId }),
+      });
+      if (!res.ok) {
+        const d = await res.json();
+        throw new Error(d.error);
+      }
+      await loadComparison();
+    } catch (err: any) {
+      setActionError(err.message);
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function handleUnmatch(bankTxId: string) {
+    if (!confirm("Voulez-vous vraiment dé-rapprocher cette opération ?")) return;
+    setActionLoading(true);
+    setActionError(null);
+    try {
+      const res = await fetch("/api/bank/reconcile/action", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "unmatch", bankTransactionId: bankTxId }),
+      });
+      if (!res.ok) {
+        const d = await res.json();
+        throw new Error(d.error);
+      }
+      await loadComparison();
+      router.refresh();
+    } catch (err: any) {
+      setActionError(err.message);
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function handleMatch() {
+    setActionLoading(true);
+    setActionError(null);
+    try {
+      const bankTxId = matchModal?.bank?.id || selectedBankTxId;
+      const entryId = selectedEntryId || matchModal?.accounting?.id;
+
+      if (!bankTxId || !entryId) {
+        throw new Error("Veuillez sélectionner l'opération correspondante");
+      }
+
+      const res = await fetch("/api/bank/reconcile/action", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "match",
-          bankTransactionId: matchModal.bank.id,
-          journalEntryId: selectedEntryId,
+          bankTransactionId: bankTxId,
+          journalEntryId: entryId,
         }),
       });
       if (!res.ok) {
@@ -314,7 +394,9 @@ export function RapprochementClient({
       }
       setMatchModal(null);
       setSelectedEntryId("");
+      setSelectedBankTxId("");
       await loadComparison();
+      router.refresh();
     } catch (err: any) {
       setActionError(err.message);
     } finally {
@@ -351,6 +433,87 @@ export function RapprochementClient({
       }
       setCreateEntryModal(null);
       await loadComparison();
+      router.refresh();
+    } catch (err: any) {
+      setActionError(err.message);
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  function openEditModal(row: ComparisonRow, type: "accounting" | "bank") {
+    setActionError(null);
+    if (type === "accounting" && row.accounting) {
+      setEditForm({
+        date: row.accounting.date ? new Date(row.accounting.date).toISOString().slice(0, 10) : "",
+        description: row.accounting.description || "",
+        debitAccount: row.accounting.debit > 0 ? "512" : "",
+        creditAccount: row.accounting.credit > 0 ? "512" : "",
+        amount: String(row.accounting.debit > 0 ? row.accounting.debit : row.accounting.credit),
+        reference: row.accounting.reference || "",
+        chequeNumber: "",
+      });
+      setEditModal({ type: "accounting", row });
+    } else if (type === "bank" && row.bank) {
+      setEditForm({
+        date: row.bank.date ? new Date(row.bank.date).toISOString().slice(0, 10) : "",
+        description: row.bank.description || "",
+        debitAccount: "512",
+        creditAccount: "",
+        amount: String(Math.abs(row.bank.amount)),
+        reference: row.bank.reference || "",
+        chequeNumber: row.bank.chequeNumber || "",
+      });
+      setEditModal({ type: "bank", row });
+    }
+  }
+
+  async function handleSaveEdit() {
+    if (!editModal) return;
+    setActionLoading(true);
+    setActionError(null);
+    try {
+      if (editModal.type === "accounting" && editModal.row.accounting) {
+        const res = await fetch("/api/bank/reconcile/action", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "edit_entry",
+            journalEntryId: editModal.row.accounting.id,
+            entryData: {
+              date: editForm.date,
+              description: editForm.description,
+              debitAccount: editForm.debitAccount,
+              creditAccount: editForm.creditAccount,
+              amount: parseFloat(editForm.amount),
+              reference: editForm.reference,
+            },
+          }),
+        });
+        if (!res.ok) {
+          const d = await res.json();
+          throw new Error(d.error);
+        }
+      } else if (editModal.type === "bank" && editModal.row.bank) {
+        const res = await fetch("/api/bank/reconcile/action", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "edit_bank",
+            bankTransactionId: editModal.row.bank.id,
+            description: editForm.description,
+            reference: editForm.reference,
+            chequeNumber: editForm.chequeNumber,
+          }),
+        });
+        if (!res.ok) {
+          const d = await res.json();
+          throw new Error(d.error);
+        }
+      }
+      setEditModal(null);
+      await loadComparison();
+      router.refresh();
     } catch (err: any) {
       setActionError(err.message);
     } finally {
@@ -485,6 +648,7 @@ export function RapprochementClient({
             { id: "section-import", label: "2. Import Relevé", icon: <Upload size={13} />, count: importHistory.length },
             { id: "section-rapprochement", label: "3. Rapprochement", icon: <ArrowRightLeft size={13} />, count: comparisonRows.length },
             { id: "section-cheques", label: "4. Chèques", icon: <FileSpreadsheet size={13} />, count: cheques.length },
+            { id: "section-resume", label: "5. Résumé final", icon: <BarChart3 size={13} />, count: null },
           ].map((s) => (
             <button
               key={s.id}
@@ -520,16 +684,18 @@ export function RapprochementClient({
             >
               {s.icon}
               {s.label}
-              <span style={{
-                background: "#e2e8f0",
-                color: "#475569",
-                borderRadius: "10px",
-                padding: "1px 6px",
-                fontSize: "10px",
-                fontWeight: 700,
-              }}>
-                {s.count}
-              </span>
+              {s.count !== null && (
+                <span style={{
+                  background: "#e2e8f0",
+                  color: "#475569",
+                  borderRadius: "10px",
+                  padding: "1px 6px",
+                  fontSize: "10px",
+                  fontWeight: 700,
+                }}>
+                  {s.count}
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -1176,142 +1342,219 @@ export function RapprochementClient({
               background: "#fff",
               borderRadius: "14px",
               border: "1px solid #e2e8f0",
-              overflow: "hidden",
+              overflowX: "auto",
               boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
             }}>
-              {/* Table header */}
-              <div style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 40px 1fr 120px 180px",
-                background: "#f8fafc",
-                borderBottom: "1px solid #e2e8f0",
-                padding: "10px 16px",
-                gap: "8px",
-              }}>
-                {["Comptabilité (512)", "", "Relevé Bancaire", "Statut", "Actions"].map((h, i) => (
-                  <div key={i} style={{
-                    fontSize: "11px", fontWeight: 600, color: "#64748b",
-                    textTransform: "uppercase", letterSpacing: "0.04em",
-                    textAlign: i === 1 ? "center" : i >= 3 ? "center" : "left",
-                  }}>
-                    {h}
-                  </div>
-                ))}
-              </div>
+              <div style={{ minWidth: "1060px" }}>
+                {/* Table header */}
+                <div style={{
+                  display: "grid",
+                  gridTemplateColumns: "85px minmax(200px, 1.8fr) 140px 140px 120px 150px minmax(220px, 1.8fr)",
+                  background: "#f8fafc",
+                  borderBottom: "1px solid #e2e8f0",
+                  padding: "12px 16px",
+                  gap: "10px",
+                  alignItems: "center",
+                }}>
+                  {[
+                    { label: "Date", align: "left" },
+                    { label: "Libellé", align: "left" },
+                    { label: "Montant comptabilité", align: "right" },
+                    { label: "Montant banque", align: "right" },
+                    { label: "Correspondance", align: "center" },
+                    { label: "Statut", align: "center" },
+                    { label: "Actions", align: "center" },
+                  ].map((h, i) => (
+                    <div key={i} style={{
+                      fontSize: "11px", fontWeight: 700, color: "#475569",
+                      textTransform: "uppercase", letterSpacing: "0.04em",
+                      textAlign: h.align as any,
+                    }}>
+                      {h.label}
+                    </div>
+                  ))}
+                </div>
 
-              {/* Table rows */}
-              {filteredRows.map((row, idx) => {
-                const badge = statusBadge(row.status);
-                return (
-                  <div
-                    key={row.id}
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "1fr 40px 1fr 120px 180px",
-                      gap: "8px",
-                      padding: "12px 16px",
-                      borderTop: idx > 0 ? "1px solid #f1f5f9" : "none",
-                      background: row.status === "MATCHED" ? "#fafffe" : row.status === "ACCOUNTING_ONLY" ? "#fffbeb" : "#faf5ff",
-                      alignItems: "center",
-                      transition: "background 0.1s",
-                    }}
-                  >
-                    {/* Accounting side */}
-                    <div>
-                      {row.accounting ? (
-                        <div>
-                          <div style={{ fontSize: "12px", color: "#94a3b8", marginBottom: "2px" }}>{fmtDate(row.accounting.date)}</div>
-                          <div style={{ fontSize: "13px", fontWeight: 500, color: "#1e293b", marginBottom: "4px" }}>
-                            {row.accounting.description}
+                {/* Table rows */}
+                {filteredRows.map((row, idx) => {
+                  const badge = statusBadge(row.status);
+                  const hasJustificatif = !!(
+                    row.accounting?.documentId ||
+                    row.accounting?.hasFile ||
+                    row.accounting?.invoiceNumber ||
+                    row.bank?.justificatif ||
+                    row.bank?.invoiceNumber ||
+                    (row.correspondance && row.correspondance !== "—")
+                  );
+
+                  return (
+                    <div
+                      key={row.id}
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "85px minmax(200px, 1.8fr) 140px 140px 120px 150px minmax(220px, 1.8fr)",
+                        gap: "10px",
+                        padding: "12px 16px",
+                        borderTop: idx > 0 ? "1px solid #f1f5f9" : "none",
+                        background: row.status === "MATCHED" ? "#fafffe" : row.status === "ACCOUNTING_ONLY" ? "#fffbeb" : row.status === "IGNORED" ? "#f8fafc" : "#faf5ff",
+                        alignItems: "center",
+                        transition: "background 0.15s",
+                      }}
+                    >
+                      {/* 1. Date */}
+                      <div style={{ fontSize: "12px", color: "#64748b", fontWeight: 600 }}>
+                        {fmtDate(row.date || row.accounting?.date || row.bank?.date || "")}
+                      </div>
+
+                      {/* 2. Libellé */}
+                      <div>
+                        {row.accounting && row.bank ? (
+                          <div>
+                            <div style={{ fontSize: "13px", fontWeight: 600, color: "#0f172a", display: "flex", alignItems: "center", gap: "6px" }}>
+                              <span style={{ fontSize: "9px", background: "#eff6ff", color: "#1d4ed8", padding: "1px 5px", borderRadius: "4px", fontWeight: 700 }}>Compta</span>
+                              {row.accounting.description}
+                            </div>
+                            <div style={{ fontSize: "12px", color: "#64748b", marginTop: "3px", display: "flex", alignItems: "center", gap: "6px" }}>
+                              <span style={{ fontSize: "9px", background: "#f5f3ff", color: "#7c3aed", padding: "1px 5px", borderRadius: "4px", fontWeight: 700 }}>Banque</span>
+                              {row.bank.description}
+                            </div>
                           </div>
-                          <div style={{ display: "flex", gap: "8px" }}>
-                            {row.accounting.debit > 0 && (
-                              <span style={{ fontSize: "12px", color: "#10b981", fontWeight: 600, fontFamily: "monospace" }}>
-                                +{fmt(row.accounting.debit, locale)}
-                              </span>
-                            )}
-                            {row.accounting.credit > 0 && (
-                              <span style={{ fontSize: "12px", color: "#f43f5e", fontWeight: 600, fontFamily: "monospace" }}>
-                                -{fmt(row.accounting.credit, locale)}
-                              </span>
-                            )}
+                        ) : row.accounting ? (
+                          <div>
+                            <div style={{ fontSize: "13px", fontWeight: 600, color: "#0f172a" }}>
+                              {row.accounting.description}
+                            </div>
                             {row.accounting.reference && (
-                              <span style={{ fontSize: "11px", color: "#94a3b8", fontFamily: "monospace" }}>
-                                {row.accounting.reference}
-                              </span>
+                              <div style={{ fontSize: "11px", color: "#94a3b8", fontFamily: "monospace", marginTop: "2px" }}>
+                                Réf : {row.accounting.reference}
+                              </div>
                             )}
                           </div>
-                        </div>
-                      ) : (
-                        <span style={{ color: "#cbd5e1", fontSize: "12px", fontStyle: "italic" }}>— Absent en comptabilité</span>
-                      )}
-                    </div>
-
-                    {/* Arrow */}
-                    <div style={{ display: "flex", justifyContent: "center" }}>
-                      <ArrowRightLeft size={14} color={row.status === "MATCHED" ? "#10b981" : "#cbd5e1"} />
-                    </div>
-
-                    {/* Bank side */}
-                    <div>
-                      {row.bank ? (
-                        <div>
-                          <div style={{ fontSize: "12px", color: "#94a3b8", marginBottom: "2px" }}>{fmtDate(row.bank.date)}</div>
-                          <div style={{ fontSize: "13px", fontWeight: 500, color: "#1e293b", marginBottom: "4px" }}>
-                            {row.bank.description}
+                        ) : row.bank ? (
+                          <div>
+                            <div style={{ fontSize: "13px", fontWeight: 600, color: "#0f172a" }}>
+                              {row.bank.description}
+                            </div>
+                            <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: "2px", display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                              {row.bank.chequeNumber && <span>Chq: {row.bank.chequeNumber}</span>}
+                              {row.bank.reference && <span>Réf: {row.bank.reference}</span>}
+                              {row.bank.importFile && <span>📥 {row.bank.importFile}</span>}
+                            </div>
                           </div>
-                          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                            <span style={{ fontSize: "12px", color: row.bank.amount >= 0 ? "#10b981" : "#f43f5e", fontWeight: 600, fontFamily: "monospace" }}>
-                              {row.bank.amount >= 0 ? "+" : ""}{fmt(row.bank.amount, locale)}
-                            </span>
-                            {row.bank.chequeNumber && (
-                              <span style={{ fontSize: "11px", background: "#f1f5f9", borderRadius: "4px", padding: "1px 5px", color: "#475569" }}>
-                                Chq {row.bank.chequeNumber}
-                              </span>
-                            )}
-                            {row.bank.importFile && (
-                              <span style={{ fontSize: "10px", color: "#94a3b8" }}>📥 {row.bank.importFile}</span>
-                            )}
-                          </div>
-                        </div>
-                      ) : (
-                        <span style={{ color: "#cbd5e1", fontSize: "12px", fontStyle: "italic" }}>— Absent du relevé</span>
-                      )}
-                    </div>
+                        ) : (
+                          <span style={{ color: "#cbd5e1", fontSize: "12px", fontStyle: "italic" }}>—</span>
+                        )}
+                      </div>
 
-                    {/* Status */}
-                    <div style={{ display: "flex", justifyContent: "center" }}>
-                      <span style={{
-                        display: "inline-flex", alignItems: "center", gap: "4px",
-                        background: badge.bg, color: badge.color,
-                        borderRadius: "20px", padding: "4px 10px",
-                        fontSize: "11px", fontWeight: 600,
-                        whiteSpace: "nowrap",
-                      }}>
-                        {badge.icon} {badge.label}
-                      </span>
-                    </div>
+                      {/* 3. Montant comptabilité */}
+                      <div style={{ textAlign: "right" }}>
+                        {row.accounting ? (
+                          <span style={{
+                            fontFamily: "monospace",
+                            fontWeight: 700,
+                            fontSize: "13px",
+                            color: row.accounting.debit > 0 ? "#10b981" : "#f43f5e",
+                          }}>
+                            {row.accounting.debit > 0 ? "+" : "-"}{fmt(row.accounting.debit || row.accounting.credit, locale)} DA
+                          </span>
+                        ) : (
+                          <span style={{ color: "#94a3b8", fontSize: "14px", fontWeight: 600 }}>—</span>
+                        )}
+                      </div>
 
-                    {/* Actions */}
-                    <div style={{ display: "flex", gap: "6px", justifyContent: "center", flexWrap: "wrap" }}>
-                      {row.status !== "MATCHED" && row.bank && (
-                        <>
+                      {/* 4. Montant banque */}
+                      <div style={{ textAlign: "right" }}>
+                        {row.bank ? (
+                          <span style={{
+                            fontFamily: "monospace",
+                            fontWeight: 700,
+                            fontSize: "13px",
+                            color: row.bank.amount >= 0 ? "#10b981" : "#f43f5e",
+                          }}>
+                            {row.bank.amount >= 0 ? "+" : ""}{fmt(row.bank.amount, locale)} DA
+                          </span>
+                        ) : (
+                          <span style={{ color: "#94a3b8", fontSize: "14px", fontWeight: 600 }}>—</span>
+                        )}
+                      </div>
+
+                      {/* 5. Correspondance */}
+                      <div style={{ display: "flex", justifyContent: "center" }}>
+                        {row.correspondance && row.correspondance !== "—" ? (
+                          <span style={{
+                            background: "#f1f5f9",
+                            border: "1px solid #e2e8f0",
+                            color: "#334155",
+                            fontFamily: "monospace",
+                            fontSize: "11px",
+                            fontWeight: 600,
+                            padding: "3px 8px",
+                            borderRadius: "6px",
+                          }}>
+                            {row.correspondance}
+                          </span>
+                        ) : (
+                          <span style={{ color: "#94a3b8", fontSize: "14px" }}>—</span>
+                        )}
+                      </div>
+
+                      {/* 6. Statut */}
+                      <div style={{ display: "flex", justifyContent: "center" }}>
+                        <span style={{
+                          display: "inline-flex", alignItems: "center", gap: "4px",
+                          background: badge.bg, color: badge.color,
+                          borderRadius: "20px", padding: "4px 10px",
+                          fontSize: "11px", fontWeight: 700,
+                          whiteSpace: "nowrap",
+                        }}>
+                          {badge.icon} {badge.label}
+                        </span>
+                      </div>
+
+                      {/* 7. Actions du comptable */}
+                      <div style={{ display: "flex", gap: "5px", justifyContent: "center", flexWrap: "wrap" }}>
+                        {/* 🟩 Rapprocher */}
+                        {row.status !== "MATCHED" && (
                           <button
                             onClick={() => {
                               setMatchModal(row);
                               setActionError(null);
                               setSelectedEntryId("");
+                              setSelectedBankTxId("");
                             }}
                             title="Rapprocher manuellement"
                             style={{
-                              display: "flex", alignItems: "center", gap: "4px",
-                              padding: "4px 8px", borderRadius: "6px",
+                              display: "inline-flex", alignItems: "center", gap: "3px",
+                              padding: "4px 7px", borderRadius: "6px",
                               border: "1px solid #10b981", background: "#f0fdf4",
-                              color: "#059669", cursor: "pointer", fontSize: "11px", fontWeight: 500,
+                              color: "#059669", cursor: "pointer", fontSize: "11px", fontWeight: 600,
                             }}
                           >
                             <Link2 size={11} /> Rapprocher
                           </button>
+                        )}
+
+                        {/* 🖊️ Corriger */}
+                        {(row.accounting || row.bank) && (
+                          <button
+                            onClick={() => {
+                              if (row.accounting) openEditModal(row, "accounting");
+                              else if (row.bank) openEditModal(row, "bank");
+                            }}
+                            title="Corriger"
+                            style={{
+                              display: "inline-flex", alignItems: "center", gap: "3px",
+                              padding: "4px 7px", borderRadius: "6px",
+                              border: "1px solid #f59e0b", background: "#fffbeb",
+                              color: "#d97706", cursor: "pointer", fontSize: "11px", fontWeight: 600,
+                            }}
+                          >
+                            <Edit3 size={11} /> Corriger
+                          </button>
+                        )}
+
+                        {/* ➕ Créer une écriture */}
+                        {row.status !== "MATCHED" && row.bank && (
                           <button
                             onClick={() => {
                               const bank = row.bank!;
@@ -1324,38 +1567,87 @@ export function RapprochementClient({
                               });
                               setActionError(null);
                             }}
-                            title="Créer une écriture"
+                            title="Créer une écriture comptable"
                             style={{
-                              display: "flex", alignItems: "center", gap: "4px",
-                              padding: "4px 8px", borderRadius: "6px",
+                              display: "inline-flex", alignItems: "center", gap: "3px",
+                              padding: "4px 7px", borderRadius: "6px",
                               border: "1px solid #3b82f6", background: "#eff6ff",
-                              color: "#2563eb", cursor: "pointer", fontSize: "11px", fontWeight: 500,
+                              color: "#2563eb", cursor: "pointer", fontSize: "11px", fontWeight: 600,
                             }}
                           >
                             <PlusCircle size={11} /> Écriture
                           </button>
+                        )}
+
+                        {/* 🔍 Voir le justificatif */}
+                        {hasJustificatif && (
+                          <button
+                            onClick={() => setJustificatifModal(row)}
+                            title="Voir le justificatif"
+                            style={{
+                              display: "inline-flex", alignItems: "center", gap: "3px",
+                              padding: "4px 7px", borderRadius: "6px",
+                              border: "1px solid #818cf8", background: "#f5f3ff",
+                              color: "#6366f1", cursor: "pointer", fontSize: "11px", fontWeight: 600,
+                            }}
+                          >
+                            <Eye size={11} /> Justificatif
+                          </button>
+                        )}
+
+                        {/* ❌ Ignorer / Rétablir */}
+                        {row.status === "BANK_ONLY" && row.bank && (
                           <button
                             onClick={() => handleIgnore(row.bank!.id)}
                             disabled={actionLoading}
-                            title="Ignorer"
+                            title="Ignorer / Marquer comme différence"
                             style={{
-                              display: "flex", alignItems: "center",
+                              display: "inline-flex", alignItems: "center", gap: "3px",
                               padding: "4px 6px", borderRadius: "6px",
-                              border: "1px solid #e2e8f0", background: "#f8fafc",
-                              color: "#94a3b8", cursor: "pointer", fontSize: "11px",
+                              border: "1px solid #cbd5e1", background: "#f8fafc",
+                              color: "#64748b", cursor: "pointer", fontSize: "11px", fontWeight: 500,
                             }}
                           >
-                            <Ban size={11} />
+                            <Ban size={11} /> Ignorer
                           </button>
-                        </>
-                      )}
-                      {row.status === "MATCHED" && (
-                        <span style={{ fontSize: "11px", color: "#94a3b8" }}>Aucune action requise</span>
-                      )}
+                        )}
+                        {row.status === "IGNORED" && row.bank && (
+                          <button
+                            onClick={() => handleUnignore(row.bank!.id)}
+                            disabled={actionLoading}
+                            title="Rétablir cette opération"
+                            style={{
+                              display: "inline-flex", alignItems: "center", gap: "3px",
+                              padding: "4px 6px", borderRadius: "6px",
+                              border: "1px solid #10b981", background: "#f0fdf4",
+                              color: "#059669", cursor: "pointer", fontSize: "11px", fontWeight: 500,
+                            }}
+                          >
+                            <CheckCircle2 size={11} /> Rétablir
+                          </button>
+                        )}
+
+                        {/* ↩️ Dé-rapprocher */}
+                        {row.status === "MATCHED" && row.bank && (
+                          <button
+                            onClick={() => handleUnmatch(row.bank!.id)}
+                            disabled={actionLoading}
+                            title="Dé-rapprocher cette opération"
+                            style={{
+                              display: "inline-flex", alignItems: "center", gap: "3px",
+                              padding: "4px 7px", borderRadius: "6px",
+                              border: "1px solid #fecdd3", background: "#fff1f2",
+                              color: "#e11d48", cursor: "pointer", fontSize: "11px", fontWeight: 500,
+                            }}
+                          >
+                            <X size={11} /> Dé-rapprocher
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>
@@ -1494,6 +1786,183 @@ export function RapprochementClient({
       </section>
 
       {/* ══════════════════════════════════════════════
+          SECTION 5 — Résumé Final du Rapprochement
+      ══════════════════════════════════════════════ */}
+      <section id="section-resume" style={{ marginBottom: "36px", scrollMarginTop: "20px" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <div style={{
+              width: "32px", height: "32px", borderRadius: "8px",
+              background: "#fef3c7", color: "#d97706",
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+              <BarChart3 size={18} />
+            </div>
+            <div>
+              <h2 style={{ fontSize: "16px", fontWeight: 700, margin: 0, color: "#0f172a" }}>
+                5. Résumé Final du Rapprochement
+              </h2>
+              <p style={{ fontSize: "12px", color: "#64748b", margin: "2px 0 0" }}>
+                Synthèse globale du mois — {MONTHS_FR[selectedMonth - 1]} {selectedYear}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => window.print()}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: "6px",
+              padding: "6px 14px", borderRadius: "8px",
+              border: "1px solid #e2e8f0", background: "#fff",
+              color: "#334155", fontSize: "12px", fontWeight: 600, cursor: "pointer",
+            }}
+          >
+            <Printer size={13} /> Imprimer
+          </button>
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+          {/* Operations summary */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "14px" }}>
+            {[
+              {
+                emoji: "🟢",
+                label: "Opérations rapprochées",
+                value: comparisonSummary?.matched ?? 0,
+                desc: "Comptabilité ↔ Banque confirmées",
+                color: "#10b981", bg: "#f0fdf4", border: "#bbf7d0",
+              },
+              {
+                emoji: "🟠",
+                label: "Opérations comptables non trouvées à la banque",
+                value: comparisonSummary?.accountingOnly ?? 0,
+                desc: "En comptabilité, absent du relevé",
+                color: "#d97706", bg: "#fffbeb", border: "#fde68a",
+              },
+              {
+                emoji: "🔴",
+                label: "Opérations bancaires non enregistrées",
+                value: comparisonSummary?.bankOnly ?? 0,
+                desc: "Sur le relevé, absent en comptabilité",
+                color: "#ef4444", bg: "#fff1f2", border: "#fecdd3",
+              },
+            ].map((s) => (
+              <div key={s.label} style={{
+                background: s.bg,
+                border: `1px solid ${s.border}`,
+                borderRadius: "14px",
+                padding: "20px",
+                display: "flex", alignItems: "flex-start", gap: "14px",
+              }}>
+                <div style={{ fontSize: "28px", flexShrink: 0 }}>{s.emoji}</div>
+                <div>
+                  <div style={{ fontSize: "30px", fontWeight: 800, color: s.color, lineHeight: 1 }}>{s.value}</div>
+                  <div style={{ fontSize: "12px", fontWeight: 600, color: "#1e293b", marginTop: "4px" }}>{s.label}</div>
+                  <div style={{ fontSize: "11px", color: "#64748b", marginTop: "2px" }}>{s.desc}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Soldes comparison */}
+          {comparisonSummary && (
+            <div style={{
+              background: "#fff",
+              border: "1px solid #e2e8f0",
+              borderRadius: "14px",
+              padding: "24px",
+              boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
+            }}>
+              <h3 style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a", margin: "0 0 18px" }}>
+                Comparaison des Soldes
+              </h3>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "16px", marginBottom: "20px" }}>
+                {[
+                  {
+                    label: "Solde Comptable (Compte 512)",
+                    value: comparisonSummary.soldeComptable,
+                    icon: <FileText size={16} />, color: "#1d4ed8", bg: "#eff6ff",
+                  },
+                  {
+                    label: "Solde Bancaire (Relevé)",
+                    value: comparisonSummary.soldeBancaire,
+                    icon: <ArrowRightLeft size={16} />, color: "#7c3aed", bg: "#f5f3ff",
+                  },
+                  {
+                    label: "Écart",
+                    value: comparisonSummary.ecart,
+                    icon: <TrendingUp size={16} />,
+                    color: Math.abs(comparisonSummary.ecart) < 1 ? "#10b981" : "#ef4444",
+                    bg: Math.abs(comparisonSummary.ecart) < 1 ? "#f0fdf4" : "#fff1f2",
+                  },
+                ].map((s) => (
+                  <div key={s.label} style={{
+                    background: s.bg,
+                    borderRadius: "12px",
+                    padding: "16px",
+                    display: "flex", alignItems: "center", gap: "12px",
+                  }}>
+                    <div style={{
+                      width: "36px", height: "36px", background: "#fff",
+                      borderRadius: "8px", display: "flex", alignItems: "center",
+                      justifyContent: "center", color: s.color, flexShrink: 0,
+                      boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+                    }}>
+                      {s.icon}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: "11px", color: "#64748b", fontWeight: 500 }}>{s.label}</div>
+                      <div style={{
+                        fontSize: "18px", fontWeight: 700, color: s.color,
+                        fontFamily: "monospace",
+                      }}>
+                        {s.value >= 0 ? "+" : ""}{fmt(s.value, locale)} DA
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Écart analysis */}
+              <div style={{
+                background: Math.abs(comparisonSummary.ecart) < 1 ? "#f0fdf4" : "#fffbeb",
+                border: `1px solid ${Math.abs(comparisonSummary.ecart) < 1 ? "#bbf7d0" : "#fde68a"}`,
+                borderRadius: "10px",
+                padding: "14px 18px",
+                display: "flex", alignItems: "center", gap: "12px",
+              }}>
+                {Math.abs(comparisonSummary.ecart) < 1 ? (
+                  <>
+                    <CheckCircle2 size={20} color="#10b981" />
+                    <div>
+                      <div style={{ fontWeight: 600, color: "#15803d", fontSize: "14px" }}>
+                        ✅ Rapprochement équilibré — Aucun écart significatif
+                      </div>
+                      <div style={{ fontSize: "12px", color: "#64748b", marginTop: "2px" }}>
+                        Le solde comptable et le solde bancaire sont identiques.
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <AlertTriangle size={20} color="#d97706" />
+                    <div>
+                      <div style={{ fontWeight: 600, color: "#92400e", fontSize: "14px" }}>
+                        ⚠️ Écart détecté : {fmt(Math.abs(comparisonSummary.ecart), locale)} DA
+                      </div>
+                      <div style={{ fontSize: "12px", color: "#64748b", marginTop: "2px" }}>
+                        {comparisonSummary.accountingOnly > 0 && `${comparisonSummary.accountingOnly} opération(s) comptables non trouvées à la banque. `}
+                        {comparisonSummary.bankOnly > 0 && `${comparisonSummary.bankOnly} opération(s) bancaires non enregistrées en comptabilité.`}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════
           MODAL — Rapprocher manuellement
       ══════════════════════════════════════════════ */}
       {matchModal && (
@@ -1522,42 +1991,80 @@ export function RapprochementClient({
               </button>
             </div>
 
-            {/* Bank TX info */}
+            {/* Bank TX info (if opened from bank side) */}
             {matchModal.bank && (
               <div style={{ background: "#f5f3ff", borderRadius: "10px", padding: "14px", marginBottom: "20px" }}>
-                <div style={{ fontSize: "11px", color: "#8b5cf6", fontWeight: 600, marginBottom: "6px" }}>OPÉRATION BANCAIRE</div>
+                <div style={{ fontSize: "11px", color: "#8b5cf6", fontWeight: 600, marginBottom: "6px" }}>OPÉRATION DU RELEVÉ BANCAIRE</div>
                 <div style={{ fontWeight: 600, color: "#1e293b" }}>{matchModal.bank.description}</div>
                 <div style={{ display: "flex", gap: "12px", marginTop: "4px" }}>
                   <span style={{ fontSize: "13px", color: "#64748b" }}>{fmtDate(matchModal.bank.date)}</span>
                   <span style={{ fontSize: "13px", fontWeight: 700, color: matchModal.bank.amount >= 0 ? "#10b981" : "#f43f5e" }}>
-                    {fmt(matchModal.bank.amount, locale)} DZD
+                    {matchModal.bank.amount >= 0 ? "+" : ""}{fmt(matchModal.bank.amount, locale)} DA
                   </span>
                 </div>
               </div>
             )}
 
-            {/* Select journal entry */}
-            <div style={{ marginBottom: "20px" }}>
-              <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#374151", marginBottom: "8px" }}>
-                Sélectionner l'écriture comptable à rapprocher
-              </label>
-              <select
-                value={selectedEntryId}
-                onChange={(e) => setSelectedEntryId(e.target.value)}
-                style={{
-                  width: "100%", padding: "10px 12px", borderRadius: "8px",
-                  border: "1px solid #e2e8f0", fontSize: "13px", color: "#1e293b",
-                  background: "#fff", cursor: "pointer",
-                }}
-              >
-                <option value="">— Sélectionner une écriture —</option>
-                {journalEntries512.filter(e => !e.bankTransaction).map((e) => (
-                  <option key={e.id} value={e.id}>
-                    {fmtDate(e.date)} — {e.description} — {fmt(e.amount, locale)} DZD
-                  </option>
-                ))}
-              </select>
-            </div>
+            {/* Accounting entry info (if opened from accounting side) */}
+            {!matchModal.bank && matchModal.accounting && (
+              <div style={{ background: "#eff6ff", borderRadius: "10px", padding: "14px", marginBottom: "20px" }}>
+                <div style={{ fontSize: "11px", color: "#1d4ed8", fontWeight: 600, marginBottom: "6px" }}>ÉCRITURE COMPTABLE (512)</div>
+                <div style={{ fontWeight: 600, color: "#1e293b" }}>{matchModal.accounting.description}</div>
+                <div style={{ display: "flex", gap: "12px", marginTop: "4px" }}>
+                  <span style={{ fontSize: "13px", color: "#64748b" }}>{fmtDate(matchModal.accounting.date)}</span>
+                  <span style={{ fontSize: "13px", fontWeight: 700, color: matchModal.accounting.debit > 0 ? "#10b981" : "#f43f5e" }}>
+                    {matchModal.accounting.debit > 0 ? `+${fmt(matchModal.accounting.debit, locale)}` : `-${fmt(matchModal.accounting.credit, locale)}`} DA
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Target selector */}
+            {matchModal.bank ? (
+              <div style={{ marginBottom: "20px" }}>
+                <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#374151", marginBottom: "8px" }}>
+                  Sélectionner l'écriture comptable à rapprocher (Compte 512)
+                </label>
+                <select
+                  value={selectedEntryId}
+                  onChange={(e) => setSelectedEntryId(e.target.value)}
+                  style={{
+                    width: "100%", padding: "10px 12px", borderRadius: "8px",
+                    border: "1px solid #e2e8f0", fontSize: "13px", color: "#1e293b",
+                    background: "#fff", cursor: "pointer",
+                  }}
+                >
+                  <option value="">— Sélectionner une écriture —</option>
+                  {journalEntries512.filter(e => !e.bankTransaction).map((e) => (
+                    <option key={e.id} value={e.id}>
+                      {fmtDate(e.date)} — {e.description} — {fmt(e.amount, locale)} DA {e.reference ? `(${e.reference})` : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <div style={{ marginBottom: "20px" }}>
+                <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#374151", marginBottom: "8px" }}>
+                  Sélectionner l'opération du relevé bancaire à rapprocher
+                </label>
+                <select
+                  value={selectedBankTxId}
+                  onChange={(e) => setSelectedBankTxId(e.target.value)}
+                  style={{
+                    width: "100%", padding: "10px 12px", borderRadius: "8px",
+                    border: "1px solid #e2e8f0", fontSize: "13px", color: "#1e293b",
+                    background: "#fff", cursor: "pointer",
+                  }}
+                >
+                  <option value="">— Sélectionner une opération bancaire —</option>
+                  {bankTransactions.filter(bt => !bt.matched && bt.matchStatus !== "IGNORED").map((bt) => (
+                    <option key={bt.id} value={bt.id}>
+                      {fmtDate(bt.date)} — {bt.description} — {bt.amount >= 0 ? "+" : ""}{fmt(bt.amount, locale)} DA {bt.chequeNumber ? `[Chq ${bt.chequeNumber}]` : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             {actionError && (
               <div style={{ color: "#dc2626", background: "#fee2e2", borderRadius: "8px", padding: "10px", fontSize: "13px", marginBottom: "16px" }}>
@@ -1571,11 +2078,11 @@ export function RapprochementClient({
               </button>
               <button
                 onClick={handleMatch}
-                disabled={!selectedEntryId || actionLoading}
+                disabled={(!selectedEntryId && !selectedBankTxId) || actionLoading}
                 style={{
                   padding: "9px 20px", borderRadius: "8px", border: "none",
-                  background: selectedEntryId ? "#10b981" : "#d1fae5",
-                  color: "#fff", cursor: selectedEntryId ? "pointer" : "not-allowed",
+                  background: (selectedEntryId || selectedBankTxId) ? "#10b981" : "#d1fae5",
+                  color: "#fff", cursor: (selectedEntryId || selectedBankTxId) ? "pointer" : "not-allowed",
                   fontSize: "13px", fontWeight: 600,
                   display: "flex", alignItems: "center", gap: "6px",
                 }}
@@ -1625,7 +2132,7 @@ export function RapprochementClient({
                 <div style={{ display: "flex", gap: "12px", marginTop: "4px" }}>
                   <span style={{ fontSize: "13px", color: "#64748b" }}>{fmtDate(createEntryModal.bank.date)}</span>
                   <span style={{ fontSize: "13px", fontWeight: 700, color: "#1d4ed8" }}>
-                    {fmt(createEntryModal.bank.amount, locale)} DZD
+                    {createEntryModal.bank.amount >= 0 ? "+" : ""}{fmt(createEntryModal.bank.amount, locale)} DA
                   </span>
                 </div>
               </div>
@@ -1697,6 +2204,297 @@ export function RapprochementClient({
               >
                 {actionLoading ? <Loader2 size={14} /> : <PlusCircle size={14} />}
                 Créer et rapprocher
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════
+          MODAL — Corriger (Écriture ou Relevé)
+      ══════════════════════════════════════════════ */}
+      {editModal && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 1000,
+          background: "rgba(15,23,42,0.5)",
+          backdropFilter: "blur(4px)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          padding: "20px",
+        }}>
+          <div style={{
+            background: "#fff",
+            borderRadius: "16px",
+            padding: "28px",
+            width: "100%",
+            maxWidth: "540px",
+            boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
+          }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px" }}>
+              <h3 style={{ fontSize: "16px", fontWeight: 700, margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
+                <Edit3 size={16} color="#d97706" />
+                {editModal.type === "accounting" ? "Corriger l'écriture comptable (512)" : "Corriger la ligne du relevé bancaire"}
+              </h3>
+              <button onClick={() => setEditModal(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8" }}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+              {editModal.type === "accounting" ? (
+                <>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                    <div>
+                      <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#374151", marginBottom: "6px" }}>Date</label>
+                      <input
+                        type="date"
+                        value={editForm.date}
+                        onChange={(e) => setEditForm(f => ({ ...f, date: e.target.value }))}
+                        style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: "1px solid #e2e8f0", fontSize: "13px", boxSizing: "border-box" }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#374151", marginBottom: "6px" }}>Montant (DA)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={editForm.amount}
+                        onChange={(e) => setEditForm(f => ({ ...f, amount: e.target.value }))}
+                        style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: "1px solid #e2e8f0", fontSize: "13px", boxSizing: "border-box" }}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#374151", marginBottom: "6px" }}>Libellé</label>
+                    <input
+                      value={editForm.description}
+                      onChange={(e) => setEditForm(f => ({ ...f, description: e.target.value }))}
+                      style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: "1px solid #e2e8f0", fontSize: "13px", boxSizing: "border-box" }}
+                    />
+                  </div>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                    <div>
+                      <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#374151", marginBottom: "6px" }}>Compte Débit</label>
+                      <input
+                        value={editForm.debitAccount}
+                        onChange={(e) => setEditForm(f => ({ ...f, debitAccount: e.target.value }))}
+                        placeholder="ex: 512"
+                        style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: "1px solid #e2e8f0", fontSize: "13px", boxSizing: "border-box" }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#374151", marginBottom: "6px" }}>Compte Crédit</label>
+                      <input
+                        value={editForm.creditAccount}
+                        onChange={(e) => setEditForm(f => ({ ...f, creditAccount: e.target.value }))}
+                        placeholder="ex: 411"
+                        style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: "1px solid #e2e8f0", fontSize: "13px", boxSizing: "border-box" }}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#374151", marginBottom: "6px" }}>Référence</label>
+                    <input
+                      value={editForm.reference}
+                      onChange={(e) => setEditForm(f => ({ ...f, reference: e.target.value }))}
+                      placeholder="N° chèque, virement, facture..."
+                      style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: "1px solid #e2e8f0", fontSize: "13px", boxSizing: "border-box" }}
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div>
+                    <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#374151", marginBottom: "6px" }}>Libellé relevé bancaire</label>
+                    <input
+                      value={editForm.description}
+                      onChange={(e) => setEditForm(f => ({ ...f, description: e.target.value }))}
+                      style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: "1px solid #e2e8f0", fontSize: "13px", boxSizing: "border-box" }}
+                    />
+                  </div>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                    <div>
+                      <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#374151", marginBottom: "6px" }}>N° de Chèque</label>
+                      <input
+                        value={editForm.chequeNumber}
+                        onChange={(e) => setEditForm(f => ({ ...f, chequeNumber: e.target.value }))}
+                        placeholder="ex: 1254"
+                        style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: "1px solid #e2e8f0", fontSize: "13px", boxSizing: "border-box" }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#374151", marginBottom: "6px" }}>Référence</label>
+                      <input
+                        value={editForm.reference}
+                        onChange={(e) => setEditForm(f => ({ ...f, reference: e.target.value }))}
+                        placeholder="VIR, etc."
+                        style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: "1px solid #e2e8f0", fontSize: "13px", boxSizing: "border-box" }}
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {actionError && (
+              <div style={{ color: "#dc2626", background: "#fee2e2", borderRadius: "8px", padding: "10px", fontSize: "13px", marginTop: "16px" }}>
+                {actionError}
+              </div>
+            )}
+
+            <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end", marginTop: "20px" }}>
+              <button onClick={() => setEditModal(null)} style={{ padding: "9px 18px", borderRadius: "8px", border: "1px solid #e2e8f0", background: "#fff", color: "#64748b", cursor: "pointer", fontSize: "13px" }}>
+                Annuler
+              </button>
+              <button
+                onClick={handleSaveEdit}
+                disabled={actionLoading}
+                style={{
+                  padding: "9px 20px", borderRadius: "8px", border: "none",
+                  background: "linear-gradient(135deg, #d97706, #f59e0b)",
+                  color: "#fff", cursor: "pointer",
+                  fontSize: "13px", fontWeight: 600,
+                  display: "flex", alignItems: "center", gap: "6px",
+                  boxShadow: "0 2px 8px rgba(217,119,6,0.3)",
+                }}
+              >
+                {actionLoading ? <Loader2 size={14} /> : <Check size={14} />}
+                Enregistrer la correction
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════
+          MODAL — Voir le justificatif
+      ══════════════════════════════════════════════ */}
+      {justificatifModal && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 1000,
+          background: "rgba(15,23,42,0.5)",
+          backdropFilter: "blur(4px)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          padding: "20px",
+        }}>
+          <div style={{
+            background: "#fff",
+            borderRadius: "16px",
+            padding: "28px",
+            width: "100%",
+            maxWidth: "640px",
+            maxHeight: "90vh",
+            display: "flex",
+            flexDirection: "column",
+            boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
+          }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "18px" }}>
+              <h3 style={{ fontSize: "16px", fontWeight: 700, margin: 0, display: "flex", alignItems: "center", gap: "8px", color: "#0f172a" }}>
+                <Eye size={18} color="#2563eb" />
+                Pièce justificative
+              </h3>
+              <button onClick={() => setJustificatifModal(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8" }}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <div style={{ overflowY: "auto", flex: 1, paddingRight: "4px" }}>
+              {/* Operation recap */}
+              <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "14px", marginBottom: "16px" }}>
+                <div style={{ fontSize: "11px", color: "#64748b", fontWeight: 600, textTransform: "uppercase" }}>Opération associée</div>
+                <div style={{ fontSize: "14px", fontWeight: 700, color: "#1e293b", marginTop: "4px" }}>
+                  {justificatifModal.accounting?.description || justificatifModal.bank?.description || "—"}
+                </div>
+                <div style={{ display: "flex", gap: "16px", marginTop: "6px", fontSize: "12px", color: "#64748b", flexWrap: "wrap" }}>
+                  <span>Date : <strong>{fmtDate(justificatifModal.date || justificatifModal.accounting?.date || justificatifModal.bank?.date || "")}</strong></span>
+                  <span>Montant : <strong>{fmt(justificatifModal.amountAccounting || justificatifModal.amountBank || 0, locale)} DA</strong></span>
+                  {justificatifModal.correspondance && <span>Réf : <strong>{justificatifModal.correspondance}</strong></span>}
+                </div>
+              </div>
+
+              {/* Justificatif details */}
+              {justificatifModal.accounting?.documentId ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                  <div style={{
+                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                    padding: "12px 16px", background: "#eff6ff", borderRadius: "8px", border: "1px solid #bfdbfe",
+                  }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                      <FileText size={20} color="#2563eb" />
+                      <div>
+                        <div style={{ fontSize: "13px", fontWeight: 600, color: "#1e40af" }}>
+                          {justificatifModal.accounting.originalName || "Document comptable"}
+                        </div>
+                        {justificatifModal.accounting.invoiceNumber && (
+                          <div style={{ fontSize: "11px", color: "#3b82f6" }}>Facture N° {justificatifModal.accounting.invoiceNumber}</div>
+                        )}
+                      </div>
+                    </div>
+                    <a
+                      href={`/api/documents/${justificatifModal.accounting.documentId}/view`}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{
+                        display: "inline-flex", alignItems: "center", gap: "6px",
+                        padding: "6px 12px", background: "#2563eb", color: "#fff",
+                        borderRadius: "6px", textDecoration: "none", fontSize: "12px", fontWeight: 600,
+                      }}
+                    >
+                      <ExternalLink size={13} /> Ouvrir plein écran
+                    </a>
+                  </div>
+
+                  {/* Preview iframe */}
+                  <div style={{ border: "1px solid #e2e8f0", borderRadius: "10px", overflow: "hidden", height: "340px", background: "#f8fafc" }}>
+                    <iframe
+                      src={`/api/documents/${justificatifModal.accounting.documentId}/view`}
+                      style={{ width: "100%", height: "100%", border: "none" }}
+                      title="Prévisualisation du justificatif"
+                    />
+                  </div>
+                </div>
+              ) : justificatifModal.bank?.justificatif ? (
+                <div style={{ padding: "18px", background: "#f0fdf4", borderRadius: "10px", border: "1px solid #bbf7d0" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+                    <CheckCircle2 size={18} color="#16a34a" />
+                    <div style={{ fontWeight: 600, color: "#166534" }}>Reçu / Déclaration de paiement client</div>
+                  </div>
+                  <div style={{ fontSize: "13px", color: "#374151" }}>
+                    Référence : <strong>{justificatifModal.bank.justificatif}</strong>
+                  </div>
+                  {justificatifModal.bank.invoiceNumber && (
+                    <div style={{ fontSize: "13px", color: "#374151", marginTop: "4px" }}>
+                      Facture liée : <strong>{justificatifModal.bank.invoiceNumber}</strong>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div style={{ padding: "24px", textAlign: "center", background: "#f8fafc", borderRadius: "10px", border: "1px dashed #cbd5e1" }}>
+                  <FileText size={32} color="#94a3b8" style={{ margin: "0 auto 8px" }} />
+                  <div style={{ fontSize: "13px", fontWeight: 600, color: "#475569" }}>
+                    Aucun document numérisé directement rattaché
+                  </div>
+                  <div style={{ fontSize: "12px", color: "#94a3b8", marginTop: "4px" }}>
+                    {justificatifModal.correspondance && justificatifModal.correspondance !== "—"
+                      ? `Référence renseignée : ${justificatifModal.correspondance}`
+                      : "Vous pouvez rattacher une pièce en éditant l'écriture."}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "20px", paddingTop: "14px", borderTop: "1px solid #f1f5f9" }}>
+              <button
+                onClick={() => setJustificatifModal(null)}
+                style={{
+                  padding: "8px 18px", borderRadius: "8px", border: "1px solid #e2e8f0",
+                  background: "#fff", color: "#334155", cursor: "pointer", fontSize: "13px", fontWeight: 500,
+                }}
+              >
+                Fermer
               </button>
             </div>
           </div>

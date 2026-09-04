@@ -3,7 +3,7 @@
  * Returns a structured comparison between:
  *   - Journal entries on account 512 (Comptabilité)
  *   - Bank transactions for the same company/period
- * Each item has a "status": MATCHED | ACCOUNTING_ONLY | BANK_ONLY
+ * Each item has a "status": MATCHED | ACCOUNTING_ONLY | BANK_ONLY | IGNORED
  */
 import { getCurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -56,6 +56,18 @@ export async function GET(req: NextRequest) {
       creditAccount: true,
       amount: true,
       reference: true,
+      documentId: true,
+      document: {
+        select: {
+          id: true,
+          originalName: true,
+          fileBase64: true,
+          ocrData: true,
+          invoice: {
+            select: { id: true, invoiceNumber: true, amount: true, status: true },
+          },
+        },
+      },
       bankTransaction: {
         select: { id: true, matchStatus: true },
       },
@@ -88,6 +100,12 @@ export async function GET(req: NextRequest) {
       import: {
         select: { filename: true, importedAt: true },
       },
+      invoicePayments: {
+        include: {
+          invoice: { select: { id: true, invoiceNumber: true, amount: true } },
+          declaration: { select: { id: true, reference: true, justificatif: true } },
+        },
+      },
     },
   });
 
@@ -98,11 +116,18 @@ export async function GET(req: NextRequest) {
   for (const entry of journalEntries) {
     const linkedBankTx = bankTransactions.find((bt) => bt.journalEntryId === entry.id);
     const isDebit = entry.debitAccount === "512";
+    const isMatched = !!linkedBankTx;
 
     rows.push({
       id: `acc-${entry.id}`,
+      date: entry.date,
       source: "ACCOUNTING",
-      status: linkedBankTx ? "MATCHED" : "ACCOUNTING_ONLY",
+      status: isMatched ? "MATCHED" : "ACCOUNTING_ONLY",
+      correspondance: linkedBankTx?.chequeNumber
+        ? `CHQ ${linkedBankTx.chequeNumber}`
+        : linkedBankTx?.reference || entry.reference || "—",
+      amountAccounting: entry.amount,
+      amountBank: linkedBankTx ? linkedBankTx.amount : null,
       accounting: {
         id: entry.id,
         date: entry.date,
@@ -110,6 +135,10 @@ export async function GET(req: NextRequest) {
         debit: isDebit ? entry.amount : 0,
         credit: !isDebit ? entry.amount : 0,
         reference: entry.reference,
+        documentId: entry.documentId,
+        originalName: entry.document?.originalName,
+        hasFile: !!entry.document?.fileBase64,
+        invoiceNumber: entry.document?.invoice?.invoiceNumber,
       },
       bank: linkedBankTx
         ? {
@@ -120,23 +149,31 @@ export async function GET(req: NextRequest) {
             chequeNumber: linkedBankTx.chequeNumber,
             reference: linkedBankTx.reference,
             matchStatus: linkedBankTx.matchStatus,
+            matchReason: linkedBankTx.matchReason,
+            invoiceNumber: linkedBankTx.invoicePayments?.[0]?.invoice?.invoiceNumber,
+            justificatif: linkedBankTx.invoicePayments?.[0]?.declaration?.justificatif,
           }
         : null,
     });
   }
 
   // 2. Bank-only transactions (not linked to any journal entry)
-  const linkedJournalIds = new Set(
-    bankTransactions.filter((bt) => bt.journalEntryId).map((bt) => bt.journalEntryId)
-  );
-
   for (const bt of bankTransactions) {
     const alreadyInRows = rows.some((r) => r.bank?.id === bt.id);
-    if (!alreadyInRows && bt.matchStatus !== "IGNORED") {
+    if (!alreadyInRows) {
+      const isIgnored = bt.matchStatus === "IGNORED";
+      const paymentInfo = bt.invoicePayments?.[0];
+
       rows.push({
         id: `bank-${bt.id}`,
+        date: bt.date,
         source: "BANK",
-        status: bt.matchStatus === "MATCHED" || bt.matchStatus === "MANUAL_MATCH" ? "MATCHED" : "BANK_ONLY",
+        status: isIgnored ? "IGNORED" : "BANK_ONLY",
+        correspondance: bt.chequeNumber
+          ? `CHQ ${bt.chequeNumber}`
+          : bt.reference || paymentInfo?.declaration?.reference || "—",
+        amountAccounting: null,
+        amountBank: bt.amount,
         accounting: null,
         bank: {
           id: bt.id,
@@ -148,7 +185,10 @@ export async function GET(req: NextRequest) {
           senderName: bt.senderName,
           balance: bt.balance,
           matchStatus: bt.matchStatus,
+          matchReason: bt.matchReason,
           importFile: bt.import?.filename,
+          invoiceNumber: paymentInfo?.invoice?.invoiceNumber,
+          justificatif: paymentInfo?.declaration?.justificatif,
         },
       });
     }
@@ -161,17 +201,29 @@ export async function GET(req: NextRequest) {
     return new Date(dateA).getTime() - new Date(dateB).getTime();
   });
 
+  // Calculate opening balances & final balances for Account 512
+  const { computeOpeningBalance, computeSoldeFinal, getAccountNature } = await import("@/lib/accounting");
+  const soldeInitial512 = await computeOpeningBalance("512", month, year, companyId);
+  const totalDebit512 = journalEntries.filter((e) => e.debitAccount === "512").reduce((sum, e) => sum + e.amount, 0);
+  const totalCredit512 = journalEntries.filter((e) => e.creditAccount === "512").reduce((sum, e) => sum + e.amount, 0);
+  const soldeComptable = computeSoldeFinal(getAccountNature("512"), soldeInitial512, totalDebit512, totalCredit512);
+
+  // Bank balance: check if last transaction in the month has a running balance, otherwise compute from movements
+  const totalBankMoves = bankTransactions
+    .filter((bt) => bt.matchStatus !== "IGNORED")
+    .reduce((sum, bt) => sum + bt.amount, 0);
+  const lastTxWithBalance = [...bankTransactions].reverse().find((bt) => bt.balance !== null && bt.balance !== undefined);
+  const soldeBancaire = lastTxWithBalance?.balance !== null && lastTxWithBalance?.balance !== undefined
+    ? lastTxWithBalance.balance
+    : (soldeInitial512 + totalBankMoves);
+
+  const ecart = soldeComptable - soldeBancaire;
+
   // Summary stats
   const matched = rows.filter((r) => r.status === "MATCHED").length;
   const accountingOnly = rows.filter((r) => r.status === "ACCOUNTING_ONLY").length;
   const bankOnly = rows.filter((r) => r.status === "BANK_ONLY").length;
-
-  const totalAccounting = journalEntries.reduce((sum, e) => {
-    const isDebit = e.debitAccount === "512";
-    return sum + (isDebit ? e.amount : -e.amount);
-  }, 0);
-
-  const totalBank = bankTransactions.reduce((sum, bt) => sum + bt.amount, 0);
+  const ignored = rows.filter((r) => r.status === "IGNORED").length;
 
   return Response.json({
     rows,
@@ -179,10 +231,14 @@ export async function GET(req: NextRequest) {
       matched,
       accountingOnly,
       bankOnly,
+      ignored,
       total: rows.length,
-      totalAccounting,
-      totalBank,
-      ecart: totalAccounting - totalBank,
+      soldeInitial512,
+      totalDebit512,
+      totalCredit512,
+      soldeComptable,
+      soldeBancaire,
+      ecart,
     },
     bankTransactions: bankTransactions.map((bt) => ({
       id: bt.id,
