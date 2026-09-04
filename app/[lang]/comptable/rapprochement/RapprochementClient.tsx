@@ -449,7 +449,7 @@ export function RapprochementClient({
         </div>
       </div>
 
-      {/* ── BARRE DE NAVIGATION RAPIDE (5 SECTIONS) ── */}
+      {/* ── BARRE DE NAVIGATION RAPIDE (4 SECTIONS) ── */}
       <div style={{
         display: "flex",
         alignItems: "center",
@@ -473,7 +473,7 @@ export function RapprochementClient({
             borderRadius: "6px",
             letterSpacing: "0.03em",
           }}>
-            5 SECTIONS PRINCIPALES
+            4 SECTIONS PRINCIPALES
           </span>
           <span style={{ fontSize: "13px", color: "#64748b", fontWeight: 500 }}>
             Toutes les sections sont regroupées ci-dessous sur cette même page :
