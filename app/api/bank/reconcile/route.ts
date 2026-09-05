@@ -330,6 +330,7 @@ export async function POST(req: NextRequest) {
               source: "BANQUE",
               journalType: "BANQUE",
               companyId,
+              documentId: decl.invoice?.documentId || null,
               validatedById: user.userId,
               validatedAt: new Date(),
             },

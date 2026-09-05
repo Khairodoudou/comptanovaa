@@ -102,10 +102,29 @@ export async function GET(req: NextRequest) {
       },
       invoicePayments: {
         include: {
-          invoice: { select: { id: true, invoiceNumber: true, amount: true } },
+          invoice: {
+            select: {
+              id: true,
+              invoiceNumber: true,
+              amount: true,
+              documentId: true,
+              document: { select: { id: true, originalName: true, fileBase64: true } },
+            },
+          },
           declaration: { select: { id: true, reference: true, justificatif: true } },
         },
       },
+    },
+  });
+
+  // Get all company invoices to resolve documents linked by reference/description
+  const companyInvoices = await db.invoice.findMany({
+    where: { companyId },
+    select: {
+      id: true,
+      invoiceNumber: true,
+      documentId: true,
+      document: { select: { id: true, originalName: true, fileBase64: true } },
     },
   });
 
@@ -117,6 +136,22 @@ export async function GET(req: NextRequest) {
     const linkedBankTx = bankTransactions.find((bt) => bt.journalEntryId === entry.id);
     const isDebit = entry.debitAccount === "512";
     const isMatched = !!linkedBankTx;
+
+    const invPay = linkedBankTx?.invoicePayments?.[0];
+    const fallbackInv = !entry.documentId && !invPay?.invoice?.documentId
+      ? companyInvoices.find((inv) =>
+          inv.invoiceNumber &&
+          (entry.reference?.toLowerCase().includes(inv.invoiceNumber.toLowerCase()) ||
+           entry.description?.toLowerCase().includes(inv.invoiceNumber.toLowerCase()) ||
+           linkedBankTx?.reference?.toLowerCase().includes(inv.invoiceNumber.toLowerCase()) ||
+           linkedBankTx?.description?.toLowerCase().includes(inv.invoiceNumber.toLowerCase()))
+        )
+      : null;
+
+    const resolvedDocId = entry.documentId || invPay?.invoice?.documentId || fallbackInv?.documentId || null;
+    const resolvedDocName = entry.document?.originalName || invPay?.invoice?.document?.originalName || fallbackInv?.document?.originalName || null;
+    const resolvedInvoiceNumber = entry.document?.invoice?.invoiceNumber || invPay?.invoice?.invoiceNumber || fallbackInv?.invoiceNumber || null;
+    const resolvedJustificatif = invPay?.declaration?.justificatif || null;
 
     rows.push({
       id: `acc-${entry.id}`,
@@ -135,10 +170,10 @@ export async function GET(req: NextRequest) {
         debit: isDebit ? entry.amount : 0,
         credit: !isDebit ? entry.amount : 0,
         reference: entry.reference,
-        documentId: entry.documentId,
-        originalName: entry.document?.originalName,
-        hasFile: !!entry.document?.fileBase64,
-        invoiceNumber: entry.document?.invoice?.invoiceNumber,
+        documentId: resolvedDocId,
+        originalName: resolvedDocName,
+        hasFile: !!(entry.document?.fileBase64 || invPay?.invoice?.document?.fileBase64 || fallbackInv?.document?.fileBase64 || resolvedDocId),
+        invoiceNumber: resolvedInvoiceNumber,
       },
       bank: linkedBankTx
         ? {
@@ -150,8 +185,10 @@ export async function GET(req: NextRequest) {
             reference: linkedBankTx.reference,
             matchStatus: linkedBankTx.matchStatus,
             matchReason: linkedBankTx.matchReason,
-            invoiceNumber: linkedBankTx.invoicePayments?.[0]?.invoice?.invoiceNumber,
-            justificatif: linkedBankTx.invoicePayments?.[0]?.declaration?.justificatif,
+            invoiceNumber: resolvedInvoiceNumber,
+            justificatif: resolvedJustificatif,
+            documentId: resolvedDocId,
+            originalName: resolvedDocName,
           }
         : null,
     });
@@ -163,6 +200,17 @@ export async function GET(req: NextRequest) {
     if (!alreadyInRows) {
       const isIgnored = bt.matchStatus === "IGNORED";
       const paymentInfo = bt.invoicePayments?.[0];
+      const fallbackInv = !paymentInfo?.invoice?.documentId
+        ? companyInvoices.find((inv) =>
+            inv.invoiceNumber &&
+            (bt.reference?.toLowerCase().includes(inv.invoiceNumber.toLowerCase()) ||
+             bt.description?.toLowerCase().includes(inv.invoiceNumber.toLowerCase()))
+          )
+        : null;
+
+      const bankDocId = paymentInfo?.invoice?.documentId || fallbackInv?.documentId || null;
+      const bankDocName = paymentInfo?.invoice?.document?.originalName || fallbackInv?.document?.originalName || null;
+      const bankInvNum = paymentInfo?.invoice?.invoiceNumber || fallbackInv?.invoiceNumber || null;
 
       rows.push({
         id: `bank-${bt.id}`,
@@ -187,8 +235,10 @@ export async function GET(req: NextRequest) {
           matchStatus: bt.matchStatus,
           matchReason: bt.matchReason,
           importFile: bt.import?.filename,
-          invoiceNumber: paymentInfo?.invoice?.invoiceNumber,
+          invoiceNumber: bankInvNum,
           justificatif: paymentInfo?.declaration?.justificatif,
+          documentId: bankDocId,
+          originalName: bankDocName,
         },
       });
     }

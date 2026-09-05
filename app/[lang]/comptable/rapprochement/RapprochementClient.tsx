@@ -1,5 +1,6 @@
 "use client";
 
+
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -8,7 +9,7 @@ import {
   FileText, ArrowRightLeft, PlusCircle, Check, Camera, GitMerge,
   Minus, BarChart3, TrendingUp, TrendingDown, Clock, Ban,
   ChevronDown, Info, Zap, AlertTriangle, Search, Filter,
-  Edit3, Printer, ExternalLink,
+  Edit3, Printer, ExternalLink, Download,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -100,6 +101,8 @@ interface ComparisonRow {
     importFile?: string | null;
     invoiceNumber?: string | null;
     justificatif?: string | null;
+    documentId?: string | null;
+    originalName?: string | null;
   } | null;
 }
 
@@ -2645,74 +2648,149 @@ export function RapprochementClient({
               </div>
 
               {/* Justificatif details */}
-              {justificatifModal.accounting?.documentId ? (
-                <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-                  <div style={{
-                    display: "flex", alignItems: "center", justifyContent: "space-between",
-                    padding: "12px 16px", background: "#eff6ff", borderRadius: "8px", border: "1px solid #bfdbfe",
-                  }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                      <FileText size={20} color="#2563eb" />
-                      <div>
-                        <div style={{ fontSize: "13px", fontWeight: 600, color: "#1e40af" }}>
-                          {justificatifModal.accounting.originalName || "Document comptable"}
+              {(() => {
+                const docId = justificatifModal.accounting?.documentId || justificatifModal.bank?.documentId;
+                const docName = justificatifModal.accounting?.originalName || justificatifModal.bank?.originalName || "Document justificatif";
+                const invoiceNum = justificatifModal.accounting?.invoiceNumber || justificatifModal.bank?.invoiceNumber;
+                const justif = justificatifModal.bank?.justificatif;
+                const isDataUri = justif?.startsWith("data:");
+
+                if (docId) {
+                  return (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                      <div style={{
+                        display: "flex", alignItems: "center", justifyContent: "space-between",
+                        padding: "12px 16px", background: "#eff6ff", borderRadius: "8px", border: "1px solid #bfdbfe",
+                        flexWrap: "wrap", gap: "10px"
+                      }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                          <FileText size={22} color="#2563eb" />
+                          <div>
+                            <div style={{ fontSize: "13px", fontWeight: 600, color: "#1e40af" }}>
+                              {docName}
+                            </div>
+                            {invoiceNum && (
+                              <div style={{ fontSize: "11px", color: "#3b82f6", fontWeight: 500 }}>
+                                Facture N° {invoiceNum}
+                              </div>
+                            )}
+                          </div>
                         </div>
-                        {justificatifModal.accounting.invoiceNumber && (
-                          <div style={{ fontSize: "11px", color: "#3b82f6" }}>Facture N° {justificatifModal.accounting.invoiceNumber}</div>
-                        )}
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <a
+                            href={`/api/documents/${docId}/download`}
+                            download
+                            style={{
+                              display: "inline-flex", alignItems: "center", gap: "6px",
+                              padding: "6px 12px", background: "#10b981", color: "#fff",
+                              borderRadius: "6px", textDecoration: "none", fontSize: "12px", fontWeight: 600,
+                              cursor: "pointer",
+                            }}
+                          >
+                            <Download size={13} /> Télécharger
+                          </a>
+                          <a
+                            href={`/api/documents/${docId}/view`}
+                            target="_blank"
+                            rel="noreferrer"
+                            style={{
+                              display: "inline-flex", alignItems: "center", gap: "6px",
+                              padding: "6px 12px", background: "#2563eb", color: "#fff",
+                              borderRadius: "6px", textDecoration: "none", fontSize: "12px", fontWeight: 600,
+                            }}
+                          >
+                            <ExternalLink size={13} /> Plein écran
+                          </a>
+                        </div>
+                      </div>
+
+                      {/* Preview iframe */}
+                      <div style={{ border: "1px solid #e2e8f0", borderRadius: "10px", overflow: "hidden", height: "360px", background: "#f8fafc" }}>
+                        <iframe
+                          src={`/api/documents/${docId}/view`}
+                          style={{ width: "100%", height: "100%", border: "none" }}
+                          title="Prévisualisation du justificatif"
+                        />
                       </div>
                     </div>
-                    <a
-                      href={`/api/documents/${justificatifModal.accounting.documentId}/view`}
-                      target="_blank"
-                      rel="noreferrer"
-                      style={{
-                        display: "inline-flex", alignItems: "center", gap: "6px",
-                        padding: "6px 12px", background: "#2563eb", color: "#fff",
-                        borderRadius: "6px", textDecoration: "none", fontSize: "12px", fontWeight: 600,
-                      }}
-                    >
-                      <ExternalLink size={13} /> Ouvrir plein écran
-                    </a>
-                  </div>
+                  );
+                }
 
-                  {/* Preview iframe */}
-                  <div style={{ border: "1px solid #e2e8f0", borderRadius: "10px", overflow: "hidden", height: "340px", background: "#f8fafc" }}>
-                    <iframe
-                      src={`/api/documents/${justificatifModal.accounting.documentId}/view`}
-                      style={{ width: "100%", height: "100%", border: "none" }}
-                      title="Prévisualisation du justificatif"
-                    />
-                  </div>
-                </div>
-              ) : justificatifModal.bank?.justificatif ? (
-                <div style={{ padding: "18px", background: "#f0fdf4", borderRadius: "10px", border: "1px solid #bbf7d0" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
-                    <CheckCircle2 size={18} color="#16a34a" />
-                    <div style={{ fontWeight: 600, color: "#166534" }}>Reçu / Déclaration de paiement client</div>
-                  </div>
-                  <div style={{ fontSize: "13px", color: "#374151" }}>
-                    Référence : <strong>{justificatifModal.bank.justificatif}</strong>
-                  </div>
-                  {justificatifModal.bank.invoiceNumber && (
-                    <div style={{ fontSize: "13px", color: "#374151", marginTop: "4px" }}>
-                      Facture liée : <strong>{justificatifModal.bank.invoiceNumber}</strong>
+                if (isDataUri && justif) {
+                  return (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                      <div style={{
+                        display: "flex", alignItems: "center", justifyContent: "space-between",
+                        padding: "12px 16px", background: "#f0fdf4", borderRadius: "8px", border: "1px solid #bbf7d0",
+                        flexWrap: "wrap", gap: "10px"
+                      }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <CheckCircle2 size={20} color="#16a34a" />
+                          <div>
+                            <div style={{ fontWeight: 600, color: "#166534", fontSize: "13px" }}>
+                              Reçu / Justificatif de virement importé
+                            </div>
+                            {invoiceNum && (
+                              <div style={{ fontSize: "11px", color: "#15803d" }}>Facture liée : {invoiceNum}</div>
+                            )}
+                          </div>
+                        </div>
+                        <a
+                          href={justif}
+                          download="justificatif_virement"
+                          style={{
+                            display: "inline-flex", alignItems: "center", gap: "6px",
+                            padding: "6px 12px", background: "#16a34a", color: "#fff",
+                            borderRadius: "6px", textDecoration: "none", fontSize: "12px", fontWeight: 600,
+                          }}
+                        >
+                          <Download size={13} /> Télécharger
+                        </a>
+                      </div>
+                      <div style={{ border: "1px solid #e2e8f0", borderRadius: "10px", overflow: "hidden", height: "360px", background: "#f8fafc" }}>
+                        <iframe
+                          src={justif}
+                          style={{ width: "100%", height: "100%", border: "none" }}
+                          title="Prévisualisation du reçu"
+                        />
+                      </div>
                     </div>
-                  )}
-                </div>
-              ) : (
-                <div style={{ padding: "24px", textAlign: "center", background: "#f8fafc", borderRadius: "10px", border: "1px dashed #cbd5e1" }}>
-                  <FileText size={32} color="#94a3b8" style={{ margin: "0 auto 8px" }} />
-                  <div style={{ fontSize: "13px", fontWeight: 600, color: "#475569" }}>
-                    Aucun document numérisé directement rattaché
+                  );
+                }
+
+                if (justif) {
+                  return (
+                    <div style={{ padding: "18px", background: "#f0fdf4", borderRadius: "10px", border: "1px solid #bbf7d0" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+                        <CheckCircle2 size={18} color="#16a34a" />
+                        <div style={{ fontWeight: 600, color: "#166534" }}>Reçu / Déclaration de paiement client</div>
+                      </div>
+                      <div style={{ fontSize: "13px", color: "#374151" }}>
+                        Référence : <strong>{justif}</strong>
+                      </div>
+                      {invoiceNum && (
+                        <div style={{ fontSize: "13px", color: "#374151", marginTop: "4px" }}>
+                          Facture liée : <strong>{invoiceNum}</strong>
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+
+                return (
+                  <div style={{ padding: "24px", textAlign: "center", background: "#f8fafc", borderRadius: "10px", border: "1px dashed #cbd5e1" }}>
+                    <FileText size={32} color="#94a3b8" style={{ margin: "0 auto 8px" }} />
+                    <div style={{ fontSize: "13px", fontWeight: 600, color: "#475569" }}>
+                      Aucun document numérisé directement rattaché
+                    </div>
+                    <div style={{ fontSize: "12px", color: "#94a3b8", marginTop: "4px" }}>
+                      {justificatifModal.correspondance && justificatifModal.correspondance !== "—"
+                        ? `Référence renseignée : ${justificatifModal.correspondance}`
+                        : "Vous pouvez rattacher une pièce en éditant l'écriture."}
+                    </div>
                   </div>
-                  <div style={{ fontSize: "12px", color: "#94a3b8", marginTop: "4px" }}>
-                    {justificatifModal.correspondance && justificatifModal.correspondance !== "—"
-                      ? `Référence renseignée : ${justificatifModal.correspondance}`
-                      : "Vous pouvez rattacher une pièce en éditant l'écriture."}
-                  </div>
-                </div>
-              )}
+                );
+              })()}
             </div>
 
             <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "20px", paddingTop: "14px", borderTop: "1px solid #f1f5f9" }}>

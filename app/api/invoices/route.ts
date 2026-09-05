@@ -85,7 +85,17 @@ export async function GET(req: NextRequest) {
     const invoices = await (db as any).invoice.findMany({
       where: whereClause,
       include: {
-        company: { select: { name: true, client: { select: { name: true } } } },
+        company: {
+          select: {
+            name: true,
+            bankName: true,
+            rib: true,
+            iban: true,
+            ccp: true,
+            beneficiaryName: true,
+            client: { select: { name: true } },
+          },
+        },
         document: { select: { originalName: true, filename: true } },
         declarations: {
           orderBy: { createdAt: "desc" },
