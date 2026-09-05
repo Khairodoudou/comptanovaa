@@ -80,9 +80,8 @@ export default async function ComptableJournalPage({
     }),
   ]);
 
-  const totalOperations = new Set(
-    entries.map((e) => e.documentId || `manual-${e.id}`)
-  ).size;
+  // Chaque JournalEntry = 1 opération comptable indépendante
+  const totalOperations = entries.length;
 
   return (
     <div className="p-6 sm:p-8 max-w-7xl mx-auto space-y-6">
@@ -218,12 +217,18 @@ export default async function ComptableJournalPage({
             val.toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
           return Object.entries(groupedByClient).map(([cId, clientData]) => {
+            // Chaque JournalEntry est une opération indépendante dans le journal.
+            // On NE groupe PAS par documentId : cela fusionne Achat (607/401)
+            // et Règlement (512/411) en une seule ligne → BUG.
+            // Chaque entrée = une opération avec sa propre date et ses 2 comptes.
             const opsMap = clientData.entries.reduce((acc, entry) => {
-              const docId = entry.document?.id || `manual-${entry.id}`;
-              if (!acc[docId]) {
-                acc[docId] = { document: entry.document, entries: [], date: entry.date, source: entry.source };
-              }
-              acc[docId].entries.push(entry);
+              const opKey = entry.id; // clé unique = id de la JournalEntry
+              acc[opKey] = {
+                document: entry.document,
+                entries: [entry],
+                date: entry.date,
+                source: entry.source,
+              };
               return acc;
             }, {} as Record<string, { document: any; entries: typeof entries; date: Date; source?: string }>);
 

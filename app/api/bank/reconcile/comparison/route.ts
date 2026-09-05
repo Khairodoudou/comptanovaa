@@ -111,7 +111,17 @@ export async function GET(req: NextRequest) {
               document: { select: { id: true, originalName: true, fileBase64: true } },
             },
           },
-          declaration: { select: { id: true, reference: true, justificatif: true } },
+          declaration: {
+            select: {
+              id: true,
+              reference: true,
+              justificatif: true,
+              paymentDate: true,
+              amount: true,
+              status: true,
+              invoiceId: true,
+            },
+          },
         },
       },
     },
@@ -126,6 +136,22 @@ export async function GET(req: NextRequest) {
       documentId: true,
       document: { select: { id: true, originalName: true, fileBase64: true } },
     },
+  });
+
+  // Get all company payment declarations (to resolve client transfer receipts)
+  const companyDeclarations = await db.paymentDeclaration.findMany({
+    where: { invoice: { companyId } },
+    select: {
+      id: true,
+      invoiceId: true,
+      reference: true,
+      paymentDate: true,
+      amount: true,
+      status: true,
+      justificatif: true,
+      createdAt: true,
+    },
+    orderBy: { createdAt: "desc" },
   });
 
   // Build comparison rows
@@ -148,10 +174,19 @@ export async function GET(req: NextRequest) {
         )
       : null;
 
+    const declData = invPay?.declaration || companyDeclarations.find((d) =>
+      (fallbackInv && d.invoiceId === fallbackInv.id) ||
+      (d.reference && (
+        entry.reference?.toLowerCase().includes(d.reference.toLowerCase()) ||
+        linkedBankTx?.reference?.toLowerCase().includes(d.reference.toLowerCase()) ||
+        linkedBankTx?.description?.toLowerCase().includes(d.reference.toLowerCase())
+      ))
+    );
+
     const resolvedDocId = entry.documentId || invPay?.invoice?.documentId || fallbackInv?.documentId || null;
     const resolvedDocName = entry.document?.originalName || invPay?.invoice?.document?.originalName || fallbackInv?.document?.originalName || null;
     const resolvedInvoiceNumber = entry.document?.invoice?.invoiceNumber || invPay?.invoice?.invoiceNumber || fallbackInv?.invoiceNumber || null;
-    const resolvedJustificatif = invPay?.declaration?.justificatif || null;
+    const resolvedJustificatif = declData?.justificatif || invPay?.declaration?.justificatif || null;
 
     rows.push({
       id: `acc-${entry.id}`,
@@ -191,6 +226,16 @@ export async function GET(req: NextRequest) {
             originalName: resolvedDocName,
           }
         : null,
+      paymentDeclaration: declData ? {
+        id: declData.id,
+        reference: declData.reference,
+        paymentDate: declData.paymentDate,
+        amount: declData.amount,
+        status: declData.status,
+        justificatif: declData.justificatif,
+        invoiceId: declData.invoiceId,
+        hasFile: !!declData.justificatif,
+      } : null,
     });
   }
 
@@ -207,6 +252,14 @@ export async function GET(req: NextRequest) {
              bt.description?.toLowerCase().includes(inv.invoiceNumber.toLowerCase()))
           )
         : null;
+
+      const bankDecl = paymentInfo?.declaration || companyDeclarations.find((d) =>
+        (fallbackInv && d.invoiceId === fallbackInv.id) ||
+        (d.reference && (
+          bt.reference?.toLowerCase().includes(d.reference.toLowerCase()) ||
+          bt.description?.toLowerCase().includes(d.reference.toLowerCase())
+        ))
+      );
 
       const bankDocId = paymentInfo?.invoice?.documentId || fallbackInv?.documentId || null;
       const bankDocName = paymentInfo?.invoice?.document?.originalName || fallbackInv?.document?.originalName || null;
@@ -236,10 +289,20 @@ export async function GET(req: NextRequest) {
           matchReason: bt.matchReason,
           importFile: bt.import?.filename,
           invoiceNumber: bankInvNum,
-          justificatif: paymentInfo?.declaration?.justificatif,
+          justificatif: bankDecl?.justificatif || paymentInfo?.declaration?.justificatif,
           documentId: bankDocId,
           originalName: bankDocName,
         },
+        paymentDeclaration: bankDecl ? {
+          id: bankDecl.id,
+          reference: bankDecl.reference,
+          paymentDate: bankDecl.paymentDate,
+          amount: bankDecl.amount,
+          status: bankDecl.status,
+          justificatif: bankDecl.justificatif,
+          invoiceId: bankDecl.invoiceId,
+          hasFile: !!bankDecl.justificatif,
+        } : null,
       });
     }
   }

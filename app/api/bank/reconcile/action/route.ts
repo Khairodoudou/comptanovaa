@@ -268,5 +268,31 @@ export async function POST(req: NextRequest) {
     return Response.json({ success: true, status: "MATCHED", entryId: newEntry.id });
   }
 
+  // 8. ATTACH JUSTIFICATIF (Rattacher un reçu de paiement / justificatif)
+  if (action === "attach_justificatif") {
+    const { declarationId, invoiceId, justificatif } = body;
+    if (declarationId) {
+      await (db as any).paymentDeclaration.update({
+        where: { id: declarationId },
+        data: { justificatif },
+      });
+      return Response.json({ success: true });
+    }
+    if (invoiceId) {
+      const decl = await (db as any).paymentDeclaration.findFirst({
+        where: { invoiceId },
+        orderBy: { createdAt: "desc" },
+      });
+      if (decl) {
+        await (db as any).paymentDeclaration.update({
+          where: { id: decl.id },
+          data: { justificatif },
+        });
+        return Response.json({ success: true });
+      }
+    }
+    return Response.json({ error: "declarationId ou invoiceId requis" }, { status: 400 });
+  }
+
   return Response.json({ error: "Action non reconnue" }, { status: 400 });
 }
