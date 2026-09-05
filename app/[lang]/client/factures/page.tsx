@@ -169,6 +169,23 @@ export default function ClientInvoicesPage() {
                           {invoice.description && (
                             <p className="text-xs text-slate-500 mt-0.5">{invoice.description}</p>
                           )}
+                          {/* Référence de virement déclarée */}
+                          {lastDecl && lastDecl.reference && (
+                            <div className="mt-1.5 flex items-center gap-1.5">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                🏦 Réf. virement :
+                              </span>
+                              <span className="font-mono text-xs font-semibold text-indigo-800 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                                {lastDecl.reference}
+                              </span>
+                            </div>
+                          )}
+                          {/* Pièce justificative du virement */}
+                          {lastDecl && lastDecl.status === "PENDING" && !lastDecl.reference && (
+                            <p className="text-xs text-amber-600 font-medium mt-1">
+                              ⏳ Paiement déclaré — en attente de vérification
+                            </p>
+                          )}
                           {lastDecl && invoice.status === "REFUSED" && lastDecl.refusalReason && (
                             <p className="text-xs text-rose-600 font-medium mt-1 bg-rose-50 px-2.5 py-1 rounded-md border border-rose-100">
                               Motif de refus : {lastDecl.refusalReason}

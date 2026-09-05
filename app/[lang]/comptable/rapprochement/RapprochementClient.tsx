@@ -1514,6 +1514,8 @@ export function RapprochementClient({
                     row.accounting?.invoiceNumber ||
                     row.bank?.justificatif ||
                     row.bank?.invoiceNumber ||
+                    row.paymentDeclaration?.reference ||
+                    row.paymentDeclaration?.amount ||
                     (row.correspondance && row.correspondance !== "—")
                   );
 
