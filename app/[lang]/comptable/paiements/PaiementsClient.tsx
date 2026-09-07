@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   CreditCard, Clock, CheckCircle2, XCircle, AlertCircle, Loader2,
   Eye, Check, X, FileText, Building2, User, Calendar, DollarSign,
   RefreshCw, Search, Filter, ChevronDown, ExternalLink, Image as ImageIcon,
+  Download, Maximize2, Upload, ZoomIn, Paperclip,
 } from "lucide-react";
 
 interface Company {
@@ -50,6 +51,11 @@ interface Declaration {
       name: string;
       client: { id: string; name: string; email: string };
     };
+    document?: {
+      id: string;
+      originalName: string;
+      mimeType: string | null;
+    } | null;
   };
 }
 
@@ -120,6 +126,44 @@ export function PaiementsClient({ companies, lang, locale, initialDeclarationId,
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+
+  // Justificatif preview & upload states
+  const [justifViewTab, setJustifViewTab] = useState<"recu" | "facture">("recu");
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  const [lightboxIsPdf, setLightboxIsPdf] = useState(false);
+  const [uploadingJustif, setUploadingJustif] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  async function handleUploadJustificatif(file: File) {
+    if (!selectedDecl) return;
+    setUploadingJustif(true);
+    setActionError(null);
+    try {
+      const formData = new FormData();
+      formData.append("justificatif", file);
+
+      const res = await fetch(`/api/comptable/payments/${selectedDecl.id}/justificatif`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Erreur lors du téléversement du justificatif");
+      }
+
+      const data = await res.json();
+      setSelectedDecl((prev) => (prev ? { ...prev, justificatif: data.justificatif } : null));
+      setDeclarations((prev) =>
+        prev.map((d) => (d.id === selectedDecl.id ? { ...d, justificatif: data.justificatif } : d))
+      );
+      setJustifViewTab("recu");
+    } catch (e: any) {
+      setActionError(e.message || "Erreur de téléversement");
+    } finally {
+      setUploadingJustif(false);
+    }
+  }
 
   const loadDeclarations = useCallback(async () => {
     setLoading(true);
@@ -439,23 +483,199 @@ export function PaiementsClient({ companies, lang, locale, initialDeclarationId,
                 )}
               </div>
 
-              {/* Proof */}
-              {selectedDecl.justificatif && (
-                <div className="bg-[#f8fafc] border border-slate-200 rounded-xl p-4 space-y-2">
-                  <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide flex items-center gap-1.5">
-                    <ImageIcon size={13} /> Justificatif de paiement
-                  </p>
-                  {selectedDecl.justificatif.startsWith("data:image") ? (
-                    <img src={selectedDecl.justificatif} alt="Justificatif" className="max-w-full rounded-xl border border-slate-200 max-h-64 object-contain" />
-                  ) : selectedDecl.justificatif.startsWith("data:application/pdf") ? (
-                    <a href={selectedDecl.justificatif} download="justificatif.pdf" className="inline-flex items-center gap-2 text-xs text-indigo-600 hover:underline">
-                      <ExternalLink size={13} /> Télécharger le justificatif PDF
-                    </a>
-                  ) : (
-                    <p className="text-xs text-slate-500">{selectedDecl.justificatif}</p>
-                  )}
+              {/* ─── JUSTIFICATIF DE PAIEMENT (PDF OU IMAGE) ────────────────────── */}
+              <div className="bg-[#f8fafc] border border-slate-200/90 rounded-2xl p-4 sm:p-5 space-y-3.5 shadow-xs">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shadow-2xs">
+                      <FileText size={16} />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-[#0f172a] flex items-center gap-2">
+                        Justificatif de paiement (PDF ou image)
+                      </h4>
+                      <p className="text-[11px] text-slate-500">
+                        Preuve de virement, reçu bancaire ou document de facturation
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Hidden input + attach/replace button */}
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      className="hidden"
+                      accept=".pdf,.png,.jpg,.jpeg,.webp"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleUploadJustificatif(file);
+                        e.target.value = "";
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploadingJustif}
+                      className="px-2.5 py-1.5 rounded-lg border border-slate-200 hover:bg-white text-slate-700 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-2xs disabled:opacity-50"
+                      title="Téléverser un nouveau justificatif (PDF ou image)"
+                    >
+                      {uploadingJustif ? (
+                        <Loader2 size={13} className="animate-spin text-indigo-600" />
+                      ) : (
+                        <Upload size={13} className="text-indigo-600" />
+                      )}
+                      {selectedDecl.justificatif ? "Remplacer" : "Joindre un reçu"}
+                    </button>
+                  </div>
                 </div>
-              )}
+
+                {/* Sub-tabs if both direct receipt and invoice document are available */}
+                {selectedDecl.justificatif && selectedDecl.invoice.document && (
+                  <div className="flex gap-2 border-b border-slate-200 pb-2 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setJustifViewTab("recu")}
+                      className={`px-3 py-1.5 rounded-lg font-semibold flex items-center gap-1.5 transition-all ${
+                        justifViewTab === "recu"
+                          ? "bg-indigo-600 text-white shadow-xs"
+                          : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
+                      }`}
+                    >
+                      <CheckCircle2 size={13} /> Reçu de paiement (Client)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setJustifViewTab("facture")}
+                      className={`px-3 py-1.5 rounded-lg font-semibold flex items-center gap-1.5 transition-all ${
+                        justifViewTab === "facture"
+                          ? "bg-indigo-600 text-white shadow-xs"
+                          : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
+                      }`}
+                    >
+                      <FileText size={13} /> Facture numérisée
+                    </button>
+                  </div>
+                )}
+
+                {/* Main preview container */}
+                {(() => {
+                  let fileUrl: string | null = null;
+                  let isPdf = false;
+                  let isImg = false;
+                  let fileLabel = "";
+
+                  if (selectedDecl.justificatif && (justifViewTab === "recu" || !selectedDecl.invoice.document)) {
+                    fileUrl = selectedDecl.justificatif;
+                    isPdf =
+                      fileUrl.startsWith("data:application/pdf") ||
+                      fileUrl.toLowerCase().includes(".pdf") ||
+                      fileUrl.startsWith("data:;base64,JVBERi0");
+                    isImg = fileUrl.startsWith("data:image") || (!isPdf && !fileUrl.startsWith("http"));
+                    fileLabel = `Reçu ${selectedDecl.paymentMethod || "Paiement"}`;
+                  } else if (selectedDecl.invoice.document) {
+                    fileUrl = `/api/documents/${selectedDecl.invoice.document.id}/view`;
+                    const docName = selectedDecl.invoice.document.originalName?.toLowerCase() || "";
+                    const mime = selectedDecl.invoice.document.mimeType || "";
+                    isPdf = docName.endsWith(".pdf") || mime === "application/pdf";
+                    isImg = mime.startsWith("image/") || docName.match(/\.(jpg|jpeg|png|webp)$/) !== null;
+                    fileLabel = selectedDecl.invoice.document.originalName || "Facture";
+                  }
+
+                  if (!fileUrl) {
+                    return (
+                      <div className="p-5 text-center bg-white rounded-xl border border-dashed border-slate-300 space-y-2">
+                        <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center mx-auto text-slate-400">
+                          <ImageIcon size={20} />
+                        </div>
+                        <p className="text-xs font-semibold text-slate-700">
+                          Aucun justificatif n'a été joint par le client
+                        </p>
+                        <p className="text-[11px] text-slate-500 max-w-sm mx-auto">
+                          Le client a déclaré le paiement sans joindre de fichier. Vous pouvez joindre un reçu bancaire (PDF ou image) ci-dessous :
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          className="mt-2 inline-flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold shadow-xs transition-all"
+                        >
+                          <Upload size={13} /> Joindre un justificatif (PDF ou image)
+                        </button>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div className="space-y-2">
+                      {/* Action toolbar */}
+                      <div className="flex items-center justify-between px-3 py-2 bg-white rounded-xl border border-slate-200/80 text-xs">
+                        <span className="font-semibold text-slate-700 flex items-center gap-1.5 truncate max-w-[220px]">
+                          {isPdf ? (
+                            <FileText size={14} className="text-rose-500 shrink-0" />
+                          ) : (
+                            <ImageIcon size={14} className="text-emerald-500 shrink-0" />
+                          )}
+                          <span className="truncate">{fileLabel}</span>
+                          <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">
+                            {isPdf ? "PDF" : "IMAGE"}
+                          </span>
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setLightboxUrl(fileUrl);
+                              setLightboxIsPdf(isPdf);
+                            }}
+                            className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold flex items-center gap-1 transition-colors"
+                            title="Agrandir en plein écran"
+                          >
+                            <Maximize2 size={12} /> Plein écran
+                          </button>
+                          <a
+                            href={fileUrl}
+                            download={fileLabel}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold flex items-center gap-1 transition-colors"
+                            title="Télécharger"
+                          >
+                            <Download size={12} /> Télécharger
+                          </a>
+                        </div>
+                      </div>
+
+                      {/* Display PDF or Image */}
+                      {isPdf ? (
+                        <div className="rounded-xl border border-slate-200 overflow-hidden bg-white shadow-xs h-72">
+                          <iframe
+                            src={fileUrl}
+                            className="w-full h-full border-0"
+                            title="Aperçu justificatif PDF"
+                          />
+                        </div>
+                      ) : (
+                        <div
+                          className="rounded-xl border border-slate-200 overflow-hidden bg-slate-900/5 p-2 flex items-center justify-center max-h-72 cursor-pointer group relative"
+                          onClick={() => {
+                            setLightboxUrl(fileUrl);
+                            setLightboxIsPdf(false);
+                          }}
+                        >
+                          <img
+                            src={fileUrl}
+                            alt="Justificatif de paiement"
+                            className="max-h-68 max-w-full object-contain rounded-lg shadow-xs group-hover:scale-[1.01] transition-transform"
+                          />
+                          <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-xl text-white text-xs font-semibold gap-1.5 backdrop-blur-[2px]">
+                            <ZoomIn size={16} /> Cliquez pour agrandir
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
 
               {/* Accounting entry if confirmed */}
               {selectedDecl.accountingEntry && (
@@ -634,6 +854,54 @@ export function PaiementsClient({ companies, lang, locale, initialDeclarationId,
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+      {/* ─── LIGHTBOX FULLSCREEN PREVIEW ────────────────────────────────────────── */}
+      {lightboxUrl && (
+        <div
+          className="fixed inset-0 z-[70] bg-black/85 backdrop-blur-md flex flex-col p-4 sm:p-6 animate-in fade-in duration-200"
+          onClick={() => setLightboxUrl(null)}
+        >
+          <div className="flex items-center justify-between text-white pb-3 max-w-5xl w-full mx-auto">
+            <span className="text-sm font-semibold flex items-center gap-2">
+              <FileText size={16} /> Justificatif de paiement (PDF ou image)
+            </span>
+            <div className="flex items-center gap-2">
+              <a
+                href={lightboxUrl}
+                download={lightboxIsPdf ? "justificatif.pdf" : "justificatif.jpg"}
+                target="_blank"
+                rel="noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="px-3 py-1.5 rounded-lg bg-white/20 hover:bg-white/30 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+              >
+                <Download size={14} /> Télécharger
+              </a>
+              <button
+                onClick={() => setLightboxUrl(null)}
+                className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors text-white"
+              >
+                <X size={18} />
+              </button>
+            </div>
+          </div>
+          <div className="flex-1 flex items-center justify-center max-w-5xl w-full mx-auto overflow-hidden">
+            {lightboxIsPdf ? (
+              <iframe
+                src={lightboxUrl}
+                className="w-full h-full rounded-xl bg-white border-0 shadow-2xl"
+                title="Plein écran PDF"
+                onClick={(e) => e.stopPropagation()}
+              />
+            ) : (
+              <img
+                src={lightboxUrl}
+                alt="Aperçu justificatif"
+                className="max-w-full max-h-full object-contain rounded-xl shadow-2xl"
+                onClick={(e) => e.stopPropagation()}
+              />
+            )}
           </div>
         </div>
       )}
