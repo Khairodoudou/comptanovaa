@@ -55,22 +55,29 @@ export async function POST(
     if (!invoice) return Response.json({ error: "Facture introuvable" }, { status: 404 });
 
     const declaration = await (db as any).paymentDeclaration.findFirst({
-      where: { id: declarationId, invoiceId: id, status: "PENDING" },
+      where: {
+        id: declarationId,
+        invoiceId: id,
+        status: { in: ["PENDING", "PENDING_CONFIRMATION"] },
+      },
     });
     if (!declaration) {
       return Response.json({ error: "Déclaration introuvable ou déjà traitée" }, { status: 404 });
     }
 
     const newInvoiceStatus = resetStatus === "REFUSED" ? "REFUSED" : "UNPAID";
-    const reasonLabel = REASON_LABELS[reason as RefusalReason];
+    const reasonLabel = REASON_LABELS[reason as RefusalReason] || reason;
     const refusalMsg = notes ? `${reasonLabel} — ${notes}` : reasonLabel;
 
     await db.$transaction([
       (db as any).paymentDeclaration.update({
         where: { id: declarationId },
         data: {
-          status: "REFUSED",
+          status: "REJECTED",
+          rejectionReason: refusalMsg,
           refusalReason: refusalMsg,
+          rejectedAt: new Date(),
+          rejectedById: user.userId,
           notes: notes || null,
         },
       }),

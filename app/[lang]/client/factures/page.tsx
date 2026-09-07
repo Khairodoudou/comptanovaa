@@ -3,17 +3,23 @@
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import {
-  Receipt,
-  Clock,
-  CheckCircle2,
-  AlertCircle,
-  XCircle,
-  CreditCard,
-  FileText,
-  Loader2,
-  Info,
+  Receipt, Clock, CheckCircle2, AlertCircle, XCircle,
+  CreditCard, Loader2, Info, RotateCcw, ChevronDown, ChevronUp,
 } from "lucide-react";
 import { PaymentModal } from "./PaymentModal";
+
+interface Declaration {
+  id: string;
+  reference?: string | null;
+  amount: number;
+  paymentMethod?: string | null;
+  status: string;
+  rejectionReason?: string | null;
+  refusalReason?: string | null;
+  createdAt: string;
+  confirmedAt?: string | null;
+  rejectedAt?: string | null;
+}
 
 interface Invoice {
   id: string;
@@ -34,13 +40,7 @@ interface Invoice {
     beneficiaryName?: string | null;
   };
   document?: { originalName: string; filename: string } | null;
-  declarations?: {
-    id: string;
-    reference?: string | null;
-    amount: number;
-    status: string;
-    refusalReason?: string | null;
-  }[];
+  declarations?: Declaration[];
 }
 
 export default function ClientInvoicesPage() {
@@ -51,6 +51,7 @@ export default function ClientInvoicesPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
+  const [expandedHistory, setExpandedHistory] = useState<string | null>(null);
 
   async function loadInvoices() {
     setLoading(true);
@@ -67,46 +68,121 @@ export default function ClientInvoicesPage() {
     }
   }
 
-  useEffect(() => {
-    loadInvoices();
-  }, []);
+  useEffect(() => { loadInvoices(); }, []);
+
+  // Determine the effective payment state from declarations
+  function getEffectiveState(invoice: Invoice): {
+    state: "UNPAID" | "PENDING" | "CONFIRMED" | "REJECTED" | "PAID" | "PARTIAL";
+    lastDecl: Declaration | null;
+    rejectionReason: string | null;
+  } {
+    const decls = invoice.declarations || [];
+
+    if (invoice.status === "PAID") return { state: "PAID", lastDecl: decls[0] ?? null, rejectionReason: null };
+    if (invoice.status === "PARTIALLY_PAID") return { state: "PARTIAL", lastDecl: decls[0] ?? null, rejectionReason: null };
+
+    // Check active pending declaration
+    const pending = decls.find((d) => d.status === "PENDING_CONFIRMATION" || d.status === "PENDING");
+    if (pending) return { state: "PENDING", lastDecl: pending, rejectionReason: null };
+
+    // Most recent rejection
+    const rejected = decls.find((d) => d.status === "REJECTED" || d.status === "REFUSED");
+    if (rejected) {
+      return {
+        state: "REJECTED",
+        lastDecl: rejected,
+        rejectionReason: rejected.rejectionReason || rejected.refusalReason || "Motif non précisé",
+      };
+    }
+
+    return { state: "UNPAID", lastDecl: null, rejectionReason: null };
+  }
 
   function renderStatusBadge(invoice: Invoice) {
-    switch (invoice.status) {
+    const { state } = getEffectiveState(invoice);
+    switch (state) {
       case "UNPAID":
         return (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-700 border border-red-200">
-            <XCircle size={13} />
-            Non payée
+            <XCircle size={13} /> Non payée
           </span>
         );
-      case "PENDING_VERIFICATION":
+      case "PENDING":
         return (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
-            <Clock size={13} className="animate-pulse" />
-            En attente de vérification
+            <Clock size={13} className="animate-pulse" /> En attente de confirmation
           </span>
         );
-      case "PARTIALLY_PAID":
+      case "CONFIRMED":
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+            <CheckCircle2 size={13} /> Paiement confirmé
+          </span>
+        );
+      case "PARTIAL":
         return (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
-            <Info size={13} />
-            Partiellement payée
+            <Info size={13} /> Partiellement payée
           </span>
         );
       case "PAID":
         return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-green-50 text-green-700 border border-green-200">
-            <CheckCircle2 size={13} />
-            Payée
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+            <CheckCircle2 size={13} /> Payée
           </span>
         );
-      case "REFUSED":
+      case "REJECTED":
         return (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200">
-            <AlertCircle size={13} />
-            Refusée
+            <AlertCircle size={13} /> Paiement refusé
           </span>
+        );
+    }
+  }
+
+  function renderAction(invoice: Invoice) {
+    const { state, rejectionReason } = getEffectiveState(invoice);
+
+    switch (state) {
+      case "PENDING":
+        return (
+          <span className="text-xs text-amber-700 bg-amber-50 px-3 py-1.5 rounded-xl border border-amber-200 inline-flex items-center gap-1">
+            <Clock size={12} /> Vérification en cours
+          </span>
+        );
+      case "PAID":
+        return (
+          <span className="text-xs text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200 inline-flex items-center gap-1">
+            <CheckCircle2 size={12} /> Validé
+          </span>
+        );
+      case "CONFIRMED":
+      case "PARTIAL":
+        return (
+          <button
+            onClick={() => setSelectedInvoice(invoice)}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-[#2d8f5e] hover:bg-[#24754d] text-white transition-all shadow-sm"
+          >
+            <CreditCard size={14} /> Payer
+          </button>
+        );
+      case "REJECTED":
+        return (
+          <button
+            onClick={() => setSelectedInvoice(invoice)}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white transition-all shadow-sm"
+          >
+            <RotateCcw size={14} /> Déclarer à nouveau
+          </button>
+        );
+      default:
+        return (
+          <button
+            onClick={() => setSelectedInvoice(invoice)}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-[#2d8f5e] hover:bg-[#24754d] text-white transition-all shadow-sm"
+          >
+            <CreditCard size={14} /> Payer
+          </button>
         );
     }
   }
@@ -117,10 +193,10 @@ export default function ClientInvoicesPage() {
       <div>
         <h1 className="text-xl sm:text-2xl font-bold text-[#0f172a] tracking-tight flex items-center gap-2">
           <Receipt size={24} className="text-[#2d8f5e] shrink-0" />
-          Mes Factures & Réglements
+          Mes Factures &amp; Réglements
         </h1>
         <p className="text-xs sm:text-sm text-[#64748b] mt-1">
-          Consultez vos factures et déclarez vos paiements par virement bancaire. Tout règlement sera validé après rapprochement bancaire.
+          Consultez vos factures et déclarez vos paiements. Chaque paiement sera examiné et confirmé par votre comptable.
         </p>
       </div>
 
@@ -142,104 +218,106 @@ export default function ClientInvoicesPage() {
             <p>Aucune facture enregistrée pour le moment.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto w-full">
-            <table className="w-full text-sm min-w-[720px]">
-              <thead>
-                <tr className="border-b border-slate-100 bg-[#f8fafc] text-xs text-slate-500 font-semibold uppercase tracking-wider">
-                  <th className="px-6 py-3.5 text-left">N° / Description</th>
-                  <th className="px-6 py-3.5 text-left">Montant</th>
-                  <th className="px-6 py-3.5 text-left">Reste à payer</th>
-                  <th className="px-6 py-3.5 text-left">Statut</th>
-                  <th className="px-6 py-3.5 text-left">Date</th>
-                  <th className="px-6 py-3.5 text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {invoices.map((invoice) => {
-                  const lastDecl = invoice.declarations?.[0];
-                  const canPay = ["UNPAID", "PARTIALLY_PAID", "REFUSED"].includes(invoice.status);
+          <div className="divide-y divide-slate-100">
+            {invoices.map((invoice) => {
+              const { state, rejectionReason, lastDecl } = getEffectiveState(invoice);
+              const allDecls = invoice.declarations || [];
+              const hasHistory = allDecls.length > 1 || (allDecls.length === 1 && allDecls[0].status !== "PENDING_CONFIRMATION");
+              const isExpanded = expandedHistory === invoice.id;
 
-                  return (
-                    <tr key={invoice.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="px-6 py-4">
-                        <div>
-                          <p className="font-bold text-[#0f172a]">
-                            {invoice.invoiceNumber ? `Facture N° ${invoice.invoiceNumber}` : `Réf ${invoice.id.slice(-6)}`}
-                          </p>
-                          {invoice.description && (
-                            <p className="text-xs text-slate-500 mt-0.5">{invoice.description}</p>
-                          )}
-                          {/* Référence de virement déclarée */}
-                          {lastDecl && lastDecl.reference && (
-                            <div className="mt-1.5 flex items-center gap-1.5">
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
-                                🏦 Réf. virement :
-                              </span>
-                              <span className="font-mono text-xs font-semibold text-indigo-800 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
-                                {lastDecl.reference}
+              return (
+                <div key={invoice.id} className="p-4 sm:p-5 hover:bg-slate-50/50 transition-colors">
+                  {/* Main row */}
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    {/* Left: invoice info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-bold text-[#0f172a] text-sm">
+                          {invoice.invoiceNumber ? `Facture N° ${invoice.invoiceNumber}` : `Réf ${invoice.id.slice(-6)}`}
+                        </p>
+                        {renderStatusBadge(invoice)}
+                      </div>
+                      {invoice.description && (
+                        <p className="text-xs text-slate-500 mt-0.5">{invoice.description}</p>
+                      )}
+                      <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+                        <span className="text-xs text-slate-500">
+                          Montant : <strong className="text-[#0f172a]">{invoice.amount.toLocaleString(locale, { minimumFractionDigits: 2 })} DA</strong>
+                        </span>
+                        {invoice.remaining > 0 && state !== "PAID" && (
+                          <span className="text-xs text-amber-700 font-medium">
+                            Reste : {invoice.remaining.toLocaleString(locale, { minimumFractionDigits: 2 })} DA
+                          </span>
+                        )}
+                        <span className="text-xs text-slate-400">
+                          {new Date(invoice.createdAt).toLocaleDateString(locale)}
+                        </span>
+                      </div>
+
+                      {/* Rejection reason inline */}
+                      {state === "REJECTED" && rejectionReason && (
+                        <div className="mt-2 p-2.5 bg-rose-50 border border-rose-100 rounded-xl text-xs text-rose-700">
+                          <span className="font-semibold">Motif :</span> {rejectionReason}
+                        </div>
+                      )}
+
+                      {/* Pending confirmation info */}
+                      {state === "PENDING" && lastDecl && (
+                        <div className="mt-2 p-2.5 bg-amber-50 border border-amber-100 rounded-xl text-xs text-amber-700">
+                          ⏳ Paiement déclaré le {new Date(lastDecl.createdAt).toLocaleDateString(locale)} — en attente de confirmation par votre comptable
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Right: actions */}
+                    <div className="flex items-center gap-2 shrink-0">
+                      {renderAction(invoice)}
+                    </div>
+                  </div>
+
+                  {/* Declaration history toggle */}
+                  {hasHistory && (
+                    <div className="mt-3">
+                      <button
+                        onClick={() => setExpandedHistory(isExpanded ? null : invoice.id)}
+                        className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-700 transition-colors"
+                      >
+                        {isExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                        {isExpanded ? "Masquer" : "Voir"} l&apos;historique des déclarations ({allDecls.length})
+                      </button>
+                      {isExpanded && (
+                        <div className="mt-2 space-y-1.5">
+                          {allDecls.map((d) => (
+                            <div key={d.id} className={`p-3 rounded-xl border text-xs flex items-start justify-between gap-3 ${
+                              d.status === "CONFIRMED" ? "bg-emerald-50 border-emerald-200" :
+                              d.status === "REJECTED" || d.status === "REFUSED" ? "bg-rose-50 border-rose-200" :
+                              "bg-amber-50 border-amber-200"
+                            }`}>
+                              <div>
+                                <span className="font-semibold">
+                                  {d.status === "CONFIRMED" ? "✅ Confirmé" :
+                                   d.status === "REJECTED" || d.status === "REFUSED" ? "❌ Refusé" :
+                                   "⏳ En attente"}
+                                </span>
+                                {" — "}
+                                {d.amount.toLocaleString(locale, { minimumFractionDigits: 2 })} DA
+                                {d.paymentMethod && <span className="ml-1.5 opacity-70">({d.paymentMethod})</span>}
+                                {(d.rejectionReason || d.refusalReason) && (
+                                  <p className="text-rose-600 mt-0.5">Motif : {d.rejectionReason || d.refusalReason}</p>
+                                )}
+                              </div>
+                              <span className="text-slate-400 shrink-0">
+                                {new Date(d.createdAt).toLocaleDateString(locale)}
                               </span>
                             </div>
-                          )}
-                          {/* Pièce justificative du virement */}
-                          {lastDecl && lastDecl.status === "PENDING" && !lastDecl.reference && (
-                            <p className="text-xs text-amber-600 font-medium mt-1">
-                              ⏳ Paiement déclaré — en attente de vérification
-                            </p>
-                          )}
-                          {lastDecl && invoice.status === "REFUSED" && lastDecl.refusalReason && (
-                            <p className="text-xs text-rose-600 font-medium mt-1 bg-rose-50 px-2.5 py-1 rounded-md border border-rose-100">
-                              Motif de refus : {lastDecl.refusalReason}
-                            </p>
-                          )}
+                          ))}
                         </div>
-                      </td>
-
-                      <td className="px-6 py-4 font-semibold text-[#0f172a] whitespace-nowrap">
-                        {invoice.amount.toLocaleString(locale, { minimumFractionDigits: 2 })} DA
-                      </td>
-
-                      <td className="px-6 py-4 font-semibold text-slate-700 whitespace-nowrap">
-                        {invoice.remaining > 0 ? (
-                          <span className="text-amber-700 bg-amber-50 px-2 py-0.5 rounded font-mono text-xs">
-                            {invoice.remaining.toLocaleString(locale, { minimumFractionDigits: 2 })} DA
-                          </span>
-                        ) : (
-                          <span className="text-[#2d8f5e] font-mono text-xs">0.00 DA</span>
-                        )}
-                      </td>
-
-                      <td className="px-6 py-4 whitespace-nowrap">{renderStatusBadge(invoice)}</td>
-
-                      <td className="px-6 py-4 text-xs text-slate-500 whitespace-nowrap">
-                        {new Date(invoice.createdAt).toLocaleDateString(locale)}
-                      </td>
-
-                      <td className="px-6 py-4 text-right whitespace-nowrap">
-                        {canPay ? (
-                          <button
-                            onClick={() => setSelectedInvoice(invoice)}
-                            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-[#2d8f5e] hover:bg-[#24754d] text-white transition-all shadow-sm"
-                          >
-                            <CreditCard size={14} />
-                            Payer
-                          </button>
-                        ) : invoice.status === "PENDING_VERIFICATION" ? (
-                          <span className="text-xs text-amber-700 bg-amber-50 px-3 py-1.5 rounded-xl border border-amber-200 inline-flex items-center gap-1">
-                            <Clock size={12} />
-                            Vérification en cours
-                          </span>
-                        ) : (
-                          <span className="text-xs text-[#2d8f5e] bg-green-50 px-3 py-1.5 rounded-xl border border-green-200 inline-flex items-center gap-1">
-                            <CheckCircle2 size={12} />
-                            Validé
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

@@ -19,6 +19,7 @@ import {
   ChevronLeft,
   Menu,
   X,
+  CreditCard,
 } from "lucide-react";
 
 interface SidebarT {
@@ -60,6 +61,7 @@ export function ComptableSidebar({
       items: [
         { label: t.dashboard, href: "dashboard", icon: LayoutDashboard },
         { label: t.validate, href: "validate", icon: CheckSquare },
+        { label: lang === "ar" ? "مدفوعات" : lang === "en" ? "Payments" : "Paiements", href: "paiements", icon: CreditCard },
       ],
     },
     {

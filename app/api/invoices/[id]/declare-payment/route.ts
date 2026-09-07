@@ -1,17 +1,13 @@
 /**
  * POST /api/invoices/[id]/declare-payment
- * Le client déclare avoir effectué un paiement.
- * Body (multipart/form-data):
- *   - reference: string (optionnel)
- *   - paymentDate: string ISO date
- *   - amount: number
- *   - justificatif: File (optionnel)
+ * Client declares having made a payment.
+ * Creates PaymentDeclaration = PENDING_CONFIRMATION (never creates JournalEntry).
  */
 import { getCurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { NextRequest } from "next/server";
-import { writeFile, mkdir } from "fs/promises";
-import path from "path";
+
+const ALLOWED_METHODS = ["VIREMENT", "CIB", "EDAHABIA", "CHEQUE", "ESPECES"];
 
 export async function POST(
   req: NextRequest,
@@ -33,10 +29,15 @@ export async function POST(
       include: {
         company: {
           select: {
+            id: true,
             comptableId: true,
             name: true,
-            client: { select: { name: true } },
+            client: { select: { id: true, name: true } },
           },
+        },
+        declarations: {
+          where: { status: "PENDING_CONFIRMATION" },
+          take: 1,
         },
       },
     });
@@ -44,7 +45,15 @@ export async function POST(
     if (!invoice) return Response.json({ error: "Facture introuvable" }, { status: 404 });
 
     if (invoice.status === "PAID") {
-      return Response.json({ error: "Cette facture est déjà payée" }, { status: 400 });
+      return Response.json({ error: "Cette facture est déjà entièrement payée" }, { status: 400 });
+    }
+
+    // Prevent multiple active PENDING_CONFIRMATION declarations
+    if (invoice.declarations && invoice.declarations.length > 0) {
+      return Response.json(
+        { error: "Un paiement est déjà en attente de confirmation pour cette facture" },
+        { status: 400 }
+      );
     }
 
     let formData: FormData;
@@ -57,6 +66,7 @@ export async function POST(
     const reference = formData.get("reference") as string | null;
     const paymentDateStr = formData.get("paymentDate") as string | null;
     const amountStr = formData.get("amount") as string | null;
+    const paymentMethod = (formData.get("paymentMethod") as string | null) || "VIREMENT";
     const justificatifFile = formData.get("justificatif") as File | null;
 
     if (!amountStr) {
@@ -68,12 +78,15 @@ export async function POST(
       return Response.json({ error: "Montant invalide" }, { status: 400 });
     }
 
+    if (!ALLOWED_METHODS.includes(paymentMethod.toUpperCase())) {
+      return Response.json({ error: "Méthode de paiement invalide" }, { status: 400 });
+    }
+
     let justificatifPath: string | null = null;
     if (justificatifFile && justificatifFile.size > 0) {
       try {
         const buffer = Buffer.from(await justificatifFile.arrayBuffer());
         const mime = justificatifFile.type || (justificatifFile.name.endsWith(".pdf") ? "application/pdf" : "image/jpeg");
-        // Store as Data URI for 100% serverless static rendering without 404
         justificatifPath = `data:${mime};base64,${buffer.toString("base64")}`;
       } catch (fsErr) {
         console.warn("Base64 conversion failed:", fsErr);
@@ -87,8 +100,10 @@ export async function POST(
         reference: reference || null,
         paymentDate: paymentDateStr ? new Date(paymentDateStr) : null,
         amount,
+        paymentMethod: paymentMethod.toUpperCase(),
         justificatif: justificatifPath,
-        status: "PENDING",
+        status: "PENDING_CONFIRMATION",
+        declaredById: user.userId,
       },
     });
 
@@ -100,12 +115,12 @@ export async function POST(
     await (db as any).auditLog.create({
       data: {
         action: "PAYMENT_DECLARED",
-        entityType: "Invoice",
-        entityId: id,
-        oldValue: JSON.stringify({ status: invoice.status }),
-        newValue: JSON.stringify({ status: "PENDING_VERIFICATION", amount, reference }),
+        entityType: "PaymentDeclaration",
+        entityId: declaration.id,
+        oldValue: JSON.stringify({ invoiceStatus: invoice.status }),
+        newValue: JSON.stringify({ status: "PENDING_CONFIRMATION", amount, paymentMethod, reference }),
         userId: user.userId,
-        companyId: invoice.companyId,
+        companyId: invoice.company.id,
       },
     });
 
@@ -115,7 +130,7 @@ export async function POST(
           userId: invoice.company.comptableId,
           type: "payment",
           message: `Nouveau paiement déclaré par ${invoice.company.client.name} pour la facture ${invoice.invoiceNumber ?? id} (${amount.toLocaleString("fr-FR")} DA)`,
-          link: `/comptable/rapprochement?tab=pending`,
+          link: `/comptable/paiements?id=${declaration.id}`,
         },
       });
     }

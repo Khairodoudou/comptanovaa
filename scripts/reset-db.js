@@ -8,6 +8,8 @@ async function resetAllData() {
 
   console.log("Emptying all tables on Turso...");
 
+  await client.execute("PRAGMA foreign_keys = OFF");
+
   const tables = [
     "JournalEntryVersion",
     "ReconciliationMatch",
@@ -32,9 +34,22 @@ async function resetAllData() {
   for (const table of tables) {
     try {
       const res = await client.execute(`DELETE FROM "${table}"`);
-      console.log(`Cleared ${table} (${res.rowsAffected} rows deleted)`);
+      console.log(`Cleared ${table} (${res.rowsAffected ?? 0} rows deleted)`);
     } catch (e) {
       console.warn(`Table ${table}:`, e.message);
+    }
+  }
+
+  await client.execute("PRAGMA foreign_keys = ON");
+
+  console.log("\nVerifying tables count...");
+  for (const table of tables) {
+    try {
+      const res = await client.execute(`SELECT COUNT(*) as count FROM "${table}"`);
+      const count = res.rows[0].count;
+      console.log(`  - ${table}: ${count} rows`);
+    } catch (e) {
+      console.warn(`  - ${table} check failed:`, e.message);
     }
   }
 

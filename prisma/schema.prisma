@@ -40,6 +40,9 @@ enum InvoiceStatus {
 }
 
 enum PaymentDeclarationStatus {
+  PENDING_CONFIRMATION
+  CONFIRMED
+  REJECTED
   PENDING
   VALIDATED
   REFUSED
@@ -144,6 +147,9 @@ model User {
   entryVersions         JournalEntryVersion[]
   completedDeadlines    FiscalDeadline[]    @relation("CompletedDeadlines")
   reconMatches          ReconciliationMatch[] @relation("MatchedBy")
+  declaredPayments      PaymentDeclaration[] @relation("PaymentDeclaredBy")
+  confirmedPayments     PaymentDeclaration[] @relation("PaymentConfirmedBy")
+  rejectedPayments      PaymentDeclaration[] @relation("PaymentRejectedBy")
 }
 
 model Company {
@@ -267,6 +273,7 @@ model JournalEntry {
   bankTransaction BankTransaction?
   versions        JournalEntryVersion[]
   reconMatches    ReconciliationMatch[]
+  paymentDeclaration PaymentDeclaration? @relation("PaymentAccountingEntry")
 }
 
 model JournalEntryVersion {
@@ -406,19 +413,36 @@ model Invoice {
 }
 
 model PaymentDeclaration {
-  id              String                   @id @default(cuid())
-  invoiceId       String
-  invoice         Invoice                  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-  reference       String?
-  paymentDate     DateTime?
-  amount          Float
-  justificatif    String?
-  status          PaymentDeclarationStatus @default(PENDING)
-  refusalReason   String?
-  notes           String?
-  createdAt       DateTime                 @default(now())
-  updatedAt       DateTime                 @updatedAt
-  invoicePayments InvoicePayment[]
+  id                String                   @id @default(cuid())
+  invoiceId         String
+  invoice           Invoice                  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  reference         String?
+  paymentDate       DateTime?
+  amount            Float
+  paymentMethod     String?                  @default("VIREMENT")
+  justificatif      String?
+  status            PaymentDeclarationStatus @default(PENDING_CONFIRMATION)
+  refusalReason     String?
+  rejectionReason   String?
+  notes             String?
+
+  declaredById      String?
+  declaredBy        User?                    @relation("PaymentDeclaredBy", fields: [declaredById], references: [id])
+
+  confirmedAt       DateTime?
+  confirmedById     String?
+  confirmedBy       User?                    @relation("PaymentConfirmedBy", fields: [confirmedById], references: [id])
+
+  rejectedAt        DateTime?
+  rejectedById      String?
+  rejectedBy        User?                    @relation("PaymentRejectedBy", fields: [rejectedById], references: [id])
+
+  accountingEntryId String?                  @unique
+  accountingEntry   JournalEntry?            @relation("PaymentAccountingEntry", fields: [accountingEntryId], references: [id])
+
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+  invoicePayments   InvoicePayment[]
 }
 
 model InvoicePayment {

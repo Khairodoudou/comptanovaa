@@ -51,8 +51,11 @@ export default async function ClientBankHistoryPage({
 
   const statusColor = (status: string) => {
     switch (status) {
+      case "CONFIRMED":
       case "VALIDATED": return "bg-green-50 text-green-700 border-green-200";
+      case "REJECTED":
       case "REFUSED":   return "bg-red-50 text-red-700 border-red-200";
+      case "PENDING_CONFIRMATION":
       case "PENDING":   return "bg-amber-50 text-amber-700 border-amber-200";
       default:          return "bg-slate-50 text-slate-600 border-slate-200";
     }
@@ -60,9 +63,12 @@ export default async function ClientBankHistoryPage({
 
   const statusLabel = (status: string) => {
     switch (status) {
-      case "VALIDATED": return lang === "ar" ? "✅ مصادق عليه" : "✅ Validé";
-      case "REFUSED":   return lang === "ar" ? "❌ مرفوض" : "❌ Refusé";
-      case "PENDING":   return lang === "ar" ? "⏳ قيد المراجعة" : "⏳ En attente";
+      case "CONFIRMED":
+      case "VALIDATED": return lang === "ar" ? "✅ مصادق عليه" : "✅ Confirmé";
+      case "REJECTED":
+      case "REFUSED":   return lang === "ar" ? "❌ مرفوض" : "❌ Rejeté";
+      case "PENDING_CONFIRMATION":
+      case "PENDING":   return lang === "ar" ? "⏳ قيد التأكيد" : "⏳ En attente de confirmation";
       default: return status;
     }
   };
@@ -172,8 +178,8 @@ export default async function ClientBankHistoryPage({
                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${statusColor(decl.status)}`}>
                       {statusLabel(decl.status)}
                     </span>
-                    {decl.status === "REFUSED" && decl.notes && (
-                      <p className="text-xs text-red-500 mt-1 max-w-[200px] truncate">{decl.notes}</p>
+                    {(decl.status === "REFUSED" || decl.status === "REJECTED") && (decl.rejectionReason || decl.notes) && (
+                      <p className="text-xs text-red-500 mt-1 max-w-[200px] truncate">{decl.rejectionReason || decl.notes}</p>
                     )}
                   </td>
                 </tr>

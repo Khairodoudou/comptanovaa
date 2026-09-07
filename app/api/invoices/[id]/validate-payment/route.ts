@@ -37,7 +37,11 @@ export async function POST(
     if (!invoice) return Response.json({ error: "Facture introuvable" }, { status: 404 });
 
     const declaration = await (db as any).paymentDeclaration.findFirst({
-      where: { id: declarationId, invoiceId: id, status: "PENDING" },
+      where: {
+        id: declarationId,
+        invoiceId: id,
+        status: { in: ["PENDING", "PENDING_CONFIRMATION"] },
+      },
     });
     if (!declaration) {
       return Response.json({ error: "Déclaration introuvable ou déjà traitée" }, { status: 404 });
@@ -89,7 +93,12 @@ export async function POST(
       }),
       (db as any).paymentDeclaration.update({
         where: { id: declarationId },
-        data: { status: "VALIDATED", notes: notes || null },
+        data: {
+          status: "CONFIRMED",
+          confirmedAt: new Date(),
+          confirmedById: user.userId,
+          notes: notes || null,
+        },
       }),
       db.bankTransaction.update({
         where: { id: finalTxId },

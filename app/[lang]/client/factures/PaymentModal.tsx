@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { X, Building2, CreditCard, Upload, CheckCircle2, Loader2, AlertCircle } from "lucide-react";
+import { X, Building2, CreditCard, Upload, CheckCircle2, Loader2, AlertCircle, Clock } from "lucide-react";
 
 interface BankDetails {
   bankName?: string | null;
@@ -27,10 +27,19 @@ interface Props {
   onSuccess: () => void;
 }
 
+const PAYMENT_METHODS = [
+  { value: "VIREMENT", label: "Virement bancaire" },
+  { value: "CIB", label: "Carte CIB" },
+  { value: "EDAHABIA", label: "Carte Edahabia" },
+  { value: "CHEQUE", label: "Chèque" },
+  { value: "ESPECES", label: "Espèces" },
+];
+
 export function PaymentModal({ invoice, locale, onClose, onSuccess }: Props) {
   const [reference, setReference] = useState("");
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().slice(0, 10));
   const [amount, setAmount] = useState(invoice.remaining.toString());
+  const [paymentMethod, setPaymentMethod] = useState("VIREMENT");
   const [justificatif, setJustificatif] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -48,6 +57,7 @@ export function PaymentModal({ invoice, locale, onClose, onSuccess }: Props) {
       if (reference) formData.append("reference", reference);
       formData.append("paymentDate", paymentDate);
       formData.append("amount", amount);
+      formData.append("paymentMethod", paymentMethod);
       if (justificatif) formData.append("justificatif", justificatif);
 
       const res = await fetch(`/api/invoices/${invoice.id}/declare-payment`, {
@@ -74,7 +84,7 @@ export function PaymentModal({ invoice, locale, onClose, onSuccess }: Props) {
         {/* Header */}
         <div className="px-5 sm:px-6 py-4 sm:py-5 bg-[#0f172a] text-white flex items-center justify-between shrink-0">
           <div>
-            <h2 className="text-base sm:text-lg font-bold">Règlement Facture</h2>
+            <h2 className="text-base sm:text-lg font-bold">Déclarer un paiement</h2>
             <p className="text-xs text-slate-300 mt-0.5">
               {invoice.invoiceNumber ? `N° ${invoice.invoiceNumber}` : `Réf: ${invoice.id}`}
             </p>
@@ -89,21 +99,18 @@ export function PaymentModal({ invoice, locale, onClose, onSuccess }: Props) {
 
         {submitted ? (
           <div className="p-6 sm:p-8 text-center space-y-4 overflow-y-auto">
-            <div className="w-16 h-16 rounded-full bg-green-50 text-[#2d8f5e] flex items-center justify-center mx-auto border border-green-200">
-              <CheckCircle2 size={36} />
+            <div className="w-16 h-16 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center mx-auto border border-amber-200">
+              <Clock size={36} />
             </div>
-            <h3 className="text-lg font-bold text-[#0f172a]">Paiement Enregistré</h3>
+            <h3 className="text-lg font-bold text-[#0f172a]">Paiement Déclaré</h3>
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-xs text-amber-800 text-left space-y-1">
-              <p className="font-semibold">⚠️ Attention :</p>
+              <p className="font-semibold">⏳ En attente de confirmation</p>
               <p>
-                Votre paiement a été enregistré et sera validé après vérification bancaire par notre service comptable.
+                Votre déclaration de paiement a été enregistrée. Votre comptable va l&apos;examiner et confirmer ou vous notifier en cas de problème.
               </p>
             </div>
             <button
-              onClick={() => {
-                onSuccess();
-                onClose();
-              }}
+              onClick={() => { onSuccess(); onClose(); }}
               className="w-full py-2.5 bg-[#2d8f5e] hover:bg-[#24754d] text-white font-medium rounded-xl text-sm transition-colors shadow-sm"
             >
               Compris, fermer
@@ -120,30 +127,22 @@ export function PaymentModal({ invoice, locale, onClose, onSuccess }: Props) {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                 <div>
                   <span className="text-slate-400 block">Bénéficiaire</span>
-                  <span className="font-semibold text-[#0f172a]">
-                    {bank.beneficiaryName || bank.name}
-                  </span>
+                  <span className="font-semibold text-[#0f172a]">{bank.beneficiaryName || bank.name}</span>
                 </div>
                 <div>
                   <span className="text-slate-400 block">Banque</span>
-                  <span className="font-semibold text-[#0f172a]">
-                    {bank.bankName || "Non spécifié"}
-                  </span>
+                  <span className="font-semibold text-[#0f172a]">{bank.bankName || "Non spécifié"}</span>
                 </div>
                 {bank.rib && (
                   <div className="col-span-full">
                     <span className="text-slate-400 block">RIB</span>
-                    <span className="font-mono text-[#0f172a] bg-white px-2 py-1 rounded border border-slate-200 inline-block font-semibold">
-                      {bank.rib}
-                    </span>
+                    <span className="font-mono text-[#0f172a] bg-white px-2 py-1 rounded border border-slate-200 inline-block font-semibold">{bank.rib}</span>
                   </div>
                 )}
                 {bank.iban && (
                   <div className="col-span-full">
                     <span className="text-slate-400 block">IBAN</span>
-                    <span className="font-mono text-[#0f172a] bg-white px-2 py-1 rounded border border-slate-200 inline-block font-semibold">
-                      {bank.iban}
-                    </span>
+                    <span className="font-mono text-[#0f172a] bg-white px-2 py-1 rounded border border-slate-200 inline-block font-semibold">{bank.iban}</span>
                   </div>
                 )}
                 {bank.ccp && (
@@ -157,10 +156,26 @@ export function PaymentModal({ invoice, locale, onClose, onSuccess }: Props) {
 
             {/* Form */}
             <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Payment method */}
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">
+                  Méthode de paiement <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={paymentMethod}
+                  onChange={(e) => setPaymentMethod(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm text-[#0f172a] focus:ring-2 focus:ring-[#2d8f5e] focus:outline-none bg-white"
+                >
+                  {PAYMENT_METHODS.map((m) => (
+                    <option key={m.value} value={m.value}>{m.label}</option>
+                  ))}
+                </select>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-medium text-slate-700 mb-1">
-                    Montant du virement (DA) <span className="text-red-500">*</span>
+                    Montant (DA) <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="number"
@@ -177,7 +192,7 @@ export function PaymentModal({ invoice, locale, onClose, onSuccess }: Props) {
 
                 <div>
                   <label className="block text-xs font-medium text-slate-700 mb-1">
-                    Date du virement <span className="text-red-500">*</span>
+                    Date du paiement <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="date"
@@ -204,13 +219,13 @@ export function PaymentModal({ invoice, locale, onClose, onSuccess }: Props) {
 
               <div>
                 <label className="block text-xs font-medium text-slate-700 mb-1">
-                  Justificatif de virement (PDF ou image)
+                  Justificatif de paiement (PDF ou image)
                 </label>
                 <div className="flex items-center gap-3">
                   <label className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 border border-dashed border-slate-300 hover:border-[#2d8f5e] rounded-xl text-xs font-medium text-slate-600 cursor-pointer bg-slate-50/50 hover:bg-green-50/30 transition-all">
                     <Upload size={15} className="text-[#2d8f5e]" />
                     <span className="truncate">
-                      {justificatif ? justificatif.name : "Joindre un reçu de virement"}
+                      {justificatif ? justificatif.name : "Joindre un reçu de paiement"}
                     </span>
                     <input
                       type="file"
@@ -220,11 +235,7 @@ export function PaymentModal({ invoice, locale, onClose, onSuccess }: Props) {
                     />
                   </label>
                   {justificatif && (
-                    <button
-                      type="button"
-                      onClick={() => setJustificatif(null)}
-                      className="text-xs text-red-500 hover:underline"
-                    >
+                    <button type="button" onClick={() => setJustificatif(null)} className="text-xs text-red-500 hover:underline">
                       Supprimer
                     </button>
                   )}
@@ -252,13 +263,9 @@ export function PaymentModal({ invoice, locale, onClose, onSuccess }: Props) {
                   className="flex-1 py-2.5 bg-[#2d8f5e] hover:bg-[#24754d] text-white font-medium rounded-xl text-sm transition-all disabled:opacity-60 flex items-center justify-center gap-2 shadow-sm"
                 >
                   {loading ? (
-                    <>
-                      <Loader2 size={16} className="animate-spin" /> Enregistrement...
-                    </>
+                    <><Loader2 size={16} className="animate-spin" /> Envoi...</>
                   ) : (
-                    <>
-                      <CreditCard size={16} /> J&apos;ai effectué le paiement
-                    </>
+                    <><CreditCard size={16} /> J&apos;ai effectué le paiement</>
                   )}
                 </button>
               </div>

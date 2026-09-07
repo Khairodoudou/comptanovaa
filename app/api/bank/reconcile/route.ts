@@ -222,9 +222,13 @@ export async function POST(req: NextRequest) {
   }
 
   // Gather match targets:
-  // 1. Pending payment declarations
+  // 1. Only PENDING_CONFIRMATION declarations (CONFIRMED ones already have JournalEntries)
   const pendingDeclarations = await db.paymentDeclaration.findMany({
-    where: { invoice: { companyId }, status: "PENDING" },
+    where: {
+      invoice: { companyId },
+      status: "PENDING_CONFIRMATION",
+      accountingEntryId: null, // extra guard: no existing entry
+    },
     include: { invoice: { include: { company: { include: { client: true } } } } },
   });
 
@@ -316,32 +320,42 @@ export async function POST(req: NextRequest) {
 
         if (isMatched && matchedTarget?.type === "declaration") {
           const decl = matchedTarget.declarationData;
-          // Create the JournalEntry 512 in Comptabilité for this payment
-          const isCredit = row.amount < 0;
-          const newEntry = await tx.journalEntry.create({
-            data: {
-              date: new Date(row.date),
-              description: `Règlement client Facture ${decl.invoice?.invoiceNumber || decl.invoiceId} - ${row.description}`,
-              debitAccount: isCredit ? "411" : "512",
-              creditAccount: isCredit ? "512" : "411",
-              amount: Math.abs(row.amount),
-              reference: row.reference || decl.reference || row.chequeNumber || null,
-              status: "VALIDATED",
-              source: "BANQUE",
-              journalType: "BANQUE",
-              companyId,
-              documentId: decl.invoice?.documentId || null,
-              validatedById: user.userId,
-              validatedAt: new Date(),
-            },
-          });
-          entryId = newEntry.id;
+          // Verify no accounting entry already exists for this declaration (idempotency guard)
+          const existingEntry = decl.accountingEntryId
+            ? await tx.journalEntry.findFirst({ where: { id: decl.accountingEntryId } })
+            : null;
 
-          // Update declaration to VALIDATED
-          await tx.paymentDeclaration.update({
-            where: { id: decl.id },
-            data: { status: "VALIDATED" },
-          });
+          if (!existingEntry) {
+            // Create the JournalEntry for this payment during reconciliation
+            const isCredit = row.amount < 0;
+            const newEntry = await tx.journalEntry.create({
+              data: {
+                date: new Date(row.date),
+                description: `Règlement client Facture ${decl.invoice?.invoiceNumber || decl.invoiceId} - ${row.description}`,
+                debitAccount: isCredit ? "411" : "512",
+                creditAccount: isCredit ? "512" : "411",
+                amount: Math.abs(row.amount),
+                reference: row.reference || decl.reference || row.chequeNumber || null,
+                status: "VALIDATED",
+                source: "BANQUE",
+                journalType: "BANQUE",
+                companyId,
+                documentId: decl.invoice?.documentId || null,
+                validatedById: user.userId,
+                validatedAt: new Date(),
+              },
+            });
+            entryId = newEntry.id;
+
+            // Update declaration to CONFIRMED (was PENDING_CONFIRMATION, now reconciled)
+            await (tx as any).paymentDeclaration.update({
+              where: { id: decl.id },
+              data: { status: "CONFIRMED", confirmedAt: new Date(), confirmedById: user.userId, accountingEntryId: newEntry.id },
+            });
+          } else {
+            // Declaration already has an accounting entry — just link to it
+            entryId = existingEntry.id;
+          }
 
           // Check invoice total payments and update invoice status
           const inv = await tx.invoice.findUnique({

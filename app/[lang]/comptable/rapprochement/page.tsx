@@ -123,7 +123,7 @@ export default async function RapprochementPage({
         pendingDeclarations = await (db as any).paymentDeclaration.findMany({
           where: {
             invoice: { companyId: selectedCompanyId },
-            status: "PENDING",
+            status: "PENDING_CONFIRMATION",
           },
           include: {
             invoice: {

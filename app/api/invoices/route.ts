@@ -99,7 +99,18 @@ export async function GET(req: NextRequest) {
         document: { select: { originalName: true, filename: true } },
         declarations: {
           orderBy: { createdAt: "desc" },
-          take: 1,
+          select: {
+            id: true,
+            amount: true,
+            paymentMethod: true,
+            status: true,
+            reference: true,
+            rejectionReason: true,
+            refusalReason: true,
+            createdAt: true,
+            confirmedAt: true,
+            rejectedAt: true,
+          },
         },
         payments: {
           include: {
@@ -111,7 +122,12 @@ export async function GET(req: NextRequest) {
     });
 
     const enriched = invoices.map((inv: any) => {
-      const totalPaid = (inv.payments || []).reduce((s: number, p: any) => s + p.amount, 0);
+      // Use only CONFIRMED declarations for financial totals
+      const confirmedDecls = (inv.declarations || []).filter((d: any) => d.status === "CONFIRMED");
+      const totalPaidFromDecls = confirmedDecls.reduce((s: number, d: any) => s + d.amount, 0);
+      // Fall back to InvoicePayment records if available (bank reconciled)
+      const totalPaidFromPayments = (inv.payments || []).reduce((s: number, p: any) => s + p.amount, 0);
+      const totalPaid = Math.max(totalPaidFromDecls, totalPaidFromPayments);
       const remaining = Math.max(0, inv.amount - totalPaid);
       return { ...inv, totalPaid, remaining };
     });
