@@ -75,7 +75,7 @@ export async function GET(req: NextRequest) {
   });
 
   // Get bank transactions
-  const bankTransactions = await db.bankTransaction.findMany({
+  const rawBankTransactions = await db.bankTransaction.findMany({
     where: {
       companyId,
       date: { gte: startOfMonth, lt: endOfMonth },
@@ -125,6 +125,14 @@ export async function GET(req: NextRequest) {
         },
       },
     },
+  });
+
+  // Guardrail: Exclude pre-existing corrupted records (e.g. IBAN/account number leakage > 999M DA or header text)
+  const bankTransactions = rawBankTransactions.filter((bt) => {
+    if (Math.abs(bt.amount) > 999_999_999) return false;
+    if (bt.balance !== null && bt.balance !== undefined && Math.abs(bt.balance) > 999_999_999) return false;
+    if (/--- ---|titulaire du compte|devise da|iban dz/i.test(bt.description)) return false;
+    return true;
   });
 
   // Get all company invoices to resolve documents linked by reference/description

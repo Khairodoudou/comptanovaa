@@ -3,6 +3,7 @@ import { extractDocumentData, type ExtractedData } from "./text-extractor";
 
 export interface OcrResult {
   rawText: string;
+  markdown?: string;
   extracted: ExtractedData;
   tesseractConfidence: number;
   needsManualReview: boolean;
@@ -62,7 +63,8 @@ export async function runOcr(
     throw new Error(`OCR_FAILED: ${data.message ?? "Mistral error"}`);
   }
 
-  const rawText = (data.pages?.map((p: any) => p.markdown).join("\n") ?? "")
+  const markdown = data.pages?.map((p: any) => p.markdown).join("\n") ?? "";
+  const rawText = markdown
     .replace(/[#*_`~>\[\]]/g, " ")
     .replace(/\|/g, " ")
     .replace(/\s{2,}/g, " ")
@@ -76,6 +78,7 @@ export async function runOcr(
 
   return {
     rawText,
+    markdown,
     extracted,
     tesseractConfidence: 95,
     needsManualReview: false,

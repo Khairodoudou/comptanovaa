@@ -11,6 +11,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { NextRequest } from "next/server";
 import { runOcr } from "@/lib/ocr/professional-ocr";
+import { parseBankStatement } from "@/lib/bank/statement-parser";
 
 function parseCsv(
   text: string
@@ -46,53 +47,6 @@ function parseCsv(
     .filter(Boolean) as { date: string; description: string; amount: number; chequeNumber?: string; reference?: string; senderName?: string; balance?: number }[];
 }
 
-function parsePdfBankText(
-  rawText: string
-): { date: string; description: string; amount: number; chequeNumber?: string; reference?: string }[] {
-  const results: { date: string; description: string; amount: number; chequeNumber?: string; reference?: string }[] = [];
-
-  const DATE_RE = /(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{4}|\d{4}[\/\-\.]\d{2}[\/\-\.]\d{2})/;
-
-  const lines = rawText.split(/\n+/).map((l) => l.trim()).filter((l) => l.length > 5);
-
-  for (const line of lines) {
-    const dateMatch = line.match(DATE_RE);
-    if (!dateMatch) continue;
-
-    const date = normalizeDate(dateMatch[1]);
-    if (!date) continue;
-
-    const afterDate = line.slice(dateMatch.index! + dateMatch[1].length).trim();
-
-    const numbers: number[] = [];
-    let m: RegExpExecArray | null;
-
-    const decimalRe = /(\d[\d\s]*[.,]\d{2})/g;
-    while ((m = decimalRe.exec(afterDate)) !== null) {
-      const n = parseFloat(m[1].replace(/\s/g, "").replace(",", "."));
-      if (!isNaN(n) && n > 0) numbers.push(n);
-    }
-
-    if (numbers.length === 0) {
-      const anyRe = /(\d[\d\s]*)/g;
-      while ((m = anyRe.exec(afterDate)) !== null) {
-        const n = parseFloat(m[1].replace(/\s/g, ""));
-        if (!isNaN(n) && n > 0) numbers.push(n);
-      }
-    }
-
-    if (numbers.length === 0) continue;
-
-    const amount = Math.max(...numbers);
-    const description = afterDate.replace(/\d[\d\s]*[.,]?\d*/g, "").replace(/\s+/g, " ").trim() || line.trim();
-    const chequeNumber = extractChequeFromText(line) || undefined;
-    const reference = extractRefFromText(line) || undefined;
-
-    results.push({ date, description: description.slice(0, 120), amount, chequeNumber, reference });
-  }
-
-  return results;
-}
 
 function normalizeDate(raw: string): string | null {
   if (!raw) return null;
@@ -207,10 +161,39 @@ export async function POST(req: NextRequest) {
   } else if (isPdf) {
     try {
       const buffer = Buffer.from(await file.arrayBuffer());
-      const ocrResult = await runOcr(buffer, fileName, mimeType);
-      rows = parsePdfBankText(ocrResult.rawText);
+
+      // Strategy 1: Native 2D PDF Coordinate Extraction
+      let parseResult = await parseBankStatement({
+        buffer,
+        filename: fileName,
+      });
+
+      // Strategy 2: If coordinate parser yielded 0 transactions (e.g. scanned image PDF), use Mistral OCR
+      if (parseResult.isFailure || parseResult.transactions.length === 0) {
+        const ocrResult = await runOcr(buffer, fileName, mimeType);
+        parseResult = await parseBankStatement({
+          markdownText: ocrResult.markdown || ocrResult.rawText,
+          filename: fileName,
+        });
+      }
+
+      if (parseResult.isFailure || parseResult.transactions.length === 0) {
+        return Response.json(
+          { error: parseResult.unparsedReason || "Aucune opération bancaire reconnue dans le PDF." },
+          { status: 400 }
+        );
+      }
+
+      rows = parseResult.transactions.map((t) => ({
+        date: t.date,
+        description: t.description,
+        amount: t.amount,
+        chequeNumber: t.chequeNumber,
+        reference: t.reference,
+        balance: t.balance,
+      }));
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Erreur OCR";
+      const msg = err instanceof Error ? err.message : "Erreur d'analyse";
       return Response.json({ error: `Échec de l'analyse du PDF: ${msg}` }, { status: 500 });
     }
   } else {
