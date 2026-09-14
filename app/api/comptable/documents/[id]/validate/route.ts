@@ -250,6 +250,7 @@ export async function POST(
             source: "MANUAL",
             companyId: document.companyId,
             documentId: document.id,
+            journalType: document.journalEntries[0]?.journalType || null,
             correctedById: user.userId,
             correctedAt: now,
             ...(action === "VALIDATE"
@@ -280,6 +281,17 @@ export async function POST(
           },
         });
       }
+    }
+
+    // Supprimer les éventuelles lignes retirées par le comptable (hors règlements)
+    const submittedIds = submittedEntries.map((s) => s.id).filter(Boolean) as string[];
+    const obsoleteEntries = document.journalEntries.filter(
+      (e) => !submittedIds.includes(e.id) && e.source !== "PAIEMENT"
+    );
+    if (obsoleteEntries.length > 0) {
+      await tx.journalEntry.deleteMany({
+        where: { id: { in: obsoleteEntries.map((e) => e.id) } },
+      });
     }
 
     // If VALIDATING, update Document status

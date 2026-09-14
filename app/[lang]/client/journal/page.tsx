@@ -78,9 +78,29 @@ export default async function ClientJournalPage({
 
   const totalAmount = entries.reduce((sum, e) => sum + e.amount, 0);
 
-  const totalOperations = new Set(
-    entries.map((e) => e.documentId || `manual-${e.id}`)
-  ).size;
+  // Fonction de regroupement intelligente des écritures comptables
+  const getOpKey = (entry: (typeof entries)[0]) => {
+    const dateStr = new Date(entry.date).toISOString().slice(0, 10);
+    if (entry.source === "PAIEMENT") {
+      return `payment_${entry.id}`;
+    }
+    if ((entry as any).bankTransaction) {
+      return `bank_${entry.id}`;
+    }
+    if (entry.documentId || entry.document?.id) {
+      const docId = entry.documentId || entry.document?.id;
+      return `doc_${docId}_${dateStr}`;
+    }
+    const jType = entry.journalType || "OD";
+    const ref = (entry.reference || "").trim();
+    const desc = (entry.description || "").trim();
+    const timeBatch = entry.createdAt
+      ? Math.floor(new Date(entry.createdAt).getTime() / 15000)
+      : entry.id;
+    return `manual_${entry.companyId || ""}_${jType}_${dateStr}_${ref}_${desc}_${timeBatch}`;
+  };
+
+  const totalOperations = new Set(entries.map(getOpKey)).size;
 
   return (
     <div className="p-6 sm:p-8 max-w-6xl mx-auto space-y-6">
@@ -182,11 +202,11 @@ export default async function ClientJournalPage({
             val.toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
           const opsMap = entries.reduce((acc, entry) => {
-            const docId = entry.document?.id || `manual-${entry.id}`;
-            if (!acc[docId]) {
-              acc[docId] = { document: entry.document, entries: [], date: entry.date, source: entry.source };
+            const opKey = getOpKey(entry);
+            if (!acc[opKey]) {
+              acc[opKey] = { document: entry.document, entries: [], date: entry.date, source: entry.source };
             }
-            acc[docId].entries.push(entry);
+            acc[opKey].entries.push(entry);
             return acc;
           }, {} as Record<string, { document: any; entries: typeof entries; date: Date; source?: string }>);
 
@@ -290,10 +310,27 @@ export default async function ClientJournalPage({
                       month: "2-digit",
                       year: "numeric",
                     });
-                    const mainRef = op.entries.find((e) => e.reference)?.reference;
-                    const refLabel = getRefLabel(op.entries[0].description);
-                    const entityName = op.entries[0].description.split("—")[1]?.trim();
-                    const descBase = op.entries[0].description.split("—")[0].trim();
+                    const primaryEntry =
+                      [...op.entries].sort((a, b) => {
+                        const isPrimaryA =
+                          a.debitAccount.startsWith("6") ||
+                          a.creditAccount.startsWith("7") ||
+                          a.debitAccount.startsWith("3");
+                        const isPrimaryB =
+                          b.debitAccount.startsWith("6") ||
+                          b.creditAccount.startsWith("7") ||
+                          b.debitAccount.startsWith("3");
+                        if (isPrimaryA && !isPrimaryB) return -1;
+                        if (!isPrimaryA && isPrimaryB) return 1;
+                        return b.amount - a.amount;
+                      })[0] || op.entries[0];
+
+                    const mainRef =
+                      op.entries.find((e) => e.reference && e.reference.trim() !== "")?.reference ||
+                      (op.document as any)?.originalName;
+                    const refLabel = getRefLabel(primaryEntry.description);
+                    const entityName = primaryEntry.description.split("—")[1]?.trim();
+                    const descBase = primaryEntry.description.split("—")[0].trim();
 
                     let opDesc = descBase;
                     if (entityName && !opDesc.includes(entityName)) {
@@ -302,6 +339,8 @@ export default async function ClientJournalPage({
 
                     debitRows.forEach((r) => (totalClientDebit += r.amount));
                     creditRows.forEach((r) => (totalClientCredit += r.amount));
+
+                    const isPayment = op.entries.some((e) => e.source === "PAIEMENT");
 
                     return (
                       <tbody key={opIdx} className="border-b border-black text-black">
@@ -317,10 +356,17 @@ export default async function ClientJournalPage({
                           <td className="py-1.5 px-4 font-bold border-r border-black text-left">
                             <div className="flex items-center justify-between">
                               <span>Date : {opDate}</span>
-                              <span className="inline-flex items-center gap-1 text-[10px] font-extrabold bg-teal-50 text-teal-800 px-2 py-0.5 rounded border border-teal-200">
-                                <ShieldCheck size={10} />
-                                <span>Validé par l'expert</span>
-                              </span>
+                              {isPayment ? (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-extrabold bg-emerald-50 text-emerald-800 px-2 py-0.5 rounded border border-emerald-200">
+                                  <ShieldCheck size={10} />
+                                  <span>Règlement validé</span>
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-extrabold bg-teal-50 text-teal-800 px-2 py-0.5 rounded border border-teal-200">
+                                  <ShieldCheck size={10} />
+                                  <span>Validé par l'expert</span>
+                                </span>
+                              )}
                             </div>
                             <div className="mt-0.5">{opDesc}</div>
                           </td>

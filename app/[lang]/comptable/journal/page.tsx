@@ -6,7 +6,7 @@ import { NewEntryModal } from "./NewEntryModal";
 import type { Prisma } from "@prisma/client";
 import { getDictionary } from "@/get-dictionary";
 import type { Locale } from "@/i18n-config";
-import { Sparkles, Edit3 } from "lucide-react";
+import { Sparkles, Edit3, CheckCircle2 } from "lucide-react";
 
 export default async function ComptableJournalPage({
   params,
@@ -80,8 +80,34 @@ export default async function ComptableJournalPage({
     }),
   ]);
 
-  // Chaque JournalEntry = 1 opération comptable indépendante
-  const totalOperations = entries.length;
+  // Fonction de regroupement intelligente des écritures comptables
+  const getOpKey = (entry: (typeof entries)[0]) => {
+    const dateStr = new Date(entry.date).toISOString().slice(0, 10);
+    // Un règlement / paiement bancaire est toujours une opération distincte de la facture
+    if (entry.source === "PAIEMENT") {
+      return `payment_${entry.id}`;
+    }
+    // Écriture issue directement du rapprochement bancaire
+    if ((entry as any).bankTransaction) {
+      return `bank_${entry.id}`;
+    }
+    // Pièce comptable rattachée à un document (facture, bon, charge, etc.)
+    // Toutes les lignes d'une même pièce à la même date sont regroupées (ex: 626 + 4456 vs 512)
+    if (entry.documentId) {
+      return `doc_${entry.documentId}_${dateStr}`;
+    }
+    // Saisie manuelle directe dans le journal (sans document)
+    const jType = entry.journalType || "OD";
+    const ref = (entry.reference || "").trim();
+    const desc = (entry.description || "").trim();
+    const timeBatch = entry.createdAt
+      ? Math.floor(new Date(entry.createdAt).getTime() / 15000)
+      : entry.id;
+    return `manual_${entry.companyId || ""}_${jType}_${dateStr}_${ref}_${desc}_${timeBatch}`;
+  };
+
+  // Nombre réel d'opérations comptables regroupées
+  const totalOperations = new Set(entries.map(getOpKey)).size;
 
   return (
     <div className="p-6 sm:p-8 max-w-7xl mx-auto space-y-6">
@@ -217,18 +243,18 @@ export default async function ComptableJournalPage({
             val.toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
           return Object.entries(groupedByClient).map(([cId, clientData]) => {
-            // Chaque JournalEntry est une opération indépendante dans le journal.
-            // On NE groupe PAS par documentId : cela fusionne Achat (607/401)
-            // et Règlement (512/411) en une seule ligne → BUG.
-            // Chaque entrée = une opération avec sa propre date et ses 2 comptes.
+            // Regroupement des lignes d'écriture appartenant à la même opération comptable
             const opsMap = clientData.entries.reduce((acc, entry) => {
-              const opKey = entry.id; // clé unique = id de la JournalEntry
-              acc[opKey] = {
-                document: entry.document,
-                entries: [entry],
-                date: entry.date,
-                source: entry.source,
-              };
+              const opKey = getOpKey(entry);
+              if (!acc[opKey]) {
+                acc[opKey] = {
+                  document: entry.document,
+                  entries: [],
+                  date: entry.date,
+                  source: entry.source,
+                };
+              }
+              acc[opKey].entries.push(entry);
               return acc;
             }, {} as Record<string, { document: any; entries: typeof entries; date: Date; source?: string }>);
 
@@ -334,10 +360,29 @@ export default async function ComptableJournalPage({
                         month: "2-digit",
                         year: "numeric",
                       });
-                      const mainRef = op.entries.find((e) => e.reference)?.reference;
-                      const refLabel = getRefLabel(op.entries[0].description);
-                      const entityName = op.entries[0].description.split("—")[1]?.trim();
-                      const descBase = op.entries[0].description.split("—")[0].trim();
+                      // On sélectionne la ligne principale (charge 6xx, vente 7xx, stock 3xx ou montant le plus élevé)
+                      // pour que l'en-tête affiche la nature de l'opération (ex: Frais postaux) et non la ligne de TVA
+                      const primaryEntry =
+                        [...op.entries].sort((a, b) => {
+                          const isPrimaryA =
+                            a.debitAccount.startsWith("6") ||
+                            a.creditAccount.startsWith("7") ||
+                            a.debitAccount.startsWith("3");
+                          const isPrimaryB =
+                            b.debitAccount.startsWith("6") ||
+                            b.creditAccount.startsWith("7") ||
+                            b.debitAccount.startsWith("3");
+                          if (isPrimaryA && !isPrimaryB) return -1;
+                          if (!isPrimaryA && isPrimaryB) return 1;
+                          return b.amount - a.amount;
+                        })[0] || op.entries[0];
+
+                      const mainRef =
+                        op.entries.find((e) => e.reference && e.reference.trim() !== "")?.reference ||
+                        (op.document as any)?.originalName;
+                      const refLabel = getRefLabel(primaryEntry.description);
+                      const entityName = primaryEntry.description.split("—")[1]?.trim();
+                      const descBase = primaryEntry.description.split("—")[0].trim();
 
                       let opDesc = descBase;
                       if (entityName && !opDesc.includes(entityName)) {
@@ -347,7 +392,9 @@ export default async function ComptableJournalPage({
                       debitRows.forEach((r) => (totalClientDebit += r.amount));
                       creditRows.forEach((r) => (totalClientCredit += r.amount));
 
-                      const isManual = op.entries.some((e) => e.source === "MANUAL");
+                      const isPayment = op.entries.some((e) => e.source === "PAIEMENT");
+                      const hasDoc = !!op.document || op.entries.some((e) => !!e.documentId);
+                      const isManualOnly = !hasDoc && !isPayment && op.entries.every((e) => e.source === "MANUAL");
 
                       return (
                         <tbody key={opIdx} className="border-b border-black text-black">
@@ -363,7 +410,12 @@ export default async function ComptableJournalPage({
                             <td className="py-1.5 px-4 font-bold border-r border-black text-left">
                               <div className="flex items-center justify-between">
                                 <span>Date : {opDate}</span>
-                                {isManual ? (
+                                {isPayment ? (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-extrabold bg-emerald-50 text-emerald-800 px-2 py-0.5 rounded border border-emerald-200">
+                                    <CheckCircle2 size={10} />
+                                    <span>Règlement validé</span>
+                                  </span>
+                                ) : isManualOnly ? (
                                   <span className="inline-flex items-center gap-1 text-[10px] font-extrabold bg-blue-50 text-blue-800 px-2 py-0.5 rounded border border-blue-200">
                                     <Edit3 size={10} />
                                     <span>Saisie manuelle</span>

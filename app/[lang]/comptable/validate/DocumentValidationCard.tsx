@@ -308,29 +308,71 @@ export function DocumentValidationCard({
         reference?: string;
       }> = [];
 
-      const creditAcc = credits[0]?.account || "401";
+      // Algorithme de ventilation équilibrée débit / crédit (multi-lignes)
+      const dQueue = debits.map((d) => ({ ...d, remaining: Number(d.debit) }));
+      const cQueue = credits.map((c) => ({ ...c, remaining: Number(c.credit) }));
 
-      debits.forEach((d, i) => {
+      let dIdx = 0;
+      let cIdx = 0;
+      let pairIndex = 0;
+
+      while (dIdx < dQueue.length && cIdx < cQueue.length) {
+        const d = dQueue[dIdx];
+        const c = cQueue[cIdx];
+
+        if (d.remaining <= 0.0001) {
+          dIdx++;
+          continue;
+        }
+        if (c.remaining <= 0.0001) {
+          cIdx++;
+          continue;
+        }
+
+        const slice = Math.min(d.remaining, c.remaining);
+        const roundedSlice = Math.round(slice * 100) / 100;
+
+        const entryId =
+          d.originalEntryId ||
+          (pairIndex < initialEntries.length ? initialEntries[pairIndex]?.id : undefined);
+
         payloadEntries.push({
-          id: d.originalEntryId || initialEntries[i]?.id,
+          id: entryId,
           debitAccount: d.account,
-          creditAccount: creditAcc,
-          amount: Number(d.debit),
+          creditAccount: c.account,
+          amount: roundedSlice,
           description: `${d.label} — ${supplierName}`,
           reference,
         });
-      });
 
-      if (payloadEntries.length === 0 && credits.length > 0) {
-        credits.forEach((c) => {
-          payloadEntries.push({
-            debitAccount: "512",
-            creditAccount: c.account,
-            amount: Number(c.credit),
-            description: `${c.label} — ${supplierName}`,
-            reference,
+        d.remaining -= slice;
+        c.remaining -= slice;
+        pairIndex++;
+      }
+
+      if (payloadEntries.length === 0) {
+        if (debits.length > 0) {
+          debits.forEach((d, i) => {
+            payloadEntries.push({
+              id: d.originalEntryId || initialEntries[i]?.id,
+              debitAccount: d.account,
+              creditAccount: credits[0]?.account || "401",
+              amount: Number(d.debit),
+              description: `${d.label} — ${supplierName}`,
+              reference,
+            });
           });
-        });
+        } else if (credits.length > 0) {
+          credits.forEach((c) => {
+            payloadEntries.push({
+              debitAccount: "512",
+              creditAccount: c.account,
+              amount: Number(c.credit),
+              description: `${c.label} — ${supplierName}`,
+              reference,
+            });
+          });
+        }
       }
 
       const res = await fetch(`/api/comptable/documents/${document.id}/validate`, {
