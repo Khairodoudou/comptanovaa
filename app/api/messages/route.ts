@@ -137,12 +137,22 @@ export async function POST(req: NextRequest) {
 
   // Create notification for receiver
   try {
+    const receiver = await db.user.findUnique({
+      where: { id: receiverId },
+      select: { role: true, preferredLang: true },
+    });
+    const rLang = receiver?.preferredLang || "fr";
+    const notifLink =
+      receiver?.role === "COMPTABLE"
+        ? `/${rLang}/comptable/chat?companyId=${companyId}`
+        : `/${rLang}/client/chat?companyId=${companyId}`;
+
     await db.notification.create({
       data: {
         userId: receiverId,
         message: `${user.name}: ${content.trim().slice(0, 80)}${content.trim().length > 80 ? "..." : ""}`,
         type: "chat",
-        link: `/chat/${companyId}`,
+        link: notifLink,
       },
     });
   } catch {

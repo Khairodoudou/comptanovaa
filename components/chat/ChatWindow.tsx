@@ -23,7 +23,8 @@ interface ChatWindowProps {
   interlocutorRole: string;
   currentUserId: string;
   lang: string;
-  onClose: () => void;
+  onClose?: () => void;
+  inline?: boolean;
 }
 
 // ─── i18n fallback ───────────────────────────────────────
@@ -102,6 +103,7 @@ export function ChatWindow({
   currentUserId,
   lang,
   onClose,
+  inline = false,
 }: ChatWindowProps) {
   const t = T[lang] || T.fr;
   const isRtl = lang === "ar";
@@ -287,6 +289,177 @@ export function ChatWindow({
 
   // ─── Render ──────────────────────────────────────────
 
+  const panel = (
+    <div
+      className={`relative z-10 flex flex-col bg-white border border-slate-200/80 w-full h-full overflow-hidden ${
+        inline
+          ? "rounded-2xl shadow-sm"
+          : "sm:w-[420px] sm:h-[600px] sm:max-h-[85vh] sm:rounded-2xl shadow-2xl"
+      } ${!inline && isRtl ? "sm:ml-auto" : !inline ? "sm:mr-0" : ""}`}
+    >
+      {/* Header */}
+      <div className="flex items-center gap-3 px-4 py-3.5 bg-gradient-to-r from-[#0b132b] to-[#111c44] text-white shrink-0">
+        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-teal-400 to-blue-500 flex items-center justify-center text-white font-black text-sm shadow-md shrink-0">
+          {interlocutorName.charAt(0).toUpperCase()}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-bold text-sm truncate">{interlocutorName}</p>
+          <p className="text-[11px] text-slate-300 font-medium">
+            {interlocutorRole}
+          </p>
+        </div>
+        {onClose && (
+          <button
+            onClick={onClose}
+            className="p-2 rounded-lg hover:bg-white/10 transition-colors shrink-0"
+            title={t.close}
+          >
+            <X size={18} />
+          </button>
+        )}
+      </div>
+
+      {/* Messages Area */}
+      <div
+        ref={messagesContainerRef}
+        onScroll={handleScroll}
+        className="flex-1 overflow-y-auto px-4 py-4 space-y-1 bg-slate-50/80"
+      >
+        {messages.length === 0 && (
+          <div className="flex flex-col items-center justify-center h-full text-center gap-3 py-12">
+            <div className="w-14 h-14 rounded-2xl bg-teal-50 text-teal-500 flex items-center justify-center">
+              <MessageCircle size={28} />
+            </div>
+            <p className="text-sm text-slate-400 font-medium max-w-[250px]">
+              {t.no_messages}
+            </p>
+          </div>
+        )}
+
+        {messages.map((msg, idx) => {
+          const isMine = msg.senderId === currentUserId;
+          const showDate = shouldShowDateSeparator(messages, idx);
+
+          return (
+            <div key={msg.id}>
+              {/* Date separator */}
+              {showDate && (
+                <div className="flex items-center justify-center my-3">
+                  <span className="text-[10px] font-bold text-slate-400 bg-white px-3 py-1 rounded-full border border-slate-200 shadow-xs">
+                    {formatDateSeparator(msg.createdAt, lang)}
+                  </span>
+                </div>
+              )}
+
+              {/* Message bubble */}
+              <div
+                className={`flex mb-1.5 ${
+                  isMine
+                    ? isRtl
+                      ? "justify-start"
+                      : "justify-end"
+                    : isRtl
+                    ? "justify-end"
+                    : "justify-start"
+                }`}
+              >
+                <div className="max-w-[80%] group">
+                  <div
+                    className={`px-3.5 py-2 rounded-2xl text-sm leading-relaxed shadow-xs ${
+                      isMine
+                        ? "bg-gradient-to-br from-teal-600 to-blue-600 text-white rounded-br-md"
+                        : "bg-white text-slate-800 border border-slate-200 rounded-bl-md"
+                    } ${
+                      isRtl && isMine
+                        ? "rounded-br-2xl rounded-bl-md"
+                        : isRtl && !isMine
+                        ? "rounded-bl-2xl rounded-br-md"
+                        : ""
+                    } ${
+                      msg.status === "optimistic" ? "opacity-70" : ""
+                    } ${
+                      msg.status === "failed"
+                        ? "border-2 border-red-300 bg-red-50 text-red-800"
+                        : ""
+                    }`}
+                  >
+                    <p className="whitespace-pre-wrap break-words">{msg.content}</p>
+                  </div>
+
+                  {/* Time + status */}
+                  <div
+                    className={`flex items-center gap-1.5 mt-0.5 px-1 ${
+                      isMine
+                        ? isRtl
+                          ? "justify-start"
+                          : "justify-end"
+                        : isRtl
+                        ? "justify-end"
+                        : "justify-start"
+                    }`}
+                  >
+                    <span className="text-[10px] text-slate-400">
+                      {formatTime(msg.createdAt, lang)}
+                    </span>
+
+                    {msg.status === "failed" && (
+                      <button
+                        onClick={() => sendMessage(msg.content, msg.id)}
+                        className="inline-flex items-center gap-1 text-[10px] text-red-500 hover:text-red-700 font-bold transition-colors"
+                      >
+                        <AlertCircle size={10} />
+                        <span>{t.failed}</span>
+                        <RefreshCw size={9} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+
+        <div ref={messagesEndRef} />
+      </div>
+
+      {/* Input Area */}
+      <div className="shrink-0 px-3 py-3 bg-white border-t border-slate-200">
+        <div className="flex items-center gap-2">
+          <input
+            ref={inputRef}
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={t.placeholder}
+            maxLength={2000}
+            className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-400 transition-all"
+            dir={isRtl ? "rtl" : "ltr"}
+          />
+          <button
+            onClick={() => sendMessage(input)}
+            disabled={!input.trim() || sending}
+            className="w-10 h-10 rounded-xl bg-gradient-to-br from-teal-600 to-blue-600 text-white flex items-center justify-center shrink-0 shadow-md hover:shadow-lg disabled:opacity-40 disabled:cursor-not-allowed transition-all hover:scale-105 active:scale-95"
+            title={t.send}
+          >
+            <Send
+              size={17}
+              className={isRtl ? "rotate-180" : ""}
+            />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  if (inline) {
+    return (
+      <div className="w-full h-full min-h-[400px]" dir={isRtl ? "rtl" : "ltr"}>
+        {panel}
+      </div>
+    );
+  }
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-end justify-end p-0 sm:p-4"
@@ -297,164 +470,7 @@ export function ChatWindow({
         className="fixed inset-0 bg-black/40 backdrop-blur-sm sm:bg-black/20"
         onClick={onClose}
       />
-
-      {/* Chat Panel */}
-      <div
-        className={`relative z-10 flex flex-col bg-white border border-slate-200 shadow-2xl w-full h-full sm:w-[420px] sm:h-[600px] sm:max-h-[85vh] sm:rounded-2xl overflow-hidden ${
-          isRtl ? "sm:ml-auto" : "sm:mr-0"
-        }`}
-      >
-        {/* Header */}
-        <div className="flex items-center gap-3 px-4 py-3.5 bg-gradient-to-r from-[#0b132b] to-[#111c44] text-white shrink-0">
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-teal-400 to-blue-500 flex items-center justify-center text-white font-black text-sm shadow-md shrink-0">
-            {interlocutorName.charAt(0).toUpperCase()}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="font-bold text-sm truncate">{interlocutorName}</p>
-            <p className="text-[11px] text-slate-300 font-medium">
-              {interlocutorRole}
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-2 rounded-lg hover:bg-white/10 transition-colors shrink-0"
-            title={t.close}
-          >
-            <X size={18} />
-          </button>
-        </div>
-
-        {/* Messages Area */}
-        <div
-          ref={messagesContainerRef}
-          onScroll={handleScroll}
-          className="flex-1 overflow-y-auto px-4 py-4 space-y-1 bg-slate-50/80"
-        >
-          {messages.length === 0 && (
-            <div className="flex flex-col items-center justify-center h-full text-center gap-3 py-12">
-              <div className="w-14 h-14 rounded-2xl bg-teal-50 text-teal-500 flex items-center justify-center">
-                <MessageCircle size={28} />
-              </div>
-              <p className="text-sm text-slate-400 font-medium max-w-[250px]">
-                {t.no_messages}
-              </p>
-            </div>
-          )}
-
-          {messages.map((msg, idx) => {
-            const isMine = msg.senderId === currentUserId;
-            const showDate = shouldShowDateSeparator(messages, idx);
-
-            return (
-              <div key={msg.id}>
-                {/* Date separator */}
-                {showDate && (
-                  <div className="flex items-center justify-center my-3">
-                    <span className="text-[10px] font-bold text-slate-400 bg-white px-3 py-1 rounded-full border border-slate-200 shadow-xs">
-                      {formatDateSeparator(msg.createdAt, lang)}
-                    </span>
-                  </div>
-                )}
-
-                {/* Message bubble */}
-                <div
-                  className={`flex mb-1.5 ${
-                    isMine
-                      ? isRtl
-                        ? "justify-start"
-                        : "justify-end"
-                      : isRtl
-                      ? "justify-end"
-                      : "justify-start"
-                  }`}
-                >
-                  <div className="max-w-[80%] group">
-                    <div
-                      className={`px-3.5 py-2 rounded-2xl text-sm leading-relaxed shadow-xs ${
-                        isMine
-                          ? "bg-gradient-to-br from-teal-600 to-blue-600 text-white rounded-br-md"
-                          : "bg-white text-slate-800 border border-slate-200 rounded-bl-md"
-                      } ${
-                        isRtl && isMine
-                          ? "rounded-br-2xl rounded-bl-md"
-                          : isRtl && !isMine
-                          ? "rounded-bl-2xl rounded-br-md"
-                          : ""
-                      } ${
-                        msg.status === "optimistic" ? "opacity-70" : ""
-                      } ${
-                        msg.status === "failed"
-                          ? "border-2 border-red-300 bg-red-50 text-red-800"
-                          : ""
-                      }`}
-                    >
-                      <p className="whitespace-pre-wrap break-words">{msg.content}</p>
-                    </div>
-
-                    {/* Time + status */}
-                    <div
-                      className={`flex items-center gap-1.5 mt-0.5 px-1 ${
-                        isMine
-                          ? isRtl
-                            ? "justify-start"
-                            : "justify-end"
-                          : isRtl
-                          ? "justify-end"
-                          : "justify-start"
-                      }`}
-                    >
-                      <span className="text-[10px] text-slate-400">
-                        {formatTime(msg.createdAt, lang)}
-                      </span>
-
-                      {msg.status === "failed" && (
-                        <button
-                          onClick={() => sendMessage(msg.content, msg.id)}
-                          className="inline-flex items-center gap-1 text-[10px] text-red-500 hover:text-red-700 font-bold transition-colors"
-                        >
-                          <AlertCircle size={10} />
-                          <span>{t.failed}</span>
-                          <RefreshCw size={9} />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-
-          <div ref={messagesEndRef} />
-        </div>
-
-        {/* Input Area */}
-        <div className="shrink-0 px-3 py-3 bg-white border-t border-slate-200">
-          <div className="flex items-center gap-2">
-            <input
-              ref={inputRef}
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder={t.placeholder}
-              maxLength={2000}
-              className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-400 transition-all"
-              dir={isRtl ? "rtl" : "ltr"}
-            />
-            <button
-              onClick={() => sendMessage(input)}
-              disabled={!input.trim() || sending}
-              className="w-10 h-10 rounded-xl bg-gradient-to-br from-teal-600 to-blue-600 text-white flex items-center justify-center shrink-0 shadow-md hover:shadow-lg disabled:opacity-40 disabled:cursor-not-allowed transition-all hover:scale-105 active:scale-95"
-              title={t.send}
-            >
-              <Send
-                size={17}
-                className={isRtl ? "rotate-180" : ""}
-              />
-            </button>
-          </div>
-        </div>
-      </div>
+      {panel}
     </div>
   );
 }

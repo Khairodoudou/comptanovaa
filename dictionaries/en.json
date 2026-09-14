@@ -381,6 +381,7 @@
       "validate": "Validate Entries",
       "grand_livre": "General Ledger",
       "rapprochement": "Bank Reconciliation",
+      "chat": "Messages",
       "notifications": "Notifications",
       "logout": "Logout"
     },

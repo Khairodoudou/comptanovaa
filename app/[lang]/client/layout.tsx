@@ -19,8 +19,9 @@ export default async function ClientLayout({
     redirect(`/${lang}/login`);
   }
 
-  const [notifCount, company, dict] = await Promise.all([
+  const [notifCount, unreadChatCount, company, dict] = await Promise.all([
     db.notification.count({ where: { userId: user.userId, read: false } }),
+    db.message.count({ where: { receiverId: user.userId, read: false } }),
     db.company.findFirst({
       where: { clientId: user.userId },
       select: { name: true },
@@ -37,6 +38,7 @@ export default async function ClientLayout({
         dir={dir}
         user={{ name: user.name, email: user.email, role: user.role }}
         notifCount={notifCount}
+        unreadChatCount={unreadChatCount}
         companyName={company?.name}
         t={dict.dashboard.sidebar}
       />

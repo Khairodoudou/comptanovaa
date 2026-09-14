@@ -19,8 +19,9 @@ export default async function ComptableLayout({
     redirect(`/${lang}/login`);
   }
 
-  const [notifCount, dict] = await Promise.all([
+  const [notifCount, unreadChatCount, dict] = await Promise.all([
     db.notification.count({ where: { userId: user.userId, read: false } }),
+    db.message.count({ where: { receiverId: user.userId, read: false } }),
     getDictionary(lang as Locale),
   ]);
 
@@ -33,6 +34,7 @@ export default async function ComptableLayout({
         dir={dir}
         user={{ name: user.name, email: user.email, role: user.role }}
         notifCount={notifCount}
+        unreadChatCount={unreadChatCount}
         t={dict.dashboard.sidebar}
       />
       <main

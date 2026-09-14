@@ -18,6 +18,7 @@ import {
   ChevronLeft,
   Menu,
   X,
+  MessageSquare,
 } from "lucide-react";
 
 interface SidebarT {
@@ -30,6 +31,7 @@ interface SidebarT {
   profile: string;
   notifications: string;
   logout: string;
+  chat?: string;
 }
 
 interface ClientSidebarProps {
@@ -37,6 +39,7 @@ interface ClientSidebarProps {
   dir: "ltr" | "rtl";
   user: { name: string; email: string; role: string };
   notifCount: number;
+  unreadChatCount?: number;
   companyName?: string;
   t: SidebarT;
 }
@@ -46,6 +49,7 @@ export function ClientSidebar({
   dir,
   user,
   notifCount,
+  unreadChatCount = 0,
   companyName,
   t,
 }: ClientSidebarProps) {
@@ -60,6 +64,12 @@ export function ClientSidebar({
       items: [
         { label: t.dashboard, href: "dashboard", icon: LayoutDashboard },
         { label: t.documents, href: "documents", icon: FileText },
+        {
+          label: t.chat || (lang === "ar" ? "المحادثات" : lang === "en" ? "Messages" : "Messagerie"),
+          href: "chat",
+          icon: MessageSquare,
+          badge: unreadChatCount,
+        },
       ],
     },
     {
@@ -196,6 +206,11 @@ export function ClientSidebar({
                     className={active ? "text-white" : "text-slate-400 group-hover:text-teal-400 transition-colors"}
                   />
                   <span className="flex-1 truncate">{item.label}</span>
+                  {"badge" in item && Boolean(item.badge && item.badge > 0) && (
+                    <span className="px-1.5 py-0.5 rounded-full text-[10px] font-black bg-rose-500 text-white animate-pulse shrink-0">
+                      {item.badge! > 9 ? "9+" : item.badge}
+                    </span>
+                  )}
                   {active && <Chevron size={14} className="opacity-80 shrink-0" />}
                 </Link>
               );
