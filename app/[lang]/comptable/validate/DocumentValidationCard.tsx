@@ -314,7 +314,7 @@ export function DocumentValidationCard({
 
       let dIdx = 0;
       let cIdx = 0;
-      let pairIndex = 0;
+      const usedEntryIds = new Set<string>();
 
       while (dIdx < dQueue.length && cIdx < cQueue.length) {
         const d = dQueue[dIdx];
@@ -332,9 +332,19 @@ export function DocumentValidationCard({
         const slice = Math.min(d.remaining, c.remaining);
         const roundedSlice = Math.round(slice * 100) / 100;
 
-        const entryId =
-          d.originalEntryId ||
-          (pairIndex < initialEntries.length ? initialEntries[pairIndex]?.id : undefined);
+        // Assigner un entryId existant au maximum UNE SEULE FOIS pour ne jamais écraser une autre ligne
+        let entryId: string | undefined = undefined;
+        if (d.originalEntryId && !usedEntryIds.has(d.originalEntryId)) {
+          entryId = d.originalEntryId;
+          usedEntryIds.add(entryId);
+        } else {
+          // Chercher un ID non encore assigné parmi initialEntries
+          const unusedEntry = initialEntries.find((e) => !usedEntryIds.has(e.id));
+          if (unusedEntry) {
+            entryId = unusedEntry.id;
+            usedEntryIds.add(entryId);
+          }
+        }
 
         payloadEntries.push({
           id: entryId,
@@ -347,7 +357,6 @@ export function DocumentValidationCard({
 
         d.remaining -= slice;
         c.remaining -= slice;
-        pairIndex++;
       }
 
       if (payloadEntries.length === 0) {
