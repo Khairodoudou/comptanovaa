@@ -121,23 +121,26 @@ export default async function HomePage({ params }: { params: Promise<{ lang: str
           </div>
 
           {/* ─────────────────── HERO 3D DASHBOARD PREVIEW ─────────────────── */}
-          <div className="mt-16 sm:mt-20 relative mx-auto max-w-5xl">
+          <div className="mt-14 sm:mt-18 relative mx-auto max-w-5xl">
+            {/* Ambient Background Glow */}
+            <div className="absolute -inset-2 sm:-inset-4 bg-gradient-to-r from-teal-500/20 via-sky-500/15 to-emerald-500/20 rounded-3xl sm:rounded-[2.5rem] blur-2xl opacity-70 pointer-events-none -z-10" />
+
             {/* Outer Glassmorphic Glow Frame */}
-            <div className="relative p-2.5 sm:p-4 rounded-3xl bg-gradient-to-b from-slate-900/10 via-slate-900/5 to-transparent border border-white/60 shadow-2xl backdrop-blur-xl group">
-              <div className="relative rounded-2xl overflow-hidden shadow-2xl border border-slate-800/20 bg-[#0b132b]">
+            <div className="relative p-2 sm:p-3.5 rounded-2xl sm:rounded-3xl bg-white/70 border border-teal-100/90 shadow-[0_20px_50px_-15px_rgba(13,148,136,0.18),0_10px_30px_-10px_rgba(15,23,42,0.06)] backdrop-blur-xl group">
+              <div className="relative rounded-xl sm:rounded-2xl overflow-hidden shadow-xl border border-slate-200/60 bg-white">
                 <Image
                   src="/images/hero-dashboard.jpg"
-                  alt="TAYSIR COMPTA - Interface de Comptabilité Intelligente"
+                  alt="TAYSIR COMPTA - Interface Web et Application Mobile"
                   width={1400}
                   height={780}
-                  className="w-full h-auto object-cover transform transition-transform duration-700 group-hover:scale-[1.015]"
+                  className="w-full h-auto object-cover transform transition-transform duration-700 group-hover:scale-[1.01]"
                   priority
                 />
               </div>
 
               {/* Floating Highlight Chips */}
-              <div className={`hidden md:flex absolute -bottom-6 ${isRtl ? "-right-6" : "-left-6"} bg-white/95 backdrop-blur-md p-4 rounded-2xl border border-slate-200/80 shadow-xl items-center gap-3 animate-bounce-subtle`}>
-                <div className="w-10 h-10 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center font-black">
+              <div className={`hidden md:flex absolute -bottom-5 ${isRtl ? "-right-5" : "-left-5"} bg-white/95 backdrop-blur-md p-4 rounded-2xl border border-teal-100 shadow-[0_10px_25px_-5px_rgba(13,148,136,0.2)] items-center gap-3 animate-bounce-subtle z-20`}>
+                <div className="w-10 h-10 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center font-black shadow-xs">
                   <Zap size={20} />
                 </div>
                 <div>
@@ -146,8 +149,8 @@ export default async function HomePage({ params }: { params: Promise<{ lang: str
                 </div>
               </div>
 
-              <div className={`hidden md:flex absolute -top-6 ${isRtl ? "-left-6" : "-right-6"} bg-white/95 backdrop-blur-md p-4 rounded-2xl border border-slate-200/80 shadow-xl items-center gap-3`}>
-                <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-black">
+              <div className={`hidden md:flex absolute -top-5 ${isRtl ? "-left-5" : "-right-5"} bg-white/95 backdrop-blur-md p-4 rounded-2xl border border-sky-100 shadow-[0_10px_25px_-5px_rgba(2,132,199,0.2)] items-center gap-3 z-20`}>
+                <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-black shadow-xs">
                   <Shield size={20} />
                 </div>
                 <div>
