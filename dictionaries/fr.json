@@ -622,6 +622,22 @@
       "correct_cancel": "Annuler",
       "no_data": "Importez un relevé pour voir le rapprochement.",
       "empty_512": "Aucune écriture sur le compte 512 pour ce mois."
+    },
+    "chat": {
+      "title": "Chat",
+      "placeholder": "Écrire un message...",
+      "send": "Envoyer",
+      "no_messages": "Aucun message pour le moment. Envoyez le premier !",
+      "failed": "Échec de l'envoi",
+      "retry": "Réessayer",
+      "contact_comptable": "Chat avec mon comptable",
+      "contact_client": "Chat",
+      "new_message_notif": "Nouveau message de",
+      "close": "Fermer",
+      "comptable": "Comptable",
+      "client": "Client PME",
+      "today": "Aujourd'hui",
+      "yesterday": "Hier"
     }
   }
 }

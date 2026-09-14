@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { FileText, CheckSquare, Clock, XCircle, TrendingUp } from "lucide-react";
 import { ClientDashboardCharts } from "./DashboardCharts";
+import { ClientChatButton } from "./ClientChatButton";
 import { getDictionary } from "@/get-dictionary";
 import type { Locale } from "@/i18n-config";
 
@@ -19,7 +20,11 @@ export default async function ClientDashboardPage({
     getDictionary(lang as Locale),
     db.company.findFirst({
       where: { clientId: user.userId },
-      select: { id: true, comptableId: true },
+      select: {
+        id: true,
+        comptableId: true,
+        comptable: { select: { name: true } },
+      },
     }),
   ]);
 
@@ -106,13 +111,24 @@ export default async function ClientDashboardPage({
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold text-[#0f172a] tracking-tight">
-          {d.sidebar.dashboard}
-        </h1>
-        <p className="text-sm text-[#64748b] mt-1">
-          {d.activity.greeting} {user.name} — {d.activity.accounting_state}
-        </p>
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-[#0f172a] tracking-tight">
+            {d.sidebar.dashboard}
+          </h1>
+          <p className="text-sm text-[#64748b] mt-1">
+            {d.activity.greeting} {user.name} — {d.activity.accounting_state}
+          </p>
+        </div>
+
+        {company?.comptableId && (
+          <ClientChatButton
+            companyId={company.id}
+            comptableName={company.comptable?.name || (lang === "ar" ? "المحاسب" : "Comptable")}
+            currentUserId={user.userId}
+            lang={lang}
+          />
+        )}
       </div>
 
       {/* No comptable assigned — warning banner */}

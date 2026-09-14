@@ -150,6 +150,8 @@ model User {
   declaredPayments      PaymentDeclaration[] @relation("PaymentDeclaredBy")
   confirmedPayments     PaymentDeclaration[] @relation("PaymentConfirmedBy")
   rejectedPayments      PaymentDeclaration[] @relation("PaymentRejectedBy")
+  sentMessages          Message[]           @relation("SentMessages")
+  receivedMessages      Message[]           @relation("ReceivedMessages")
 }
 
 model Company {
@@ -195,6 +197,7 @@ model Company {
   auditLogs        AuditLog[]
   invitations      ComptableInvitation[]
   fiscalDeadlines  FiscalDeadline[]
+  messages         Message[]
 }
 
 model Document {
@@ -582,4 +585,22 @@ model AuditLog {
   userId      String
   user        User     @relation(fields: [userId], references: [id])
   createdAt   DateTime @default(now())
+}
+
+// ─── Chat Messages ───────────────────────────────────────
+
+model Message {
+  id         String   @id @default(cuid())
+  companyId  String
+  company    Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  senderId   String
+  sender     User     @relation("SentMessages", fields: [senderId], references: [id])
+  receiverId String
+  receiver   User     @relation("ReceivedMessages", fields: [receiverId], references: [id])
+  content    String
+  read       Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@index([companyId, createdAt])
+  @@index([receiverId, read])
 }

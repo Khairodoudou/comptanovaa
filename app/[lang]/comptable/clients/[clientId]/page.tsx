@@ -19,6 +19,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { getDictionary } from "@/get-dictionary";
 import type { Locale } from "@/i18n-config";
 import { ComptableUploadDocumentModal } from "../ComptableUploadDocumentModal";
+import { ComptableChatButton } from "./ComptableChatButton";
 
 export default async function ClientDetailPage({
   params,
@@ -107,6 +108,15 @@ export default async function ClientDetailPage({
         </div>
 
         <div className="flex items-center gap-2.5 flex-wrap">
+          {company && (
+            <ComptableChatButton
+              companyId={company.id}
+              clientName={client.name}
+              currentUserId={user.userId}
+              lang={lang}
+            />
+          )}
+
           {whatsappUrl && (
             <a
               href={whatsappUrl}

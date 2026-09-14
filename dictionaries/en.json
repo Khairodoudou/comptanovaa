@@ -622,6 +622,22 @@
       "correct_cancel": "Cancel",
       "no_data": "Import a statement to view the reconciliation.",
       "empty_512": "No entries on account 512 for this month."
+    },
+    "chat": {
+      "title": "Chat",
+      "placeholder": "Write a message...",
+      "send": "Send",
+      "no_messages": "No messages yet. Send the first one!",
+      "failed": "Failed to send",
+      "retry": "Retry",
+      "contact_comptable": "Chat with my accountant",
+      "contact_client": "Chat",
+      "new_message_notif": "New message from",
+      "close": "Close",
+      "comptable": "Accountant",
+      "client": "Client",
+      "today": "Today",
+      "yesterday": "Yesterday"
     }
   }
 }
