@@ -52,117 +52,143 @@ export default async function HomePage({ params }: { params: Promise<{ lang: str
       <Navbar dict={dict.navbar} lang={lang} />
 
       {/* ─────────────────── HERO SECTION ─────────────────── */}
-      <section className="relative pt-32 pb-24 px-4 sm:px-6 lg:px-8 overflow-hidden bg-gradient-to-b from-slate-50/80 via-white to-white">
+      <section className="relative pt-28 pb-20 sm:pt-32 sm:pb-24 px-4 sm:px-6 lg:px-8 overflow-hidden bg-gradient-to-b from-slate-50/80 via-white to-white">
         {/* Subtle Ambient Light Glows */}
-        <div className="absolute -top-32 left-1/2 -translate-x-1/2 w-[900px] h-[500px] bg-gradient-to-tr from-sky-200/40 via-teal-100/40 to-blue-100/40 blur-[110px] rounded-full pointer-events-none -z-10" />
+        <div className="absolute -top-32 left-1/2 -translate-x-1/2 w-[1000px] h-[550px] bg-gradient-to-tr from-sky-200/40 via-teal-100/40 to-blue-100/40 blur-[120px] rounded-full pointer-events-none -z-10" />
+        <div className="absolute top-1/3 -right-20 w-[450px] h-[450px] bg-gradient-to-br from-teal-200/30 to-emerald-200/20 blur-[100px] rounded-full pointer-events-none -z-10" />
 
-        <div className="max-w-6xl mx-auto">
-          {/* Top Pill / Badge */}
-          <div className="text-center max-w-4xl mx-auto space-y-6 sm:space-y-8">
-            <div className="inline-flex justify-center items-center">
-              <Link
-                href="#features"
-                className="group relative inline-flex items-center gap-2.5 sm:gap-3.5 py-2 sm:py-2.5 px-3.5 sm:px-5 rounded-full bg-white/95 hover:bg-white backdrop-blur-md border border-teal-200/90 hover:border-teal-400 shadow-[0_2px_15px_-3px_rgba(13,148,136,0.12)] hover:shadow-[0_8px_25px_-4px_rgba(13,148,136,0.22)] hover:-translate-y-0.5 active:translate-y-0 transition-all duration-300 max-w-[95vw] sm:max-w-none"
-              >
-                {/* Ambient Glow */}
-                <div className="absolute -inset-1 rounded-full bg-gradient-to-r from-teal-400/30 via-emerald-400/20 to-sky-400/30 blur-md opacity-40 group-hover:opacity-100 transition-opacity duration-500 -z-10" />
+        <div className="max-w-7xl mx-auto">
+          {/* Main 2-Column Hero Layout: Text on Left, Image on Right */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-8 xl:gap-14 items-center">
+            
+            {/* Left Column: Badge, Heading, Subtitle, CTAs & Social Proof */}
+            <div className="lg:col-span-6 xl:col-span-6 flex flex-col items-start text-start space-y-6 sm:space-y-7">
+              {/* Top Pill / Badge */}
+              <div className="inline-flex items-center">
+                <Link
+                  href="#features"
+                  className="group relative inline-flex items-center gap-2.5 sm:gap-3 py-2 px-3.5 sm:px-4 rounded-full bg-white/95 hover:bg-white backdrop-blur-md border border-teal-200/90 hover:border-teal-400 shadow-[0_2px_15px_-3px_rgba(13,148,136,0.12)] hover:shadow-[0_8px_25px_-4px_rgba(13,148,136,0.22)] hover:-translate-y-0.5 active:translate-y-0 transition-all duration-300 max-w-full"
+                >
+                  {/* Ambient Glow */}
+                  <div className="absolute -inset-1 rounded-full bg-gradient-to-r from-teal-400/30 via-emerald-400/20 to-sky-400/30 blur-md opacity-40 group-hover:opacity-100 transition-opacity duration-500 -z-10" />
 
-                {/* Left Icon Badge */}
-                <span className="flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-gradient-to-br from-teal-500 via-teal-600 to-emerald-500 text-white shadow-md shadow-teal-600/25 shrink-0 group-hover:scale-105 group-hover:rotate-6 transition-all duration-300">
-                  <Sparkles size={16} className="fill-white/25 animate-pulse" />
-                </span>
+                  {/* Left Icon Badge */}
+                  <span className="flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gradient-to-br from-teal-500 via-teal-600 to-emerald-500 text-white shadow-md shadow-teal-600/25 shrink-0 group-hover:scale-105 group-hover:rotate-6 transition-all duration-300">
+                    <Sparkles size={15} className="fill-white/25 animate-pulse" />
+                  </span>
 
-                {/* Badge Text */}
-                <span className="text-xs sm:text-sm md:text-base font-extrabold text-slate-800 group-hover:text-slate-950 tracking-tight leading-snug text-left rtl:text-right transition-colors">
-                  {badgeText}
-                </span>
+                  {/* Badge Text */}
+                  <span className="text-xs sm:text-sm font-extrabold text-slate-800 group-hover:text-slate-950 tracking-tight leading-snug transition-colors">
+                    {badgeText}
+                  </span>
 
-                {/* Right Arrow */}
-                <span className="flex items-center justify-center w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-teal-50 text-teal-700 group-hover:bg-teal-600 group-hover:text-white transition-all duration-300 shrink-0 shadow-xs">
-                  <Arrow size={14} className="group-hover:translate-x-0.5 rtl:group-hover:-translate-x-0.5 transition-transform duration-300" />
-                </span>
-              </Link>
-            </div>
-
-            {/* Hero Main Heading */}
-            <h1 className="text-4xl sm:text-6xl lg:text-7xl font-black tracking-tight leading-[1.1] text-slate-950">
-              {dict.home.hero.title_1}{" "}
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-sky-600 to-teal-600">
-                {dict.home.hero.title_2}
-              </span>
-            </h1>
-
-            {/* Hero Subtitle */}
-            <p className="text-lg sm:text-xl text-slate-600 leading-relaxed max-w-2xl mx-auto font-medium">
-              {dict.home.hero.subtitle}
-            </p>
-
-            {/* CTA Buttons */}
-            <div className="flex flex-col sm:flex-row gap-3.5 justify-center items-center pt-2">
-              <Link
-                href={`/${lang}/register`}
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 bg-gradient-to-r from-blue-600 via-teal-600 to-emerald-600 hover:from-blue-700 hover:to-teal-700 text-white font-extrabold px-8 py-4 rounded-xl text-base shadow-lg shadow-teal-900/20 hover:shadow-teal-900/30 hover:-translate-y-0.5 transition-all"
-              >
-                <span>{dict.home.hero.cta_primary}</span>
-                <Arrow size={18} />
-              </Link>
-              <Link
-                href={`/${lang}/login`}
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-white hover:bg-slate-50 text-slate-800 font-bold px-8 py-4 rounded-xl text-base border border-slate-200 shadow-sm hover:shadow transition-all"
-              >
-                {dict.home.hero.cta_secondary}
-              </Link>
-            </div>
-
-            {/* Social Trust note */}
-            <p className="text-xs font-semibold text-slate-400 pt-2">
-              {dict.home.hero.trusted_by || "Adopté par plus de 500+ entreprises et experts-comptables en Algérie"}
-            </p>
-          </div>
-
-          {/* ─────────────────── HERO 3D DASHBOARD PREVIEW ─────────────────── */}
-          <div className="mt-14 sm:mt-18 relative mx-auto max-w-5xl">
-            {/* Ambient Background Glow */}
-            <div className="absolute -inset-2 sm:-inset-4 bg-gradient-to-r from-teal-500/20 via-sky-500/15 to-emerald-500/20 rounded-3xl sm:rounded-[2.5rem] blur-2xl opacity-70 pointer-events-none -z-10" />
-
-            {/* Outer Glassmorphic Glow Frame */}
-            <div className="relative p-2 sm:p-3.5 rounded-2xl sm:rounded-3xl bg-white/70 border border-teal-100/90 shadow-[0_20px_50px_-15px_rgba(13,148,136,0.18),0_10px_30px_-10px_rgba(15,23,42,0.06)] backdrop-blur-xl group">
-              <div className="relative rounded-xl sm:rounded-2xl overflow-hidden shadow-xl border border-slate-200/60 bg-white">
-                <Image
-                  src="/images/hero-dashboard.jpg"
-                  alt="TAYSIR COMPTA - Interface Web et Application Mobile"
-                  width={1400}
-                  height={780}
-                  className="w-full h-auto object-cover transform transition-transform duration-700 group-hover:scale-[1.01]"
-                  priority
-                />
+                  {/* Right Arrow */}
+                  <span className="flex items-center justify-center w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-teal-50 text-teal-700 group-hover:bg-teal-600 group-hover:text-white transition-all duration-300 shrink-0 shadow-xs">
+                    <Arrow size={13} className="group-hover:translate-x-0.5 rtl:group-hover:-translate-x-0.5 transition-transform duration-300" />
+                  </span>
+                </Link>
               </div>
 
-              {/* Floating Highlight Chips */}
-              <div className={`hidden md:flex absolute -bottom-5 ${isRtl ? "-right-5" : "-left-5"} bg-white/95 backdrop-blur-md p-4 rounded-2xl border border-teal-100 shadow-[0_10px_25px_-5px_rgba(13,148,136,0.2)] items-center gap-3 animate-bounce-subtle z-20`}>
-                <div className="w-10 h-10 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center font-black shadow-xs">
-                  <Zap size={20} />
-                </div>
-                <div>
-                  <p className="text-xs font-black text-slate-900">{isRtl ? "استخراج فوري عبر OCR" : "Extraction OCR < 3s"}</p>
-                  <p className="text-[11px] text-slate-500">{isRtl ? "دقة مطابقة بنسبة 99%" : "Génération automatique d'écritures"}</p>
-                </div>
+              {/* Hero Main Heading */}
+              <h1 className="text-3xl sm:text-5xl lg:text-4xl xl:text-[3.25rem] 2xl:text-[3.5rem] font-black tracking-tight leading-[1.14] text-slate-950">
+                {dict.home.hero.title_1}{" "}
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-sky-600 to-teal-600">
+                  {dict.home.hero.title_2}
+                </span>
+              </h1>
+
+              {/* Hero Subtitle */}
+              <p className="text-base sm:text-lg lg:text-lg text-slate-600 leading-relaxed font-normal max-w-xl">
+                {dict.home.hero.subtitle}
+              </p>
+
+              {/* CTA Buttons */}
+              <div className="flex flex-col sm:flex-row gap-3.5 w-full sm:w-auto items-stretch sm:items-center pt-1">
+                <Link
+                  href={`/${lang}/register`}
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 bg-gradient-to-r from-blue-600 via-teal-600 to-emerald-600 hover:from-blue-700 hover:to-teal-700 text-white font-extrabold px-7 py-3.5 sm:px-8 sm:py-4 rounded-xl text-base shadow-lg shadow-teal-900/20 hover:shadow-teal-900/30 hover:-translate-y-0.5 transition-all"
+                >
+                  <span>{dict.home.hero.cta_primary}</span>
+                  <Arrow size={18} />
+                </Link>
+                <Link
+                  href={`/${lang}/login`}
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-white hover:bg-slate-50 text-slate-800 font-bold px-7 py-3.5 sm:px-8 sm:py-4 rounded-xl text-base border border-slate-200 shadow-sm hover:shadow transition-all"
+                >
+                  {dict.home.hero.cta_secondary}
+                </Link>
               </div>
 
-              <div className={`hidden md:flex absolute -top-5 ${isRtl ? "-left-5" : "-right-5"} bg-white/95 backdrop-blur-md p-4 rounded-2xl border border-sky-100 shadow-[0_10px_25px_-5px_rgba(2,132,199,0.2)] items-center gap-3 z-20`}>
-                <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-black shadow-xs">
-                  <Shield size={20} />
+              {/* Social Trust note */}
+              <div className="flex flex-wrap items-center gap-3 pt-2">
+                <div className="flex -space-x-2 rtl:space-x-reverse shrink-0">
+                  <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-gradient-to-br from-teal-500 to-teal-700 text-white font-black text-[10px] ring-2 ring-white shadow-xs">
+                    DZ
+                  </span>
+                  <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 text-white font-black text-[10px] ring-2 ring-white shadow-xs">
+                    EC
+                  </span>
+                  <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-700 text-white font-black text-[10px] ring-2 ring-white shadow-xs">
+                    PME
+                  </span>
                 </div>
-                <div>
-                  <p className="text-xs font-black text-slate-900">{isRtl ? "مطابق للجبائية الجزائرية" : "Conforme SCF & DGI"}</p>
-                  <p className="text-[11px] text-slate-500">{isRtl ? "تتبع فوري لمواعيد G50 و IBS" : "G50, IBS, IFU & Liasses"}</p>
+                <div className="flex flex-col">
+                  <div className="flex items-center gap-1 text-amber-500 text-xs">
+                    <span>★★★★★</span>
+                    <span className="text-slate-700 font-extrabold text-[11px] ml-0.5">4.9 / 5</span>
+                  </div>
+                  <p className="text-xs font-semibold text-slate-500">
+                    {dict.home.hero.trusted_by || "Adopté par plus de 500+ entreprises et experts-comptables en Algérie"}
+                  </p>
                 </div>
               </div>
             </div>
+
+            {/* Right Column: Hero 3D Dashboard Preview Image */}
+            <div className="lg:col-span-6 xl:col-span-6 relative w-full mt-6 lg:mt-0">
+              {/* Ambient Glow */}
+              <div className="absolute -inset-2 sm:-inset-4 bg-gradient-to-tr from-teal-500/25 via-sky-500/20 to-emerald-500/20 rounded-3xl sm:rounded-[2.5rem] blur-2xl opacity-75 pointer-events-none -z-10" />
+
+              {/* Outer Glassmorphic Glow Frame */}
+              <div className="relative p-2 sm:p-3 rounded-2xl sm:rounded-3xl bg-white/80 border border-teal-100/90 shadow-[0_20px_50px_-15px_rgba(13,148,136,0.18),0_10px_30px_-10px_rgba(15,23,42,0.06)] backdrop-blur-xl group hover:shadow-[0_25px_60px_-15px_rgba(13,148,136,0.25)] transition-all duration-500">
+                <div className="relative rounded-xl sm:rounded-2xl overflow-hidden shadow-lg border border-slate-200/70 bg-white">
+                  <Image
+                    src="/images/hero-dashboard.jpg"
+                    alt="TAYSIR COMPTA - Interface Web et Application Mobile"
+                    width={1400}
+                    height={780}
+                    className="w-full h-auto object-cover transform transition-transform duration-700 group-hover:scale-[1.02]"
+                    priority
+                  />
+                </div>
+
+                {/* Floating Highlight Chips */}
+                <div className={`hidden sm:flex absolute -bottom-4 sm:-bottom-5 ${isRtl ? "right-3 sm:right-6" : "left-3 sm:left-6"} bg-white/95 backdrop-blur-md p-3 sm:p-3.5 rounded-2xl border border-teal-100 shadow-[0_10px_25px_-5px_rgba(13,148,136,0.22)] items-center gap-3 animate-bounce-subtle z-20`}>
+                  <div className="w-9 h-9 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center font-black shadow-xs shrink-0">
+                    <Zap size={19} />
+                  </div>
+                  <div>
+                    <p className="text-xs font-black text-slate-900 leading-snug">{isRtl ? "استخراج فوري عبر OCR" : "Extraction OCR < 3s"}</p>
+                    <p className="text-[11px] text-slate-500 leading-tight">{isRtl ? "دقة مطابقة بنسبة 99%" : "Génération automatique d'écritures"}</p>
+                  </div>
+                </div>
+
+                <div className={`hidden sm:flex absolute -top-4 sm:-top-5 ${isRtl ? "left-3 sm:left-6" : "right-3 sm:right-6"} bg-white/95 backdrop-blur-md p-3 sm:p-3.5 rounded-2xl border border-sky-100 shadow-[0_10px_25px_-5px_rgba(2,132,199,0.22)] items-center gap-3 z-20`}>
+                  <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-black shadow-xs shrink-0">
+                    <Shield size={19} />
+                  </div>
+                  <div>
+                    <p className="text-xs font-black text-slate-900 leading-snug">{isRtl ? "مطابق للجبائية الجزائرية" : "Conforme SCF & DGI"}</p>
+                    <p className="text-[11px] text-slate-500 leading-tight">{isRtl ? "تتبع فوري لمواعيد G50 و IBS" : "G50, IBS, IFU & Liasses"}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
           </div>
 
           {/* ─────────────────── TRUST BADGES BAR ─────────────────── */}
-          <div className="mt-16 pt-8 border-t border-slate-200/70">
+          <div className="mt-16 sm:mt-20 pt-8 border-t border-slate-200/70">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
               {(dict.home.trust_badges || [
                 { label: "Conforme SCF & DGI Algérie" },
