@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
   // Verify the company exists and user belongs to it
   const company = await db.company.findUnique({
     where: { id: companyId },
-    select: { clientId: true, comptableId: true },
+    select: { clientId: true, comptableId: true, name: true },
   });
 
   if (!company) {
@@ -40,6 +40,24 @@ export async function GET(req: NextRequest) {
     },
     data: { read: true },
   });
+
+  // Mark all related chat notifications as read for current user
+  try {
+    await db.notification.updateMany({
+      where: {
+        userId: user.userId,
+        type: "chat",
+        read: false,
+        OR: [
+          { link: { contains: companyId } },
+          { message: { contains: company.name } },
+        ],
+      },
+      data: { read: true },
+    });
+  } catch {
+    // Non-blocking
+  }
 
   // Fetch messages sorted ascending
   const messages = await db.message.findMany({
@@ -134,6 +152,33 @@ export async function POST(req: NextRequest) {
       createdAt: true,
     },
   });
+
+  // Mark all previous incoming messages and chat notifications for this user as read
+  await db.message.updateMany({
+    where: {
+      companyId,
+      receiverId: user.userId,
+      read: false,
+    },
+    data: { read: true },
+  });
+
+  try {
+    await db.notification.updateMany({
+      where: {
+        userId: user.userId,
+        type: "chat",
+        read: false,
+        OR: [
+          { link: { contains: companyId } },
+          { message: { contains: company.name } },
+        ],
+      },
+      data: { read: true },
+    });
+  } catch {
+    // Non-blocking
+  }
 
   // Create notification for receiver
   try {

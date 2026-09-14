@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Search, MessageSquare, Building2, User, ArrowLeft, ArrowRight } from "lucide-react";
 import { ChatWindow } from "@/components/chat/ChatWindow";
 
@@ -40,21 +40,54 @@ export function ComptableChatView({
   const [mobileView, setMobileView] = useState<"list" | "chat">(
     initialCompanyId ? "chat" : "list"
   );
+  const [convList, setConvList] = useState(conversations);
+
+  useEffect(() => {
+    setConvList(conversations);
+  }, [conversations]);
+
+  // Clear unread count for the active conversation
+  useEffect(() => {
+    if (selectedId) {
+      setConvList((prev) =>
+        prev.map((c) =>
+          c.companyId === selectedId ? { ...c, unreadCount: 0 } : c
+        )
+      );
+    }
+  }, [selectedId]);
+
+  // Listen to chat:read events
+  useEffect(() => {
+    const handleChatRead = (e: Event) => {
+      const customEvent = e as CustomEvent<{ companyId: string }>;
+      const cId = customEvent.detail?.companyId || selectedId;
+      if (cId) {
+        setConvList((prev) =>
+          prev.map((c) =>
+            c.companyId === cId ? { ...c, unreadCount: 0 } : c
+          )
+        );
+      }
+    };
+    window.addEventListener("chat:read", handleChatRead);
+    return () => window.removeEventListener("chat:read", handleChatRead);
+  }, [selectedId]);
 
   const filtered = useMemo(() => {
-    if (!search.trim()) return conversations;
+    if (!search.trim()) return convList;
     const q = search.toLowerCase();
-    return conversations.filter(
+    return convList.filter(
       (c) =>
         c.companyName.toLowerCase().includes(q) ||
         c.clientName.toLowerCase().includes(q) ||
         c.clientEmail.toLowerCase().includes(q)
     );
-  }, [conversations, search]);
+  }, [convList, search]);
 
   const activeConv = useMemo(
-    () => conversations.find((c) => c.companyId === selectedId),
-    [conversations, selectedId]
+    () => convList.find((c) => c.companyId === selectedId),
+    [convList, selectedId]
   );
 
   const labels = {

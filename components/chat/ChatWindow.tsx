@@ -182,6 +182,13 @@ export function ChatWindow({
 
         return merged;
       });
+
+      // Dispatch chat:read so sidebars and conversation lists update their counters
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent("chat:read", { detail: { companyId } })
+        );
+      }
     } catch {
       // Silent fail for polling
     }
@@ -263,6 +270,12 @@ export function ChatWindow({
           prev.map((m) => (m.id === tempId ? realMessage : m))
         );
         pendingTempIdsRef.current.delete(tempId);
+
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(
+            new CustomEvent("chat:read", { detail: { companyId } })
+          );
+        }
       } catch {
         // Mark as failed
         setMessages((prev) =>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
@@ -59,6 +59,48 @@ export function ComptableSidebar({
   const isRtl = dir === "rtl";
   const [mobileOpen, setMobileOpen] = useState(false);
 
+  const [chatCount, setChatCount] = useState(unreadChatCount);
+  const [bellCount, setBellCount] = useState(notifCount);
+
+  useEffect(() => {
+    setChatCount(unreadChatCount);
+  }, [unreadChatCount]);
+
+  useEffect(() => {
+    setBellCount(notifCount);
+  }, [notifCount]);
+
+  const refreshCounts = useCallback(async () => {
+    try {
+      const [chatRes, notifRes] = await Promise.all([
+        fetch("/api/messages/unread"),
+        fetch("/api/notifications/unread"),
+      ]);
+      if (chatRes.ok) {
+        const d = await chatRes.json();
+        setChatCount(d.unreadCount ?? 0);
+      }
+      if (notifRes.ok) {
+        const d = await notifRes.json();
+        setBellCount(d.unreadCount ?? 0);
+      }
+    } catch {
+      // Silent
+    }
+  }, []);
+
+  useEffect(() => {
+    const onChatRead = () => {
+      refreshCounts();
+    };
+    window.addEventListener("chat:read", onChatRead);
+    const timer = setInterval(refreshCounts, 4000);
+    return () => {
+      window.removeEventListener("chat:read", onChatRead);
+      clearInterval(timer);
+    };
+  }, [refreshCounts]);
+
   const SECTIONS = [
     {
       title: lang === "ar" ? "المتابعة اليومية" : lang === "en" ? "DAILY TRACKING" : "SUIVI QUOTIDIEN",
@@ -70,7 +112,7 @@ export function ComptableSidebar({
           label: t.chat || (lang === "ar" ? "المحادثات" : lang === "en" ? "Messages" : "Messagerie"),
           href: "chat",
           icon: MessageSquare,
-          badge: unreadChatCount,
+          badge: chatCount,
         },
       ],
     },
@@ -232,16 +274,16 @@ export function ComptableSidebar({
           >
             <div className="relative shrink-0">
               <Bell size={16} className="text-slate-400 group-hover:text-teal-400" />
-              {notifCount > 0 && (
+              {bellCount > 0 && (
                 <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-rose-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center animate-pulse">
-                  {notifCount > 9 ? "9+" : notifCount}
+                  {bellCount > 9 ? "9+" : bellCount}
                 </span>
               )}
             </div>
             <span className="flex-1">{t.notifications}</span>
-            {notifCount > 0 && (
+            {bellCount > 0 && (
               <span className="ml-auto text-[10px] bg-rose-500/20 text-rose-400 font-bold px-1.5 py-0.5 rounded-full shrink-0">
-                {notifCount}
+                {bellCount}
               </span>
             )}
           </Link>
