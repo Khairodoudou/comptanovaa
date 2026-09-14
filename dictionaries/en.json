@@ -26,16 +26,36 @@
       "trusted_by": "Trusted by over 500+ enterprises and certified accounting firms across Algeria"
     },
     "trust_badges": [
-      { "label": "Compliant with Algerian SCF & DGI" },
-      { "label": "High-Accuracy AI OCR Extraction" },
-      { "label": "Cloud Bank-Grade Security & Encryption" },
-      { "label": "Automated Reconciliation & Audit Trail" }
+      {
+        "label": "Compliant with Algerian SCF & DGI"
+      },
+      {
+        "label": "High-Accuracy AI OCR Extraction"
+      },
+      {
+        "label": "Cloud Bank-Grade Security & Encryption"
+      },
+      {
+        "label": "Automated Reconciliation & Audit Trail"
+      }
     ],
     "stats": [
-      { "value": "85%", "label": "Manual data entry time saved" },
-      { "value": "< 3s", "label": "To scan and assign accounting entries" },
-      { "value": "100%", "label": "Compliant with Algerian tax standards" },
-      { "value": "24/7", "label": "Real-time sync and audit traceability" }
+      {
+        "value": "85%",
+        "label": "Manual data entry time saved"
+      },
+      {
+        "value": "< 3s",
+        "label": "To scan and assign accounting entries"
+      },
+      {
+        "value": "100%",
+        "label": "Compliant with Algerian tax standards"
+      },
+      {
+        "value": "24/7",
+        "label": "Real-time sync and audit traceability"
+      }
     ],
     "deep_features": {
       "ocr": {
@@ -151,7 +171,33 @@
       "subtitle": "Join the platform that is redefining accounting in Algeria today. Setup in under 2 minutes.",
       "button_primary": "Create a Free Account",
       "button_secondary": "Talk to Our Experts"
-    }
+    },
+    "hero_features": [
+      {
+        "title": "Smart OCR",
+        "description": "Automatic data extraction"
+      },
+      {
+        "title": "Automated Bookkeeping",
+        "description": "Instant accounting entries generation"
+      },
+      {
+        "title": "Bank Reconciliation",
+        "description": "Automatic and secure reconciliation"
+      },
+      {
+        "title": "Tracking & Dashboards",
+        "description": "Real-time monitoring of your business"
+      },
+      {
+        "title": "Security & Compliance",
+        "description": "Protected data, guaranteed compliance"
+      },
+      {
+        "title": "Dedicated Support",
+        "description": "Specialized team to assist you daily"
+      }
+    ]
   },
   "login": {
     "welcome": "Welcome to your digital accounting workspace",
@@ -218,10 +264,22 @@
       "subtitle": "Zero paper, 100% audit traceability, flawless tax compliance, and instantaneous bank reconciliation."
     },
     "stats": [
-      { "value": "100%", "label": "Aligned with the Algerian Financial Accounting System (SCF)" },
-      { "value": "1/10", "label": "Of usual time spent processing accounting records" },
-      { "value": "0", "label": "Lost documents thanks to the secure cloud vault" },
-      { "value": "24/7", "label": "Secure access for both the firm and its clients" }
+      {
+        "value": "100%",
+        "label": "Aligned with the Algerian Financial Accounting System (SCF)"
+      },
+      {
+        "value": "1/10",
+        "label": "Of usual time spent processing accounting records"
+      },
+      {
+        "value": "0",
+        "label": "Lost documents thanks to the secure cloud vault"
+      },
+      {
+        "value": "24/7",
+        "label": "Secure access for both the firm and its clients"
+      }
     ],
     "values": {
       "title": "Our Core Values",

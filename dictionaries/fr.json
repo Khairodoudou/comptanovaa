@@ -26,16 +26,36 @@
       "trusted_by": "Adopté par plus de 500+ entreprises et experts-comptables à travers l'Algérie"
     },
     "trust_badges": [
-      { "label": "Conforme SCF & DGI Algérie" },
-      { "label": "Extraction OCR Haute Précision" },
-      { "label": "Sécurité & Chiffrement Cloud" },
-      { "label": "Rapprochement Bancaire & Audit" }
+      {
+        "label": "Conforme SCF & DGI Algérie"
+      },
+      {
+        "label": "Extraction OCR Haute Précision"
+      },
+      {
+        "label": "Sécurité & Chiffrement Cloud"
+      },
+      {
+        "label": "Rapprochement Bancaire & Audit"
+      }
     ],
     "stats": [
-      { "value": "85%", "label": "De temps de saisie manuelle économisé" },
-      { "value": "< 3s", "label": "Pour numériser et imputer une facture" },
-      { "value": "100%", "label": "Conforme aux normes fiscales algériennes" },
-      { "value": "24/7", "label": "Traçabilité et collaboration en temps réel" }
+      {
+        "value": "85%",
+        "label": "De temps de saisie manuelle économisé"
+      },
+      {
+        "value": "< 3s",
+        "label": "Pour numériser et imputer une facture"
+      },
+      {
+        "value": "100%",
+        "label": "Conforme aux normes fiscales algériennes"
+      },
+      {
+        "value": "24/7",
+        "label": "Traçabilité et collaboration en temps réel"
+      }
     ],
     "deep_features": {
       "ocr": {
@@ -151,7 +171,33 @@
       "subtitle": "Rejoignez dès aujourd'hui la plateforme qui transforme la comptabilité en Algérie. Configuration en moins de 2 minutes.",
       "button_primary": "Créer un Compte Gratuit",
       "button_secondary": "Consulter nos Experts"
-    }
+    },
+    "hero_features": [
+      {
+        "title": "OCR intelligent",
+        "description": "Extraction automatique des données"
+      },
+      {
+        "title": "Écritures automatisées",
+        "description": "Génération de vos écritures comptables"
+      },
+      {
+        "title": "Rapprochement bancaire",
+        "description": "Rapprochement automatique et sécurisé"
+      },
+      {
+        "title": "Suivi & tableaux de bord",
+        "description": "Pilotage en temps réel de votre activité"
+      },
+      {
+        "title": "Sécurité & conformité",
+        "description": "Vos données protégées, conformité assurée"
+      },
+      {
+        "title": "Accompagnement",
+        "description": "Support dédié pour vous accompagner au quotidien"
+      }
+    ]
   },
   "login": {
     "welcome": "Bienvenue sur votre espace comptable digital",
@@ -218,10 +264,22 @@
       "subtitle": "Zéro papier, 100% de traçabilité, conformité fiscale absolue et réconciliation bancaire instantanée."
     },
     "stats": [
-      { "value": "100%", "label": "Adapté au Système Comptable Financier (SCF)" },
-      { "value": "1/10", "label": "Du temps habituel pour traiter un dossier comptable" },
-      { "value": "0", "label": "Perte de document grâce au coffre-fort cloud" },
-      { "value": "24/7", "label": "Accès sécurisé pour le cabinet et ses clients" }
+      {
+        "value": "100%",
+        "label": "Adapté au Système Comptable Financier (SCF)"
+      },
+      {
+        "value": "1/10",
+        "label": "Du temps habituel pour traiter un dossier comptable"
+      },
+      {
+        "value": "0",
+        "label": "Perte de document grâce au coffre-fort cloud"
+      },
+      {
+        "value": "24/7",
+        "label": "Accès sécurisé pour le cabinet et ses clients"
+      }
     ],
     "values": {
       "title": "Nos Valeurs Fondatrices",

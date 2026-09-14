@@ -25,9 +25,23 @@ import {
   Activity,
   Check,
   TrendingUp,
+  ScanText,
+  FileEdit,
+  Landmark,
+  ShieldCheck,
+  Headset,
 } from "lucide-react";
 
 const featureIcons = [FileText, ScanLine, BookOpen, CheckCircle2, CreditCard, Bell];
+
+const heroFeatureMeta = [
+  { icon: ScanText, color: "bg-sky-50 text-sky-600 border border-sky-100/80" },
+  { icon: FileEdit, color: "bg-blue-50 text-blue-600 border border-blue-100/80" },
+  { icon: Landmark, color: "bg-sky-50 text-sky-700 border border-sky-100/80" },
+  { icon: TrendingUp, color: "bg-emerald-50 text-emerald-600 border border-emerald-100/80" },
+  { icon: ShieldCheck, color: "bg-teal-50 text-teal-600 border border-teal-100/80" },
+  { icon: Headset, color: "bg-indigo-50 text-indigo-600 border border-indigo-100/80" },
+];
 
 export default async function HomePage({ params }: { params: Promise<{ lang: string }> }) {
   const { lang } = await params;
@@ -46,6 +60,19 @@ export default async function HomePage({ params }: { params: Promise<{ lang: str
   }));
 
   const badgeText = (dict.home?.badge || "La 1ère plateforme intelligente de comptabilité & fiscalité en Algérie").replace(/^[✨\s]+/, "");
+
+  const heroFeatures = (dict.home?.hero_features || [
+    { title: "OCR intelligent", description: "Extraction automatique des données" },
+    { title: "Écritures automatisées", description: "Génération de vos écritures comptables" },
+    { title: "Rapprochement bancaire", description: "Rapprochement automatique et sécurisé" },
+    { title: "Suivi & tableaux de bord", description: "Pilotage en temps réel de votre activité" },
+    { title: "Sécurité & conformité", description: "Vos données protégées, conformité assurée" },
+    { title: "Accompagnement", description: "Support dédié pour vous accompagner au quotidien" },
+  ]).map((item: any, index: number) => ({
+    ...item,
+    icon: heroFeatureMeta[index]?.icon || ScanText,
+    color: heroFeatureMeta[index]?.color || "bg-sky-50 text-sky-600 border border-sky-100/80",
+  }));
 
   return (
     <div className="min-h-screen bg-white text-slate-900 overflow-x-hidden">
@@ -118,30 +145,6 @@ export default async function HomePage({ params }: { params: Promise<{ lang: str
                   {dict.home.hero.cta_secondary}
                 </Link>
               </div>
-
-              {/* Social Trust note */}
-              <div className="flex flex-wrap items-center gap-3 pt-2">
-                <div className="flex -space-x-2 rtl:space-x-reverse shrink-0">
-                  <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-gradient-to-br from-teal-500 to-teal-700 text-white font-black text-[10px] ring-2 ring-white shadow-xs">
-                    DZ
-                  </span>
-                  <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 text-white font-black text-[10px] ring-2 ring-white shadow-xs">
-                    EC
-                  </span>
-                  <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-700 text-white font-black text-[10px] ring-2 ring-white shadow-xs">
-                    PME
-                  </span>
-                </div>
-                <div className="flex flex-col">
-                  <div className="flex items-center gap-1 text-amber-500 text-xs">
-                    <span>★★★★★</span>
-                    <span className="text-slate-700 font-extrabold text-[11px] ml-0.5">4.9 / 5</span>
-                  </div>
-                  <p className="text-xs font-semibold text-slate-500">
-                    {dict.home.hero.trusted_by || "Adopté par plus de 500+ entreprises et experts-comptables en Algérie"}
-                  </p>
-                </div>
-              </div>
             </div>
 
             {/* Right Column: Hero 3D Dashboard Preview Image */}
@@ -187,20 +190,28 @@ export default async function HomePage({ params }: { params: Promise<{ lang: str
 
           </div>
 
-          {/* ─────────────────── TRUST BADGES BAR ─────────────────── */}
-          <div className="mt-16 sm:mt-20 pt-8 border-t border-slate-200/70">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-              {(dict.home.trust_badges || [
-                { label: "Conforme SCF & DGI Algérie" },
-                { label: "Extraction OCR Haute Précision" },
-                { label: "Sécurité & Chiffrement Cloud" },
-                { label: "Rapprochement Bancaire & Audit" }
-              ]).map((badge: any, i: number) => (
-                <div key={i} className="flex items-center justify-center gap-2 p-3 bg-white/60 rounded-xl border border-slate-200/60 shadow-xs">
-                  <CheckCircle2 size={16} className="text-teal-600 shrink-0" />
-                  <span className="text-xs font-bold text-slate-700">{badge.label}</span>
-                </div>
-              ))}
+          {/* ─────────────────── 6 HERO PILLARS (IMAGE 2) ─────────────────── */}
+          <div className="mt-14 sm:mt-18 pt-8 border-t border-slate-200/80">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 divide-y sm:divide-y-0 sm:divide-x rtl:sm:divide-x-reverse divide-slate-200/70">
+              {heroFeatures.map((item: any, idx: number) => {
+                const Icon = item.icon;
+                return (
+                  <div
+                    key={idx}
+                    className="p-4 sm:p-5 flex flex-col items-start text-start group hover:bg-slate-50/70 rounded-xl transition-all duration-200"
+                  >
+                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-3.5 shadow-xs transition-transform duration-300 group-hover:scale-105 ${item.color}`}>
+                      <Icon size={22} className="stroke-[2.2]" />
+                    </div>
+                    <h3 className="font-extrabold text-slate-900 text-sm sm:text-[15px] leading-snug tracking-tight group-hover:text-teal-700 transition-colors">
+                      {item.title}
+                    </h3>
+                    <p className="text-xs text-slate-500 leading-relaxed mt-1 font-normal">
+                      {item.description}
+                    </p>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
