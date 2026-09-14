@@ -27,10 +27,10 @@ export const SCF_ACCOUNT_LABELS: Record<string, string> = {
   "4452": "TVA due",
 
   // Classe 5 : Comptes financiers
-  "512": "Banque",
+  "512": "Banques",
   "5120": "Banques nationales",
   "517": "Autres organismes financiers (CCP)",
-  "53": "Caisse",
+  "53": "Caisses",
   "530": "Caisse principale",
 
   // Classe 6 : Comptes de charges
@@ -55,6 +55,70 @@ export const SCF_ACCOUNT_LABELS: Record<string, string> = {
 };
 
 /**
+ * Nettoie les suffixes OCR superflus dans le nom de tiers (ADRESSE :, TEL :, etc.)
+ */
+export function cleanEntityName(name?: string | null): string {
+  if (!name) return "";
+  let clean = name.trim();
+  // Strip trailing OCR artifacts like "ADRESSE : TEL", "ADRESSE :", "TEL :", "ADR :"
+  clean = clean.replace(/\s*(?:ADRESSE|ADR|TEL|TÉLÉPHONE|TELEPHONE)\s*:\s*(?:TEL\s*:?)?\s*$/i, "").trim();
+  clean = clean.replace(/\s+(?:ADRESSE\s*:?|TEL\s*:?|TÉLÉPHONE\s*:?)+$/i, "").trim();
+  return clean;
+}
+
+/**
+ * Détermine dynamiquement le préfixe de référence comptable (BL N°, BC N°, BR N°, BS N°, Chèque N°, etc.)
+ */
+export function getRefLabel(
+  reference?: string | null,
+  docType?: string | null,
+  originalDesc?: string
+): string {
+  const ref = (reference || "").toUpperCase().trim();
+  const type = (docType || "").toUpperCase().trim();
+  const desc = (originalDesc || "").toLowerCase();
+
+  // 1. Bon de livraison (BL)
+  if (ref.startsWith("BL") || type.includes("LIVRAISON") || desc.includes("livraison")) {
+    return "BL N°";
+  }
+
+  // 2. Bon de commande (BC)
+  if (ref.startsWith("BC") || type.includes("COMMANDE") || desc.includes("bon de commande")) {
+    return "BC N°";
+  }
+
+  // 3. Bon de réception (BR)
+  if (ref.startsWith("BR") || type.includes("RECEPTION") || desc.includes("réception") || desc.includes("reception")) {
+    return "BR N°";
+  }
+
+  // 4. Bon de sortie (BS)
+  if (ref.startsWith("BS") || type.includes("SORTIE") || desc.includes("bon de sortie") || desc.includes("sortie de stock")) {
+    return "BS N°";
+  }
+
+  // 5. Chèque
+  if (
+    ref.startsWith("CHQ") ||
+    ref.startsWith("CH") ||
+    type.includes("CHEQUE") ||
+    desc.includes("chèque") ||
+    desc.includes("cheque")
+  ) {
+    return "Chèque N°";
+  }
+
+  // 6. Opération bancaire
+  if (type.includes("BANCAIRE") || desc.includes("bancaire") || desc.includes("virement")) {
+    return "Opération N°";
+  }
+
+  // Par défaut: Facture
+  return "Facture N°";
+}
+
+/**
  * Returns a formal SCF account label for a given account code.
  * If entityName is provided, appends it to third-party accounts (401, 411).
  */
@@ -66,20 +130,21 @@ export function getAccountTitle(account: string, entityName?: string): string {
     if (clean.startsWith("380")) label = "Achats de marchandises";
     else if (clean.startsWith("4456")) label = "TVA déductible";
     else if (clean.startsWith("4457")) label = "TVA collectée";
-    else if (clean.startsWith("401")) label = "Fournisseur";
-    else if (clean.startsWith("411")) label = "Client";
-    else if (clean.startsWith("512")) label = "Banque";
-    else if (clean.startsWith("53")) label = "Caisse";
-    else if (clean.startsWith("607")) label = "Achats non stockés (électricité, eau)";
-    else if (clean.startsWith("626")) label = "Frais postaux et télécoms";
-    else if (clean.startsWith("600")) label = "Marchandises vendues";
-    else if (clean.startsWith("30")) label = "Stock de marchandises";
-    else if (clean.startsWith("70")) label = "Vente de marchandises";
+    else if (clean.startsWith("401")) label = "Fournisseurs";
+    else if (clean.startsWith("411")) label = "Clients";
+    else if (clean.startsWith("512")) label = "Banques";
+    else if (clean.startsWith("53")) label = "Caisses";
+    else if (clean.startsWith("607")) label = "Achats non stockés de matières et fournitures";
+    else if (clean.startsWith("626")) label = "Frais postaux et de télécommunications";
+    else if (clean.startsWith("600")) label = "Achats de marchandises vendues";
+    else if (clean.startsWith("30")) label = "Stocks de marchandises";
+    else if (clean.startsWith("70")) label = "Ventes de marchandises";
     else label = `Compte ${account}`;
   }
 
-  if (entityName && (clean.startsWith("401") || clean.startsWith("411"))) {
-    return `${label} (${entityName})`;
+  const cleanedEntity = cleanEntityName(entityName);
+  if (cleanedEntity && (clean.startsWith("401") || clean.startsWith("411"))) {
+    return `${label} (${cleanedEntity})`;
   }
 
   return label;

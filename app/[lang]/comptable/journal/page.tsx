@@ -7,6 +7,7 @@ import type { Prisma } from "@prisma/client";
 import { getDictionary } from "@/get-dictionary";
 import type { Locale } from "@/i18n-config";
 import { Sparkles, Edit3, CheckCircle2 } from "lucide-react";
+import { getAccountTitle, cleanEntityName, getRefLabel } from "@/lib/accounting";
 
 export default async function ComptableJournalPage({
   params,
@@ -206,37 +207,45 @@ export default async function ComptableJournalPage({
             return acc;
           }, {} as Record<string, { clientName: string; entries: typeof entries }>);
 
-          const formatDescription = (account: string, originalDesc: string) => {
-            let baseDesc = originalDesc.split("—")[0].trim();
-            const entityName = originalDesc.split("—")[1]?.trim() || "";
+          const formatDebitDescription = (account: string, originalDesc: string) => {
+            const parts = (originalDesc || "").split("—");
+            const baseDesc = parts[0]?.trim() || "";
+            const rawEntity = parts[1]?.trim() || "";
+            const entityName = cleanEntityName(rawEntity);
 
-            if (account.startsWith("607")) return `Achats de marchandises`;
-            if (account.startsWith("626")) return `Frais postaux et de télécommunications`;
-            if (account.startsWith("600")) return `Marchandise stockée`;
-            if (account.startsWith("30")) return `Stock de marchandises`;
+            if (account.startsWith("401")) return entityName ? `Fournisseur ${entityName}` : (baseDesc || "Fournisseurs");
+            if (account.startsWith("411")) return entityName ? `Client ${entityName}` : (baseDesc || "Clients");
+            if (account.startsWith("512")) return "Banques";
+            if (account.startsWith("53")) return "Caisses";
 
-            if (baseDesc.includes("Achat marchandises")) baseDesc = "Achats de marchandises";
-            if (baseDesc.includes("Vente HT")) baseDesc = "Vente de marchandises";
-            if (baseDesc.includes("TVA déductible")) baseDesc = "TVA déductible";
-            if (baseDesc.includes("TVA collectée")) baseDesc = "TVA collectée";
-            if (baseDesc.includes("Charge TTC")) baseDesc = "Achats de marchandises";
-            if (baseDesc.includes("Sortie de stock")) baseDesc = "Marchandise stockée";
-
-            if (account.startsWith("401")) return `Fournisseur ${entityName}`;
-            if (account.startsWith("411")) return `Client ${entityName}`;
-            if (account.startsWith("512")) return `Banques`;
-            if (account.startsWith("53")) return `Caisses`;
-            return baseDesc;
+            if (baseDesc && baseDesc !== "Charge TTC" && !baseDesc.startsWith("Compte ")) {
+              return baseDesc;
+            }
+            return getAccountTitle(account, entityName);
           };
 
-          const getRefLabel = (originalDesc: string) => {
-            const lower = originalDesc.toLowerCase();
-            if (lower.includes("chèque") || lower.includes("cheque")) return "Chèque N°";
-            if (lower.includes("bancaire")) return "Opération N°";
-            if (lower.includes("sortie") || lower.includes("bon de sortie") || lower.includes("livraison"))
-              return "BS N°";
-            if (lower.includes("bon de réception") || lower.includes("réception")) return "BR N°";
-            return "Facture N°";
+          const formatCreditDescription = (account: string, originalDesc: string) => {
+            const parts = (originalDesc || "").split("—");
+            const baseDesc = parts[0]?.trim() || "";
+            const rawEntity = parts[1]?.trim() || "";
+            const entityName = cleanEntityName(rawEntity);
+
+            if (account.startsWith("401")) return entityName ? `Fournisseur ${entityName}` : "Fournisseurs";
+            if (account.startsWith("411")) return entityName ? `Client ${entityName}` : "Clients";
+            if (account.startsWith("512")) return "Banques";
+            if (account.startsWith("53")) return "Caisses";
+
+            if (baseDesc && !baseDesc.startsWith("Compte ") && baseDesc !== "Charge TTC") {
+              const scfTitle = getAccountTitle(account);
+              if (
+                baseDesc.toLowerCase().includes(scfTitle.toLowerCase()) ||
+                scfTitle.toLowerCase().includes(baseDesc.toLowerCase())
+              ) {
+                return baseDesc;
+              }
+            }
+
+            return getAccountTitle(account, entityName);
           };
 
           const formatAmount = (val: number) =>
@@ -332,7 +341,7 @@ export default async function ComptableJournalPage({
                         if (!debitsMap[entry.debitAccount]) {
                           debitsMap[entry.debitAccount] = {
                             account: entry.debitAccount,
-                            description: formatDescription(entry.debitAccount, entry.description),
+                            description: formatDebitDescription(entry.debitAccount, entry.description),
                             amount: 0,
                             reference: entry.reference,
                           };
@@ -342,7 +351,7 @@ export default async function ComptableJournalPage({
                         if (!creditsMap[entry.creditAccount]) {
                           creditsMap[entry.creditAccount] = {
                             account: entry.creditAccount,
-                            description: formatDescription(entry.creditAccount, entry.description),
+                            description: formatCreditDescription(entry.creditAccount, entry.description),
                             amount: 0,
                             reference: entry.reference,
                           };
@@ -380,8 +389,11 @@ export default async function ComptableJournalPage({
                       const mainRef =
                         op.entries.find((e) => e.reference && e.reference.trim() !== "")?.reference ||
                         (op.document as any)?.originalName;
-                      const refLabel = getRefLabel(primaryEntry.description);
-                      const entityName = primaryEntry.description.split("—")[1]?.trim();
+                      const docType = (op.document as any)?.type || (primaryEntry.document as any)?.type || "";
+                      const docName = (op.document as any)?.originalName || (primaryEntry.document as any)?.originalName || "";
+                      const refLabel = getRefLabel(mainRef, docType, docName || primaryEntry.description);
+                      const rawEntity = primaryEntry.description.split("—")[1]?.trim();
+                      const entityName = cleanEntityName(rawEntity);
                       const descBase = primaryEntry.description.split("—")[0].trim();
 
                       let opDesc = descBase;

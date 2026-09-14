@@ -24,7 +24,7 @@ import {
   X,
   Pencil,
 } from "lucide-react";
-import { getAccountTitle } from "@/lib/accounting";
+import { getAccountTitle, cleanEntityName, getRefLabel } from "@/lib/accounting";
 
 interface JournalEntryVersionData {
   id: string;
@@ -100,7 +100,7 @@ export function DocumentValidationCard({
     try {
       const parsed = JSON.parse(document.ocrData);
       ocrAmountTTC = parsed.extracted?.amount || 0;
-      extractedSupplier = parsed.supplier || parsed.extracted?.supplier || "Inconnu";
+      extractedSupplier = cleanEntityName(parsed.supplier || parsed.extracted?.supplier || "Inconnu");
       ocrInvoiceNumber = parsed.extracted?.invoiceNumber || "";
     } catch {}
   }
@@ -110,7 +110,7 @@ export function DocumentValidationCard({
     for (const e of initialEntries) {
       const parts = (e.description || "").split("—");
       if (parts.length > 1 && parts[1].trim() && parts[1].trim() !== "Inconnu") {
-        extractedSupplier = parts[1].trim();
+        extractedSupplier = cleanEntityName(parts[1].trim());
         break;
       }
     }
@@ -124,6 +124,8 @@ export function DocumentValidationCard({
     initialEntries.find((e) => e.reference)?.reference || ocrInvoiceNumber || ""
   );
 
+  const currentRefLabel = getRefLabel(reference, document.type, document.originalName);
+
   // Initialize editable lines
   const [lines, setLines] = useState<DisplayLine[]>(() => {
     const list: DisplayLine[] = [];
@@ -136,10 +138,20 @@ export function DocumentValidationCard({
       const cleanDebit = e.debitAccount.replace(/\.0$/, "");
       const cleanCredit = e.creditAccount.replace(/\.0$/, "");
 
-      if (!debitsMap[cleanDebit]) debitsMap[cleanDebit] = { amount: 0, entryId: e.id };
+      const baseDesc = (e.description || "").split("—")[0]?.trim() || "";
+
+      if (!debitsMap[cleanDebit]) {
+        debitsMap[cleanDebit] = {
+          amount: 0,
+          entryId: e.id,
+          label: baseDesc && !baseDesc.startsWith("Compte ") && baseDesc !== "Charge TTC" ? baseDesc : undefined,
+        };
+      }
       debitsMap[cleanDebit].amount += e.amount;
 
-      if (!creditsMap[cleanCredit]) creditsMap[cleanCredit] = { amount: 0, entryId: e.id };
+      if (!creditsMap[cleanCredit]) {
+        creditsMap[cleanCredit] = { amount: 0, entryId: e.id };
+      }
       creditsMap[cleanCredit].amount += e.amount;
     });
 
@@ -148,7 +160,7 @@ export function DocumentValidationCard({
         id: `deb-${acc}`,
         type: "DEBIT",
         account: acc,
-        label: getAccountTitle(acc, entityName),
+        label: data.label || getAccountTitle(acc, entityName),
         debit: data.amount,
         credit: 0,
         originalEntryId: data.entryId,
@@ -160,7 +172,7 @@ export function DocumentValidationCard({
         id: `cred-${acc}`,
         type: "CREDIT",
         account: acc,
-        label: getAccountTitle(acc, entityName),
+        label: data.label || getAccountTitle(acc, entityName),
         debit: 0,
         credit: data.amount,
         originalEntryId: data.entryId,
@@ -754,7 +766,7 @@ export function DocumentValidationCard({
               <td className="py-3 px-3 text-center border-r border-black"></td>
               <td className="py-3 px-4 text-center text-black border-r border-black font-medium">
                 <div className="flex items-center justify-center gap-1.5">
-                  <span className="font-bold">Facture N°</span>
+                  <span className="font-bold">{currentRefLabel}</span>
                   <input
                     type="text"
                     value={reference}
