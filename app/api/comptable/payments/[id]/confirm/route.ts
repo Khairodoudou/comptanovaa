@@ -109,23 +109,32 @@ export async function POST(
         }
 
         // Resolve cheque number and cheque date:
-        // Priority: DB columns (reference / paymentDate) → notes JSON (OCR) → fallback
-        let chequeNumber: string | null = fresh.reference || null;
-        let chequeDate: Date | null = fresh.paymentDate ? new Date(fresh.paymentDate) : null;
+        // Priority: notes JSON (OCR data directly from cheque) → DB columns (reference / paymentDate) → fallback
+        let chequeNumber: string | null = null;
+        let chequeDate: Date | null = null;
 
         if (fresh.notes) {
           try {
             const parsedNotes = JSON.parse(fresh.notes as string);
-            if (!chequeNumber && parsedNotes.chequeNumber) {
-              chequeNumber = parsedNotes.chequeNumber;
+            if (parsedNotes.chequeNumber) {
+              chequeNumber = String(parsedNotes.chequeNumber).trim();
             }
-            if (!chequeDate && parsedNotes.chequeDate) {
+            if (parsedNotes.chequeDate) {
               const d = new Date(parsedNotes.chequeDate);
               if (!isNaN(d.getTime())) chequeDate = d;
             }
           } catch {
             // notes is not JSON — ignore
           }
+        }
+
+        // If not present in notes, fall back to declaration reference and paymentDate
+        if (!chequeNumber && fresh.reference) {
+          chequeNumber = fresh.reference.trim();
+        }
+        if (!chequeDate && fresh.paymentDate) {
+          const d = new Date(fresh.paymentDate);
+          if (!isNaN(d.getTime())) chequeDate = d;
         }
 
         const chequeRef = chequeNumber
@@ -135,7 +144,7 @@ export async function POST(
         // Use cheque date when available; fall back to declared payment date, then now
         const entryDate = chequeDate || (fresh.paymentDate ? new Date(fresh.paymentDate) : now);
 
-        // Step 1 — Create JournalEntry
+        // Step 1 — Create JournalEntry (documentId is null because payment is an independent banking entry with justificatif on PaymentDeclaration)
         const entry = await tx.journalEntry.create({
           data: {
             date: entryDate,
@@ -148,7 +157,7 @@ export async function POST(
             source: "PAIEMENT",
             journalType: "BANQUE",
             companyId: company.id,
-            documentId: invoice.documentId || null,
+            documentId: null,
             validatedById: user.userId,
             validatedAt: now,
             sentToClient: false,
@@ -180,6 +189,8 @@ export async function POST(
             confirmedAt: now,
             confirmedById: user.userId,
             accountingEntryId: entry.id,
+            reference: chequeNumber || fresh.reference || null,
+            paymentDate: entryDate,
           },
         });
 

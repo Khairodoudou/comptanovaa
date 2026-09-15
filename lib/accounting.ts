@@ -78,27 +78,7 @@ export function getRefLabel(
   const type = (docType || "").toUpperCase().trim();
   const desc = (originalDesc || "").toLowerCase();
 
-  // 1. Bon de livraison (BL)
-  if (ref.startsWith("BL") || type.includes("LIVRAISON") || desc.includes("livraison")) {
-    return "BL N°";
-  }
-
-  // 2. Bon de commande (BC)
-  if (ref.startsWith("BC") || type.includes("COMMANDE") || desc.includes("bon de commande")) {
-    return "BC N°";
-  }
-
-  // 3. Bon de réception (BR)
-  if (ref.startsWith("BR") || type.includes("RECEPTION") || desc.includes("réception") || desc.includes("reception")) {
-    return "BR N°";
-  }
-
-  // 4. Bon de sortie (BS)
-  if (ref.startsWith("BS") || type.includes("SORTIE") || desc.includes("bon de sortie") || desc.includes("sortie de stock")) {
-    return "BS N°";
-  }
-
-  // 5. Chèque
+  // 1. Chèque (checked first to avoid confusion with invoice prefixes in payment descriptions)
   if (
     ref.startsWith("CHQ") ||
     ref.startsWith("CH") ||
@@ -109,9 +89,34 @@ export function getRefLabel(
     return "Chèque N°";
   }
 
-  // 6. Opération bancaire
-  if (type.includes("BANCAIRE") || desc.includes("bancaire") || desc.includes("virement")) {
-    return "Opération N°";
+  // 2. Règlement / virement / bancaire
+  if (
+    desc.includes("règlement") ||
+    desc.includes("reglement") ||
+    desc.includes("virement") ||
+    type.includes("BANCAIRE")
+  ) {
+    return "Règlement N°";
+  }
+
+  // 3. Bon de livraison (BL)
+  if (ref.startsWith("BL") || type.includes("LIVRAISON") || desc.includes("livraison")) {
+    return "BL N°";
+  }
+
+  // 4. Bon de commande (BC)
+  if (ref.startsWith("BC") || type.includes("COMMANDE") || desc.includes("bon de commande")) {
+    return "BC N°";
+  }
+
+  // 5. Bon de réception (BR)
+  if (ref.startsWith("BR") || type.includes("RECEPTION") || desc.includes("réception") || desc.includes("reception")) {
+    return "BR N°";
+  }
+
+  // 6. Bon de sortie (BS)
+  if (ref.startsWith("BS") || type.includes("SORTIE") || desc.includes("bon de sortie") || desc.includes("sortie de stock")) {
+    return "BS N°";
   }
 
   // Par défaut: Facture

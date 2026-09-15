@@ -334,12 +334,19 @@ export default async function ClientJournalPage({
                         return b.amount - a.amount;
                       })[0] || op.entries[0];
 
+                    const isPayment = op.entries.some((e) => e.source === "PAIEMENT");
+                    const chequeFromDesc = primaryEntry.description.match(/Chèque N°\s*([A-Za-z0-9]+)/i)?.[1];
                     const mainRef =
+                      (isPayment && (primaryEntry.reference || chequeFromDesc)) ||
                       op.entries.find((e) => e.reference && e.reference.trim() !== "")?.reference ||
                       (op.document as any)?.originalName;
                     const docType = (op.document as any)?.type || (primaryEntry.document as any)?.type || "";
                     const docName = (op.document as any)?.originalName || (primaryEntry.document as any)?.originalName || "";
-                    const refLabel = getRefLabel(mainRef, docType, docName || primaryEntry.description);
+                    const refLabel = isPayment
+                      ? (primaryEntry.description.toLowerCase().includes("chèque") || primaryEntry.description.toLowerCase().includes("cheque") || (mainRef && /^\d{5,10}$/.test(mainRef))
+                          ? "Chèque N°"
+                          : "Règlement N°")
+                      : getRefLabel(mainRef, docType, docName || primaryEntry.description);
                     const rawEntity = primaryEntry.description.split("—")[1]?.trim();
                     const entityName = cleanEntityName(rawEntity);
                     const descBase = primaryEntry.description.split("—")[0].trim();
@@ -348,11 +355,9 @@ export default async function ClientJournalPage({
                     if (entityName && !opDesc.includes(entityName)) {
                       opDesc += ` chez ${entityName}`;
                     }
-
-                    debitRows.forEach((r) => (totalClientDebit += r.amount));
-                    creditRows.forEach((r) => (totalClientCredit += r.amount));
-
-                    const isPayment = op.entries.some((e) => e.source === "PAIEMENT");
+                    if (isPayment && mainRef && !opDesc.includes(mainRef)) {
+                      opDesc += ` - Chèque N° ${mainRef}`;
+                    }
 
                     return (
                       <tbody key={opIdx} className="border-b border-black text-black">
