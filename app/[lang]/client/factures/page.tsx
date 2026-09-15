@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import {
   Receipt, Clock, CheckCircle2, AlertCircle, XCircle,
   CreditCard, Loader2, Info, RotateCcw, ChevronDown, ChevronUp,
+  Search, Filter,
 } from "lucide-react";
 import { PaymentModal } from "./PaymentModal";
 
@@ -52,6 +53,8 @@ export default function ClientInvoicesPage() {
   const [loading, setLoading] = useState(true);
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [expandedHistory, setExpandedHistory] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<"ALL" | "UNPAID" | "PENDING" | "PAID" | "REJECTED" | "PARTIAL">("ALL");
+  const [search, setSearch] = useState("");
 
   async function loadInvoices() {
     setLoading(true);
@@ -187,6 +190,32 @@ export default function ClientInvoicesPage() {
     }
   }
 
+  // Filter invoices by status and search
+  const filteredInvoices = invoices.filter((invoice) => {
+    const { state } = getEffectiveState(invoice);
+    if (statusFilter !== "ALL" && state !== statusFilter) return false;
+    if (!search.trim()) return true;
+    const q = search.toLowerCase();
+    return (
+      invoice.invoiceNumber?.toLowerCase().includes(q) ||
+      invoice.description?.toLowerCase().includes(q) ||
+      String(invoice.amount).includes(q) ||
+      new Date(invoice.createdAt).toLocaleDateString(locale).includes(q)
+    );
+  });
+
+  const STATUS_TABS: { value: typeof statusFilter; label: string }[] = [
+    { value: "ALL", label: "Toutes" },
+    { value: "UNPAID", label: "Non payées" },
+    { value: "PENDING", label: "En attente" },
+    { value: "PAID", label: "Payées" },
+    { value: "PARTIAL", label: "Partielles" },
+    { value: "REJECTED", label: "Refusées" },
+  ];
+
+  const countByStatus = (s: typeof statusFilter) =>
+    invoices.filter((inv) => s === "ALL" || getEffectiveState(inv).state === s).length;
+
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto space-y-6 sm:space-y-8 w-full min-w-0">
       {/* Page Header */}
@@ -200,12 +229,58 @@ export default function ClientInvoicesPage() {
         </p>
       </div>
 
+      {/* Filters */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-4 flex flex-col sm:flex-row flex-wrap gap-3 items-start sm:items-center">
+        {/* Status tabs */}
+        <div className="flex flex-wrap gap-1 bg-slate-100 rounded-xl p-1">
+          {STATUS_TABS.map((tab) => (
+            <button
+              key={tab.value}
+              onClick={() => setStatusFilter(tab.value)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                statusFilter === tab.value
+                  ? "bg-white shadow-sm text-[#0f172a]"
+                  : "text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              {tab.label}
+              <span className={`ml-1.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                statusFilter === tab.value ? "bg-[#2d8f5e] text-white" : "bg-slate-200 text-slate-500"
+              }`}>
+                {countByStatus(tab.value)}
+              </span>
+            </button>
+          ))}
+        </div>
+
+        {/* Search */}
+        <div className="relative flex-1 min-w-[200px]">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Rechercher par N° facture, montant, date..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full pl-8 pr-3 py-2 text-xs border border-slate-200 rounded-xl bg-white focus:ring-2 focus:ring-[#2d8f5e]/30 focus:border-[#2d8f5e] focus:outline-none transition-all"
+          />
+        </div>
+      </div>
+
       {/* Main List */}
       <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden w-full">
         <div className="px-4 sm:px-6 py-4 border-b border-slate-100 flex items-center justify-between">
           <h2 className="font-semibold text-[#0f172a] text-sm">
-            Factures ({invoices.length})
+            Factures
+            <span className="ml-2 text-slate-400 font-normal text-xs">({filteredInvoices.length}{statusFilter !== "ALL" || search ? ` / ${invoices.length}` : ""})</span>
           </h2>
+          {(statusFilter !== "ALL" || search) && (
+            <button
+              onClick={() => { setStatusFilter("ALL"); setSearch(""); }}
+              className="text-xs text-slate-400 hover:text-slate-600 flex items-center gap-1 transition-colors"
+            >
+              <Filter size={12} /> Réinitialiser
+            </button>
+          )}
         </div>
 
         {loading ? (
@@ -217,9 +292,15 @@ export default function ClientInvoicesPage() {
             <Receipt size={32} className="mx-auto text-slate-300" />
             <p>Aucune facture enregistrée pour le moment.</p>
           </div>
+        ) : filteredInvoices.length === 0 ? (
+          <div className="p-12 text-center text-slate-400 text-sm space-y-2">
+            <Search size={32} className="mx-auto text-slate-300" />
+            <p className="font-medium text-slate-500">Aucun résultat</p>
+            <p className="text-xs">Modifiez les filtres ou la recherche</p>
+          </div>
         ) : (
           <div className="divide-y divide-slate-100">
-            {invoices.map((invoice) => {
+            {filteredInvoices.map((invoice) => {
               const { state, rejectionReason, lastDecl } = getEffectiveState(invoice);
               const allDecls = invoice.declarations || [];
               const hasHistory = allDecls.length > 1 || (allDecls.length === 1 && allDecls[0].status !== "PENDING_CONFIRMATION");

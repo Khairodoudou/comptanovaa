@@ -398,9 +398,20 @@ export function PaiementsClient({ companies, lang, locale, initialDeclarationId,
                       </span>
                     </td>
                     <td className="px-5 py-4">
-                      <span className="text-xs font-medium text-slate-600 bg-slate-100 px-2 py-0.5 rounded-lg">
-                        {decl.paymentMethod || "VIREMENT"}
-                      </span>
+                      <div className="flex flex-col gap-1 items-start">
+                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-lg ${
+                          decl.paymentMethod === "CHEQUE"
+                            ? "bg-amber-100 text-amber-800 border border-amber-200"
+                            : "bg-slate-100 text-slate-600"
+                        }`}>
+                          {decl.paymentMethod === "CHEQUE" ? "Chèque" : (decl.paymentMethod || "VIREMENT")}
+                        </span>
+                        {decl.reference && (
+                          <span className="font-mono text-[11px] font-bold text-slate-700 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200">
+                            {decl.paymentMethod === "CHEQUE" ? `N° ${decl.reference}` : decl.reference}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-5 py-4 text-xs text-slate-500">
                       {new Date(decl.createdAt).toLocaleDateString(locale, { day: "numeric", month: "short", year: "numeric" })}
@@ -476,10 +487,10 @@ export function PaiementsClient({ companies, lang, locale, initialDeclarationId,
                 <InfoRow icon={<Building2 size={14} />} label="Entreprise" value={selectedDecl.invoice.company.name} />
                 <InfoRow icon={<FileText size={14} />} label="N° Facture" value={selectedDecl.invoice.invoiceNumber ?? `Réf ${selectedDecl.invoice.id.slice(-6)}`} />
                 <InfoRow icon={<DollarSign size={14} />} label="Montant déclaré" value={`${fmt(selectedDecl.amount, locale)} DA`} highlight />
-                <InfoRow icon={<CreditCard size={14} />} label="Méthode" value={selectedDecl.paymentMethod || "VIREMENT"} />
-                <InfoRow icon={<Calendar size={14} />} label="Date paiement" value={selectedDecl.paymentDate ? new Date(selectedDecl.paymentDate).toLocaleDateString(locale) : "—"} />
+                <InfoRow icon={<CreditCard size={14} />} label="Méthode" value={selectedDecl.paymentMethod === "CHEQUE" ? "Chèque" : (selectedDecl.paymentMethod || "VIREMENT")} />
+                <InfoRow icon={<Calendar size={14} />} label={selectedDecl.paymentMethod === "CHEQUE" ? "Date du chèque" : "Date paiement"} value={selectedDecl.paymentDate ? new Date(selectedDecl.paymentDate).toLocaleDateString(locale) : "—"} />
                 {selectedDecl.reference && (
-                  <InfoRow icon={<FileText size={14} />} label="Référence" value={selectedDecl.reference} />
+                  <InfoRow icon={<FileText size={14} />} label={selectedDecl.paymentMethod === "CHEQUE" ? "N° de Chèque" : "Référence"} value={selectedDecl.reference} highlight />
                 )}
               </div>
 
@@ -755,6 +766,22 @@ export function PaiementsClient({ companies, lang, locale, initialDeclarationId,
                   Êtes-vous sûr de vouloir confirmer ce paiement de{" "}
                   <strong>{fmt(selectedDecl.amount, locale)} DA</strong> ?
                 </p>
+                {selectedDecl.reference && (
+                  <div className="bg-emerald-50/60 border border-emerald-200 rounded-xl p-3 text-xs text-emerald-900 space-y-1">
+                    <p className="font-semibold flex items-center gap-1.5">
+                      <CheckCircle2 size={13} className="text-emerald-600" />
+                      {selectedDecl.paymentMethod === "CHEQUE" ? "Chèque bancaire identifié" : "Référence de paiement"}
+                    </p>
+                    <p className="font-mono font-bold text-sm text-[#0f172a]">
+                      {selectedDecl.paymentMethod === "CHEQUE" ? `N° ${selectedDecl.reference}` : selectedDecl.reference}
+                    </p>
+                    {selectedDecl.paymentDate && (
+                      <p className="text-[11px] text-slate-600">
+                        Date de valeur / chèque : {new Date(selectedDecl.paymentDate).toLocaleDateString(locale)}
+                      </p>
+                    )}
+                  </div>
+                )}
                 <p className="text-xs text-slate-500">
                   Une écriture comptable (Débit 512 / Crédit 411) sera créée automatiquement et le client sera notifié.
                 </p>

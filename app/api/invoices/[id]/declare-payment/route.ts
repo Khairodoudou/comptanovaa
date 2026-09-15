@@ -6,6 +6,7 @@
 import { getCurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { NextRequest } from "next/server";
+import { runOcr } from "@/lib/ocr/professional-ocr";
 
 const ALLOWED_METHODS = ["VIREMENT", "CIB", "EDAHABIA", "CHEQUE", "ESPECES"];
 
@@ -66,7 +67,7 @@ export async function POST(
     const reference = formData.get("reference") as string | null;
     const paymentDateStr = formData.get("paymentDate") as string | null;
     const amountStr = formData.get("amount") as string | null;
-    const paymentMethod = (formData.get("paymentMethod") as string | null) || "VIREMENT";
+    let paymentMethod = (formData.get("paymentMethod") as string | null) || "VIREMENT";
     const justificatifFile = formData.get("justificatif") as File | null;
 
     if (!amountStr) {
@@ -87,26 +88,65 @@ export async function POST(
     }
 
     let justificatifPath: string | null = null;
+    let extractedChequeNumber: string | null = null;
+    let extractedChequeDate: string | null = null;
+    let ocrNotes: string | null = null;
+
     if (justificatifFile && justificatifFile.size > 0) {
       try {
         const buffer = Buffer.from(await justificatifFile.arrayBuffer());
         const mime = justificatifFile.type || (justificatifFile.name.endsWith(".pdf") ? "application/pdf" : "image/jpeg");
         justificatifPath = `data:${mime};base64,${buffer.toString("base64")}`;
+
+        // Run OCR analysis on the uploaded payment receipt / cheque
+        try {
+          const ocrRes = await runOcr(buffer, justificatifFile.name, mime, invoice.company.name);
+          if (ocrRes.extracted.chequeNumber) {
+            extractedChequeNumber = ocrRes.extracted.chequeNumber;
+          }
+          if (ocrRes.extracted.chequeDate) {
+            extractedChequeDate = ocrRes.extracted.chequeDate;
+          }
+          ocrNotes = JSON.stringify({
+            chequeNumber: extractedChequeNumber,
+            chequeDate: extractedChequeDate,
+            ocrMethod: ocrRes.method,
+            confidence: ocrRes.tesseractConfidence,
+          });
+        } catch (ocrErr) {
+          console.warn("[declare-payment] OCR extraction warning:", ocrErr);
+        }
       } catch (fsErr) {
         console.warn("Base64 conversion failed:", fsErr);
         justificatifPath = justificatifFile.name;
       }
     }
 
+    // Determine final reference and paymentDate
+    const finalReference = extractedChequeNumber || reference || null;
+
+    let finalPaymentDate: Date | null = null;
+    if (extractedChequeDate) {
+      finalPaymentDate = new Date(extractedChequeDate);
+    } else if (paymentDateStr) {
+      finalPaymentDate = new Date(paymentDateStr);
+    }
+
+    // Auto-switch to CHEQUE if a cheque number was recognized and method was left as VIREMENT
+    if (extractedChequeNumber && paymentMethod.toUpperCase() === "VIREMENT") {
+      paymentMethod = "CHEQUE";
+    }
+
     const declaration = await (db as any).paymentDeclaration.create({
       data: {
         invoiceId: id,
-        reference: reference || null,
-        paymentDate: paymentDateStr ? new Date(paymentDateStr) : null,
+        reference: finalReference,
+        paymentDate: finalPaymentDate,
         amount,
         paymentMethod: paymentMethod.toUpperCase(),
         justificatif: justificatifPath,
         status: "PENDING_CONFIRMATION",
+        notes: ocrNotes,
         declaredById: user.userId,
       },
     });
@@ -122,24 +162,36 @@ export async function POST(
         entityType: "PaymentDeclaration",
         entityId: declaration.id,
         oldValue: JSON.stringify({ invoiceStatus: invoice.status }),
-        newValue: JSON.stringify({ status: "PENDING_CONFIRMATION", amount, paymentMethod, reference }),
+        newValue: JSON.stringify({
+          status: "PENDING_CONFIRMATION",
+          amount,
+          paymentMethod: paymentMethod.toUpperCase(),
+          reference: finalReference,
+          chequeDate: extractedChequeDate,
+        }),
         userId: user.userId,
         companyId: invoice.company.id,
       },
     });
 
     if (invoice.company.comptableId) {
+      const chqMention = extractedChequeNumber ? ` (Chèque N° ${extractedChequeNumber})` : "";
       await db.notification.create({
         data: {
           userId: invoice.company.comptableId,
           type: "payment",
-          message: `Nouveau paiement déclaré par ${invoice.company.client.name} pour la facture ${invoice.invoiceNumber ?? id} (${amount.toLocaleString("fr-FR")} DA)`,
+          message: `Nouveau paiement déclaré par ${invoice.company.client.name} pour la facture ${invoice.invoiceNumber ?? id}${chqMention} (${amount.toLocaleString("fr-FR")} DA)`,
           link: `/comptable/paiements?id=${declaration.id}`,
         },
       });
     }
 
-    return Response.json({ declaration, message: "Paiement déclaré avec succès" }, { status: 201 });
+    return Response.json({
+      declaration,
+      extractedChequeNumber,
+      extractedChequeDate,
+      message: "Paiement déclaré avec succès",
+    }, { status: 201 });
   } catch (e: any) {
     console.error("declare-payment error:", e);
     return Response.json({ error: e.message || "Erreur de déclaration" }, { status: 500 });

@@ -102,6 +102,31 @@ Date : 10/06/2024`,
     expected: { date: "2024-06-10", amount: 35000, type: "CHEQUE" },
   },
   {
+    name: "Chèque Algérien BADR avec N° et date",
+    filename: "cheque_badr.jpg",
+    text: `Banque de l'Agriculture et du Développement Rural
+BADR Banque
+CHÈQUE N° 7699290
+Payez contre ce chèque non endossable
+la somme de soixante-quatre mille dinars
+A l'ordre de : SARL khairo informatique
+# 64 000,00 DA #
+Fait à Alger, le 15/09/2026
+!7699290! 00030 00120 0123456789 22`,
+    expected: { date: "2026-09-15", amount: 64000, type: "CHEQUE", chequeNumber: "7699290" },
+  },
+  {
+    name: "Chèque Algérien BNA avec CMC7",
+    filename: "cheque_bna.pdf",
+    text: `BANQUE NATIONALE D'ALGERIE
+N° 0541289
+Payez à l'ordre de SARL DISTRIB
+Montant : 120 000 DA
+Alger le 20/09/2026
+0541289 00010 00050 9876543210 11`,
+    expected: { date: "2026-09-20", amount: 120000, type: "CHEQUE", chequeNumber: "0541289" },
+  },
+  {
     name: "OCR bruité (Tesseract output)",
     filename: "scan_facture.jpg",
     text: `FACTUR E
@@ -135,11 +160,12 @@ for (const test of TESTS) {
   const exp = test.expected;
 
   const checks = {
-    date:     exp.date     ? result.date     === exp.date                             : null,
-    amount:   exp.amount   ? result.amount   === exp.amount                           : null,
-    supplier: exp.supplier ? result.supplier?.toLowerCase().includes(exp.supplier.toLowerCase().split(" ")[0]) : null,
-    invoice:  (exp as { invoice?: string }).invoice   ? result.invoiceNumber?.includes((exp as { invoice?: string }).invoice ?? "") : null,
-    type:     exp.type     ? result.documentType === exp.type                         : null,
+    date:         exp.date     ? result.date     === exp.date                             : null,
+    amount:       exp.amount   ? result.amount   === exp.amount                           : null,
+    supplier:     exp.supplier ? result.supplier?.toLowerCase().includes(exp.supplier.toLowerCase().split(" ")[0]) : null,
+    invoice:      (exp as { invoice?: string }).invoice   ? result.invoiceNumber?.includes((exp as { invoice?: string }).invoice ?? "") : null,
+    chequeNumber: (exp as { chequeNumber?: string }).chequeNumber ? result.chequeNumber === (exp as { chequeNumber?: string }).chequeNumber : null,
+    type:         exp.type     ? result.documentType === exp.type                         : null,
   };
 
   const allPass = Object.values(checks).every((v) => v !== false);
@@ -149,6 +175,7 @@ for (const test of TESTS) {
   console.log(`${DIM}  filename: ${test.filename}${RESET}`);
   console.log(`  ${CYAN}Type:${RESET}     ${result.documentType} ${checks.type === false ? RED + "✗ expected: " + exp.type + RESET : checks.type ? GREEN + "✓" + RESET : DIM + "(not checked)" + RESET}`);
   console.log(`  ${CYAN}Date:${RESET}     ${result.date ?? DIM + "null" + RESET} ${checks.date === false ? RED + "✗ expected: " + exp.date + RESET : checks.date ? GREEN + "✓" + RESET : DIM + "(not checked)" + RESET}`);
+  console.log(`  ${CYAN}Chq N°:${RESET}   ${result.chequeNumber ?? DIM + "null" + RESET} ${checks.chequeNumber === false ? RED + "✗ expected: " + (exp as any).chequeNumber + RESET : checks.chequeNumber ? GREEN + "✓" + RESET : DIM + "(not checked)" + RESET}`);
   console.log(`  ${CYAN}Montant:${RESET}  ${result.amount ?? DIM + "null" + RESET} ${checks.amount === false ? RED + "✗ expected: " + exp.amount + RESET : checks.amount ? GREEN + "✓" + RESET : DIM + "(not checked)" + RESET}`);
   console.log(`  ${CYAN}Fourn.:${RESET}   ${result.supplier ?? DIM + "null" + RESET} ${checks.supplier === false ? RED + "✗ expected: " + exp.supplier + RESET : checks.supplier ? GREEN + "✓" + RESET : DIM + "(not checked)" + RESET}`);
   console.log(`  ${CYAN}N° Fact:${RESET}  ${result.invoiceNumber ?? DIM + "null" + RESET} ${checks.invoice === false ? RED + "✗ expected: " + (exp as {invoice?:string}).invoice + RESET : checks.invoice ? GREEN + "✓" + RESET : DIM + "(not checked)" + RESET}`);

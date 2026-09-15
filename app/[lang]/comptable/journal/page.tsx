@@ -396,17 +396,20 @@ export default async function ComptableJournalPage({
                       const entityName = cleanEntityName(rawEntity);
                       const descBase = primaryEntry.description.split("—")[0].trim();
 
+                      const isPayment = op.entries.some((e) => e.source === "PAIEMENT");
+                      const hasDoc = !!op.document || op.entries.some((e) => !!e.documentId);
+                      const isManualOnly = !hasDoc && !isPayment && op.entries.every((e) => e.source === "MANUAL");
+
                       let opDesc = descBase;
                       if (entityName && !opDesc.includes(entityName)) {
                         opDesc += ` chez ${entityName}`;
                       }
+                      if (isPayment && mainRef && !opDesc.includes(mainRef)) {
+                        opDesc += ` - Chèque N° ${mainRef}`;
+                      }
 
                       debitRows.forEach((r) => (totalClientDebit += r.amount));
                       creditRows.forEach((r) => (totalClientCredit += r.amount));
-
-                      const isPayment = op.entries.some((e) => e.source === "PAIEMENT");
-                      const hasDoc = !!op.document || op.entries.some((e) => !!e.documentId);
-                      const isManualOnly = !hasDoc && !isPayment && op.entries.every((e) => e.source === "MANUAL");
 
                       return (
                         <tbody key={opIdx} className="border-b border-black text-black">

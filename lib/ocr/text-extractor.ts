@@ -5,6 +5,7 @@
 
 export interface ExtractedData {
   date: string | null;
+  chequeDate: string | null;
   amount: number | null;
   amountHT: number | null;
   amountTVA: number | null;
@@ -360,13 +361,21 @@ function parseInvoiceNumber(text: string): string | null {
 }
 
 const CHEQUE_LABEL_PATTERNS: RegExp[] = [
-  /CH[A-ZÈEÊa-zèeê\.6]{1,3}QUE\s*[N°NnOo°\.\s]*:?\s*([A-Z0-9][A-Z0-9\-\/\.]{0,19})/gi,
-  /[N°NnOo°\.]{1,3}\s*[°\s]*CH[A-ZÈEÊa-zèeê\.6]{1,3}QUE\s*:?\s*([A-Z0-9][A-Z0-9\-\/\.]{0,19})/gi,
-  /NUM[EÉ]RO\s*(?:DE\s*)?CH[A-Za-z\.6]{1,3}QUE\s*:?\s*([A-Z0-9][A-Z0-9\-\/\.]{0,19})/gi,
-  /ORDRE\s*(?:DE\s*)?PAIEMENT\s*[N°NnOo°\.\s]*:?\s*([A-Z0-9][A-Z0-9\-\/\.]{0,19})/gi,
-  /VIREMENT\s*(?:CH[A-Za-z]{1,3}QUE\s*)?[N°NnOo°\.\s]*:?\s*([A-Z0-9][A-Z0-9\-\/\.]{0,19})/gi,
-  /(?:شيك\s*رقم|رقم\s*الشيك|شيك)\s*:?\s*([A-Z0-9][A-Z0-9\-\/\.]{0,19})/g,
-  /(?:شيك\s*رقم|رقم\s*الشيك)\s*:?\s*([\u0660-\u0669]{4,12})/g,
+  /CH[A-ZÈEÊa-zèeê\.6]{1,3}QUE\s*(?:N[°ºoO]?\.?|NUM[EÉ]RO|#|:)\s*[:#\s]*([A-Z0-9\-\/]{3,20})/gi,
+  /[N°NnOo°\.]{1,3}\s*[°\s]*CH[A-ZÈEÊa-zèeê\.6]{1,3}QUE\s*[:#\s]*([A-Z0-9\-\/]{3,20})/gi,
+  /NUM[EÉ]RO\s*(?:DE\s*)?CH[A-Za-z\.6]{1,3}QUE\s*[:#\s]*([A-Z0-9\-\/]{3,20})/gi,
+  /CH[A-ZÈEÊa-zèeê\.6]{1,3}QUE\s+([0-9]{5,12})/gi,
+  /ORDRE\s*(?:DE\s*)?PAIEMENT\s*N[°ºoO]?\.?\s*[:#\s]*([A-Z0-9\-\/]{3,20})/gi,
+  /(?:شيك\s*رقم|رقم\s*الشيك)\s*[:#\s]*([A-Z0-9\-\/]{3,20})/gi,
+  /(?:شيك\s*رقم|رقم\s*الشيك)\s*[:#\s]*([\u0660-\u0669]{4,12})/g,
+];
+
+// Algerian CMC7 / MICR line patterns and 7-digit cheque series
+const CHEQUE_CMC7_PATTERNS: RegExp[] = [
+  /[!|:;⑈](\d{7})[!|:;⑈]/,
+  /\b(\d{7})\b(?:\s+\d{5}){2,}/,
+  /\bN[°ºoO]?\.?\s*[:#]?\s*(\d{7})\b/i,
+  /S[ée]rie\s*[A-Z0-9]*\s*N[°º]?\s*[:\s]*([0-9]{6,8})/i,
 ];
 
 function normalizeArabicIndic(s: string): string {
@@ -382,13 +391,33 @@ function cleanChequeCandidate(raw: string): string {
 }
 
 function isValidChequeNumber(candidate: string): boolean {
-  if (!candidate || candidate.length < 3) return false;
-  if (/^\d{2}[\/\-]\d{2}[\/\-]\d{4}$/.test(candidate)) return false;
-  if (/^\d{4}[\/\-]\d{2}[\/\-]\d{2}$/.test(candidate)) return false;
+  if (!candidate || candidate.length < 3 || candidate.length > 20) return false;
+  // Must contain at least one digit
+  if (!/\d/.test(candidate)) return false;
+  // Disallow pure dates
+  if (/^\d{2}[\/\-\.]\d{2}[\/\-\.]\d{2,4}$/.test(candidate)) return false;
+  if (/^\d{4}[\/\-\.]\d{2}[\/\-\.]\d{2}$/.test(candidate)) return false;
+  // Disallow common words that might follow "Chèque" or "Virement"
+  if (/^(BANCAIRE|POSTAL|VIREMENT|FOURNISSEUR|CLIENT|FACTURE|TTC|TOTAL|MONTANT|CHEQUE|CHÈQUE)$/i.test(candidate)) {
+    return false;
+  }
   return true;
 }
 
-function parseChequeNumber(text: string): string | null {
+export function parseChequeNumber(text: string): string | null {
+  // 1. Check CMC7 / 7-digit Algerian cheque patterns first
+  for (const pattern of CHEQUE_CMC7_PATTERNS) {
+    const m = text.match(pattern);
+    if (m?.[1]) {
+      const candidate = cleanChequeCandidate(m[1]);
+      if (isValidChequeNumber(candidate)) {
+        console.log(`[parseChequeNumber] CMC7/7-digit match: "${m[0]}" → "${candidate}"`);
+        return candidate;
+      }
+    }
+  }
+
+  // 2. Explicit label patterns
   for (const pattern of CHEQUE_LABEL_PATTERNS) {
     const regex = new RegExp(pattern.source, pattern.flags);
     let m: RegExpExecArray | null;
@@ -403,6 +432,8 @@ function parseChequeNumber(text: string): string | null {
       }
     }
   }
+
+  // 3. CHQ codes
   const chqPattern = /\bCHQ[-\/]?([A-Z0-9]{2,20})\b/gi;
   let m: RegExpExecArray | null;
   while ((m = chqPattern.exec(text)) !== null) {
@@ -412,6 +443,8 @@ function parseChequeNumber(text: string): string | null {
       return candidate;
     }
   }
+
+  // 4. Digits near cheque keywords
   const chequeKeywordRe = /CH[A-Za-z\.6]{1,3}QUE|شيك/gi;
   let kw: RegExpExecArray | null;
   while ((kw = chequeKeywordRe.exec(text)) !== null) {
@@ -428,8 +461,27 @@ function parseChequeNumber(text: string): string | null {
       }
     }
   }
+
   console.log("[parseChequeNumber] No cheque number found.");
   return null;
+}
+
+export function parseChequeDate(text: string): string | null {
+  const CHEQUE_DATE_CONTEXT_PATTERNS = [
+    /(?:fait\s+[aà]\s+[A-Za-zÀ-ÿ\s\-]+,?\s*(?:le)?|le|en\s+date\s+du|date\s*:\s*|حرر\s+ب?[^\n,]+في|بتاريخ|في)\s*[:\s]*(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})/i,
+    /(?:fait\s+[aà]\s+[A-Za-zÀ-ÿ\s\-]+,?\s*(?:le)?|le)\s*[:\s]*(\d{1,2}\s+(?:janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre)\s+\d{4})/i,
+    /(?:حرر\s+في|بتاريخ|في)\s*[:\s]*(\d{1,2}\s+(?:يناير|فبراير|مارس|أبريل|مايو|يونيو|يوليو|أغسطس|سبتمبر|أكتوبر|نوفمبر|ديسمبر)\s+\d{4})/i,
+  ];
+
+  for (const pattern of CHEQUE_DATE_CONTEXT_PATTERNS) {
+    const m = text.match(pattern);
+    if (m && m[1]) {
+      const parsed = parseDate(m[1]);
+      if (parsed) return parsed;
+    }
+  }
+
+  return parseDate(text);
 }
 
 const TYPE_KEYWORDS: Array<{ type: DocumentType; keywords: string[] }> = [
@@ -530,17 +582,18 @@ export function extractDocumentData(
   companyName: string = ""
 ): ExtractedData {
   const date = parseDate(rawText);
+  const chequeDate = parseChequeDate(rawText) || date;
   const amount = parseAmount(rawText);
   const supplier = parseSupplier(rawText, companyName);
   const invoiceNumber = parseInvoiceNumber(rawText);
   const chequeNumber = parseChequeNumber(rawText);
   let documentType = detectDocumentType(rawText, filename, companyName);
 
-  if (documentType === "AUTRE") {
-    if (invoiceNumber) {
-      documentType = "FACTURE_CLIENT";
-    } else if (chequeNumber) {
+  if (documentType === "AUTRE" || (documentType === "FACTURE_FOURNISSEUR" && chequeNumber)) {
+    if (chequeNumber) {
       documentType = "CHEQUE";
+    } else if (invoiceNumber) {
+      documentType = "FACTURE_CLIENT";
     }
   }
 
@@ -560,6 +613,7 @@ export function extractDocumentData(
 
   const rawMatches: Record<string, string> = {};
   if (date) rawMatches.date = date;
+  if (chequeDate) rawMatches.chequeDate = chequeDate;
   if (amount) rawMatches.amount = String(amount);
   if (amountHT) rawMatches.amountHT = String(amountHT);
   if (amountTVA) rawMatches.amountTVA = String(amountTVA);
@@ -568,7 +622,7 @@ export function extractDocumentData(
   if (chequeNumber) rawMatches.chequeNumber = chequeNumber;
 
   const partial = {
-    date, amount, amountHT, amountTVA,
+    date, chequeDate, amount, amountHT, amountTVA,
     supplier, invoiceNumber, chequeNumber,
     documentType, rawMatches,
   };

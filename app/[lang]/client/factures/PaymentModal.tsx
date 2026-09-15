@@ -40,11 +40,47 @@ export function PaymentModal({ invoice, locale, onClose, onSuccess }: Props) {
   const [amount, setAmount] = useState(invoice.remaining.toString());
   const [paymentMethod, setPaymentMethod] = useState("VIREMENT");
   const [justificatif, setJustificatif] = useState<File | null>(null);
+  const [analyzingOcr, setAnalyzingOcr] = useState(false);
+  const [detectedCheque, setDetectedCheque] = useState<{ number: string; date?: string | null } | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
 
   const bank = invoice.company;
+
+  async function handleFileChange(file: File | null) {
+    setJustificatif(file);
+    setDetectedCheque(null);
+    if (!file) return;
+    setError(null);
+
+    // Run quick OCR check to assist client immediately
+    setAnalyzingOcr(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/ocr/process", {
+        method: "POST",
+        body: fd,
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const chqNum = data.extracted?.chequeNumber;
+        const chqDate = data.extracted?.chequeDate || data.extracted?.date;
+        if (chqNum) {
+          setDetectedCheque({ number: chqNum, date: chqDate });
+          setPaymentMethod("CHEQUE");
+          if (chqDate) {
+            setPaymentDate(chqDate);
+          }
+        }
+      }
+    } catch {
+      // Non-blocking: server will also process OCR upon submission
+    } finally {
+      setAnalyzingOcr(false);
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -225,17 +261,43 @@ export function PaymentModal({ invoice, locale, onClose, onSuccess }: Props) {
                       accept=".pdf,.png,.jpg,.jpeg"
                       className="hidden"
                       onChange={(e) => {
-                        setJustificatif(e.target.files?.[0] ?? null);
-                        if (e.target.files?.[0]) setError(null);
+                        handleFileChange(e.target.files?.[0] ?? null);
                       }}
                     />
                   </label>
                   {justificatif && (
-                    <button type="button" onClick={() => setJustificatif(null)} className="text-xs text-red-500 hover:underline">
+                    <button
+                      type="button"
+                      onClick={() => handleFileChange(null)}
+                      className="text-xs text-red-500 hover:underline"
+                    >
                       Supprimer
                     </button>
                   )}
                 </div>
+
+                {analyzingOcr && (
+                  <div className="flex items-center gap-1.5 text-[11px] text-[#2d8f5e] mt-2 animate-pulse">
+                    <Loader2 size={12} className="animate-spin" />
+                    <span>Analyse OCR du chèque en cours...</span>
+                  </div>
+                )}
+
+                {detectedCheque && (
+                  <div className="mt-2 p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 size={14} className="text-emerald-600 shrink-0" />
+                      <span>
+                        <strong>Chèque N° {detectedCheque.number}</strong>
+                        {detectedCheque.date ? ` du ${new Date(detectedCheque.date).toLocaleDateString(locale)}` : ""}{" "}
+                        détecté par OCR
+                      </span>
+                    </div>
+                    <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-semibold">
+                      Auto-rempli
+                    </span>
+                  </div>
+                )}
               </div>
 
               {error && (

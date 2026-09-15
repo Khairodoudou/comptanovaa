@@ -108,15 +108,20 @@ export async function POST(
           throw new Error("ALREADY_PROCESSED");
         }
 
+        // Determine cheque mention in description if available
+        const chequeRef = fresh.reference ? ` - Chèque N° ${fresh.reference}` : "";
+        const entryDesc = `Règlement client - Facture ${invoiceLabel}${chequeRef} — ${company.client.name}`;
+        const entryDate = fresh.paymentDate || now;
+
         // Step 1 — Create JournalEntry
         const entry = await tx.journalEntry.create({
           data: {
-            date: declaration.paymentDate || now,
-            description: `Règlement client - Facture ${invoiceLabel} - ${company.client.name}`,
+            date: entryDate,
+            description: entryDesc,
             debitAccount,
             creditAccount: "411",
-            amount: declaration.amount,
-            reference: declaration.reference || null,
+            amount: fresh.amount,
+            reference: fresh.reference || null,
             status: "VALIDATED",
             source: "PAIEMENT",
             journalType: "BANQUE",
@@ -136,12 +141,12 @@ export async function POST(
             versionType: "VALIDATION",
             debitAccount,
             creditAccount: "411",
-            amount: declaration.amount,
+            amount: fresh.amount,
             description: entry.description,
-            reference: declaration.reference || null,
+            reference: fresh.reference || null,
             createdById: user.userId,
             actorType: "USER",
-            reason: `Confirmation du paiement déclaré - méthode : ${declaration.paymentMethod || "VIREMENT"}`,
+            reason: `Confirmation du paiement déclaré - méthode : ${fresh.paymentMethod || "VIREMENT"}`,
           },
         });
 
