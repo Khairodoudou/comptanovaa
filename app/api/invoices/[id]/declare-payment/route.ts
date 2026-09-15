@@ -82,6 +82,10 @@ export async function POST(
       return Response.json({ error: "Méthode de paiement invalide" }, { status: 400 });
     }
 
+    if (!justificatifFile || justificatifFile.size === 0) {
+      return Response.json({ error: "Le justificatif de paiement est obligatoire" }, { status: 400 });
+    }
+
     let justificatifPath: string | null = null;
     if (justificatifFile && justificatifFile.size > 0) {
       try {

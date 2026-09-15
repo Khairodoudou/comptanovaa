@@ -36,7 +36,6 @@ const PAYMENT_METHODS = [
 ];
 
 export function PaymentModal({ invoice, locale, onClose, onSuccess }: Props) {
-  const [reference, setReference] = useState("");
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().slice(0, 10));
   const [amount, setAmount] = useState(invoice.remaining.toString());
   const [paymentMethod, setPaymentMethod] = useState("VIREMENT");
@@ -49,16 +48,19 @@ export function PaymentModal({ invoice, locale, onClose, onSuccess }: Props) {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!justificatif) {
+      setError("Le justificatif de paiement est obligatoire.");
+      return;
+    }
     setLoading(true);
     setError(null);
 
     try {
       const formData = new FormData();
-      if (reference) formData.append("reference", reference);
       formData.append("paymentDate", paymentDate);
       formData.append("amount", amount);
       formData.append("paymentMethod", paymentMethod);
-      if (justificatif) formData.append("justificatif", justificatif);
+      formData.append("justificatif", justificatif);
 
       const res = await fetch(`/api/invoices/${invoice.id}/declare-payment`, {
         method: "POST",
@@ -206,24 +208,15 @@ export function PaymentModal({ invoice, locale, onClose, onSuccess }: Props) {
 
               <div>
                 <label className="block text-xs font-medium text-slate-700 mb-1">
-                  N° de Référence / Transaction
-                </label>
-                <input
-                  type="text"
-                  placeholder="Ex: VIR-84920482 ou N° d'avis"
-                  value={reference}
-                  onChange={(e) => setReference(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm text-[#0f172a] focus:ring-2 focus:ring-[#2d8f5e] focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">
-                  Justificatif de paiement (PDF ou image)
+                  Justificatif de paiement (PDF ou image) <span className="text-red-500">*</span>
                 </label>
                 <div className="flex items-center gap-3">
-                  <label className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 border border-dashed border-slate-300 hover:border-[#2d8f5e] rounded-xl text-xs font-medium text-slate-600 cursor-pointer bg-slate-50/50 hover:bg-green-50/30 transition-all">
-                    <Upload size={15} className="text-[#2d8f5e]" />
+                  <label className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 border border-dashed rounded-xl text-xs font-medium cursor-pointer transition-all ${
+                    justificatif
+                      ? "border-[#2d8f5e] bg-green-50/30 text-[#2d8f5e]"
+                      : "border-slate-300 hover:border-[#2d8f5e] text-slate-600 bg-slate-50/50 hover:bg-green-50/30"
+                  }`}>
+                    <Upload size={15} className={justificatif ? "text-[#2d8f5e]" : "text-slate-400"} />
                     <span className="truncate">
                       {justificatif ? justificatif.name : "Joindre un reçu de paiement"}
                     </span>
@@ -231,7 +224,10 @@ export function PaymentModal({ invoice, locale, onClose, onSuccess }: Props) {
                       type="file"
                       accept=".pdf,.png,.jpg,.jpeg"
                       className="hidden"
-                      onChange={(e) => setJustificatif(e.target.files?.[0] ?? null)}
+                      onChange={(e) => {
+                        setJustificatif(e.target.files?.[0] ?? null);
+                        if (e.target.files?.[0]) setError(null);
+                      }}
                     />
                   </label>
                   {justificatif && (
