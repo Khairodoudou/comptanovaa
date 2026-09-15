@@ -35,6 +35,15 @@ const PAYMENT_METHODS = [
   { value: "ESPECES", label: "Espèces" },
 ];
 
+function cleanFileName(name: string): string {
+  try {
+    if (/[\u00C0-\u00FF]/.test(name)) {
+      return decodeURIComponent(escape(name));
+    }
+  } catch {}
+  return name;
+}
+
 export function PaymentModal({ invoice, locale, onClose, onSuccess }: Props) {
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().slice(0, 10));
   const [amount, setAmount] = useState(invoice.remaining.toString());
@@ -254,7 +263,7 @@ export function PaymentModal({ invoice, locale, onClose, onSuccess }: Props) {
                   }`}>
                     <Upload size={15} className={justificatif ? "text-[#2d8f5e]" : "text-slate-400"} />
                     <span className="truncate">
-                      {justificatif ? justificatif.name : "Joindre un reçu de paiement"}
+                      {justificatif ? cleanFileName(justificatif.name) : "Joindre un reçu de paiement"}
                     </span>
                     <input
                       type="file"

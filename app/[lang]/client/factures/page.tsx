@@ -14,6 +14,8 @@ interface Declaration {
   reference?: string | null;
   amount: number;
   paymentMethod?: string | null;
+  paymentDate?: string | null;
+  notes?: string | null;
   status: string;
   rejectionReason?: string | null;
   refusalReason?: string | null;
@@ -345,7 +347,7 @@ export default function ClientInvoicesPage() {
                       {/* Pending confirmation info */}
                       {state === "PENDING" && lastDecl && (
                         <div className="mt-2 p-2.5 bg-amber-50 border border-amber-100 rounded-xl text-xs text-amber-700">
-                          ⏳ Paiement déclaré le {new Date(lastDecl.createdAt).toLocaleDateString(locale)} — en attente de confirmation par votre comptable
+                          ⏳ Paiement déclaré le {new Date(lastDecl.paymentDate || lastDecl.createdAt).toLocaleDateString(locale)} — en attente de confirmation par votre comptable
                         </div>
                       )}
                     </div>
@@ -382,13 +384,17 @@ export default function ClientInvoicesPage() {
                                 </span>
                                 {" — "}
                                 {d.amount.toLocaleString(locale, { minimumFractionDigits: 2 })} DA
-                                {d.paymentMethod && <span className="ml-1.5 opacity-70">({d.paymentMethod})</span>}
+                                {d.paymentMethod && (
+                                  <span className="ml-1.5 opacity-80 font-medium">
+                                    ({d.paymentMethod === "CHEQUE" ? (d.reference ? `Chèque N° ${d.reference}` : "Chèque") : d.paymentMethod})
+                                  </span>
+                                )}
                                 {(d.rejectionReason || d.refusalReason) && (
                                   <p className="text-rose-600 mt-0.5">Motif : {d.rejectionReason || d.refusalReason}</p>
                                 )}
                               </div>
                               <span className="text-slate-400 shrink-0">
-                                {new Date(d.createdAt).toLocaleDateString(locale)}
+                                {new Date(d.paymentDate || d.createdAt).toLocaleDateString(locale)}
                               </span>
                             </div>
                           ))}
