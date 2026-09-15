@@ -108,10 +108,32 @@ export async function POST(
           throw new Error("ALREADY_PROCESSED");
         }
 
-        // Determine cheque mention in description if available
-        const chequeRef = fresh.reference ? ` - Chèque N° ${fresh.reference}` : "";
-        const entryDesc = `Règlement client - Facture ${invoiceLabel}${chequeRef} — ${company.client.name}`;
-        const entryDate = fresh.paymentDate || now;
+        // Resolve cheque number and cheque date:
+        // Priority: DB columns (reference / paymentDate) → notes JSON (OCR) → fallback
+        let chequeNumber: string | null = fresh.reference || null;
+        let chequeDate: Date | null = fresh.paymentDate ? new Date(fresh.paymentDate) : null;
+
+        if (fresh.notes) {
+          try {
+            const parsedNotes = JSON.parse(fresh.notes as string);
+            if (!chequeNumber && parsedNotes.chequeNumber) {
+              chequeNumber = parsedNotes.chequeNumber;
+            }
+            if (!chequeDate && parsedNotes.chequeDate) {
+              const d = new Date(parsedNotes.chequeDate);
+              if (!isNaN(d.getTime())) chequeDate = d;
+            }
+          } catch {
+            // notes is not JSON — ignore
+          }
+        }
+
+        const chequeRef = chequeNumber
+          ? ` - Chèque N° ${chequeNumber}`
+          : "";
+        const entryDesc = `Règlement client - Facture ${invoiceLabel} - ${company.client.name}${chequeRef}`;
+        // Use cheque date when available; fall back to declared payment date, then now
+        const entryDate = chequeDate || (fresh.paymentDate ? new Date(fresh.paymentDate) : now);
 
         // Step 1 — Create JournalEntry
         const entry = await tx.journalEntry.create({
@@ -121,7 +143,7 @@ export async function POST(
             debitAccount,
             creditAccount: "411",
             amount: fresh.amount,
-            reference: fresh.reference || null,
+            reference: chequeNumber || null,
             status: "VALIDATED",
             source: "PAIEMENT",
             journalType: "BANQUE",
@@ -143,7 +165,7 @@ export async function POST(
             creditAccount: "411",
             amount: fresh.amount,
             description: entry.description,
-            reference: fresh.reference || null,
+            reference: chequeNumber || null,
             createdById: user.userId,
             actorType: "USER",
             reason: `Confirmation du paiement déclaré - méthode : ${fresh.paymentMethod || "VIREMENT"}`,
