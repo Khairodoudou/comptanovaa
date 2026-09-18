@@ -206,3 +206,102 @@ export async function PATCH(
 
   return NextResponse.json({ success: true, entry: result });
 }
+
+/**
+ * DELETE /api/comptable/entries/[id]?ids=id1,id2,id3
+ * Supprime toutes les écritures d'une opération (par liste d'IDs).
+ * Vérifie que chaque écriture appartient bien au comptable connecté.
+ */
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const user = await getCurrentUser();
+  if (!user || user.role !== "COMPTABLE") {
+    return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
+  }
+
+  // ids=id1,id2,id3  (au moins l'id principal doit être présent)
+  const { searchParams } = req.nextUrl;
+  const rawIds = searchParams.get("ids");
+  const { id } = await params;
+  const idsToDelete = rawIds ? rawIds.split(",").map((s) => s.trim()).filter(Boolean) : [id];
+
+  if (idsToDelete.length === 0) {
+    return NextResponse.json({ error: "Aucun identifiant fourni" }, { status: 400 });
+  }
+
+  // Récupère toutes les entrées à supprimer
+  const entries = await db.journalEntry.findMany({
+    where: { id: { in: idsToDelete } },
+    include: {
+      company: true,
+      document: { include: { company: true } },
+    },
+  });
+
+  if (entries.length === 0) {
+    return NextResponse.json({ error: "Aucune écriture trouvée" }, { status: 404 });
+  }
+
+  // Vérifie que toutes les entrées appartiennent à ce comptable
+  for (const entry of entries) {
+    const targetCompany = entry.company || entry.document?.company;
+    if (!targetCompany || targetCompany.comptableId !== user.userId) {
+      return NextResponse.json(
+        { error: "Accès non autorisé à une ou plusieurs écritures" },
+        { status: 403 }
+      );
+    }
+  }
+
+  const firstEntry = entries[0];
+  const targetCompanyId =
+    firstEntry.companyId || firstEntry.document?.companyId || "";
+
+  // Suppression dans une transaction
+  await db.$transaction(async (tx) => {
+    // Supprimer les liaisons ReconciliationMatch
+    await tx.reconciliationMatch.deleteMany({
+      where: { journalEntryId: { in: idsToDelete } },
+    });
+
+    // Supprimer les versions
+    await tx.journalEntryVersion.deleteMany({
+      where: { journalEntryId: { in: idsToDelete } },
+    });
+
+    // Supprimer les PaymentDeclaration qui référencent ces entrées
+    await tx.paymentDeclaration.updateMany({
+      where: { accountingEntryId: { in: idsToDelete } },
+      data: { accountingEntryId: null },
+    });
+
+    // Dissocier les BankTransactions liées
+    await tx.bankTransaction.updateMany({
+      where: { journalEntryId: { in: idsToDelete } },
+      data: { journalEntryId: null },
+    });
+
+    // Supprimer les écritures
+    await tx.journalEntry.deleteMany({
+      where: { id: { in: idsToDelete } },
+    });
+
+    // Journal d'audit
+    await tx.auditLog.create({
+      data: {
+        action: "JOURNAL_ENTRY_DELETED",
+        entityType: "JournalEntry",
+        entityId: idsToDelete.join(","),
+        companyId: targetCompanyId,
+        userId: user.userId,
+        oldValue: JSON.stringify({ ids: idsToDelete, count: idsToDelete.length }),
+        newValue: null,
+        comment: `Suppression de ${idsToDelete.length} écriture(s) comptable(s) par le comptable`,
+      },
+    });
+  });
+
+  return NextResponse.json({ success: true, deleted: idsToDelete.length });
+}

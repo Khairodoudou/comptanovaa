@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { JournalFilters } from "./JournalFilters";
 import { NewEntryModal } from "./NewEntryModal";
+import { DeleteOperationButton } from "./DeleteOperationButton";
 import type { Prisma } from "@prisma/client";
 import { getDictionary } from "@/get-dictionary";
 import type { Locale } from "@/i18n-config";
@@ -307,7 +308,7 @@ export default async function ComptableJournalPage({
                 </div>
 
                 <div className="p-6 overflow-x-auto">
-                  <table className="w-full text-xs border-collapse border border-black min-w-[800px]">
+                  <table className="w-full text-xs border-collapse border border-black min-w-[860px]">
                     <thead className="border-b border-black bg-slate-100 font-bold">
                       <tr>
                         <th className="py-2.5 px-3 text-center font-bold text-black border-r border-black w-14">
@@ -322,8 +323,11 @@ export default async function ComptableJournalPage({
                         <th className="py-2.5 px-3 text-center font-bold text-black border-r border-black w-32">
                           Débit
                         </th>
-                        <th className="py-2.5 px-3 text-center font-bold text-black w-32">
+                        <th className="py-2.5 px-3 text-center font-bold text-black border-r border-black w-32">
                           Crédit
+                        </th>
+                        <th className="py-2.5 px-3 text-center font-bold text-black w-12">
+                          <span className="sr-only">Actions</span>
                         </th>
                       </tr>
                     </thead>
@@ -417,6 +421,8 @@ export default async function ComptableJournalPage({
                       debitRows.forEach((r) => (totalClientDebit += r.amount));
                       creditRows.forEach((r) => (totalClientCredit += r.amount));
 
+                      const opEntryIds = op.entries.map((e) => e.id);
+
                       return (
                         <tbody key={opIdx} className="border-b border-black text-black">
                           <tr>
@@ -451,7 +457,17 @@ export default async function ComptableJournalPage({
                               <div className="mt-0.5">{opDesc}</div>
                             </td>
                             <td className="py-1 px-3 border-r border-black"></td>
-                            <td className="py-1 px-3"></td>
+                            <td className="py-1 px-3 border-r border-black"></td>
+                            <td
+                              rowSpan={rowCount}
+                              className="py-2 px-2 text-center align-top border-l border-black"
+                            >
+                              <DeleteOperationButton
+                                entryIds={opEntryIds}
+                                operationLabel={opDesc}
+                                operationNumber={opIdx + 1}
+                              />
+                            </td>
                           </tr>
 
                           {debitRows.map((row, dIdx) => (
@@ -464,7 +480,7 @@ export default async function ComptableJournalPage({
                               <td className="py-1 px-3 text-right border-r border-black">
                                 {formatAmount(row.amount)}
                               </td>
-                              <td className="py-1 px-3"></td>
+                              <td className="py-1 px-3 border-r border-black"></td>
                             </tr>
                           ))}
 
@@ -476,7 +492,7 @@ export default async function ComptableJournalPage({
                               </td>
                               <td className="py-1 px-4 border-r border-black pl-8">{row.description}</td>
                               <td className="py-1 px-3 border-r border-black"></td>
-                              <td className="py-1 px-3 text-right">{formatAmount(row.amount)}</td>
+                              <td className="py-1 px-3 text-right border-r border-black">{formatAmount(row.amount)}</td>
                             </tr>
                           ))}
 
@@ -487,7 +503,7 @@ export default async function ComptableJournalPage({
                               {refLabel} {mainRef || "......."}
                             </td>
                             <td className="py-2 px-3 border-r border-black"></td>
-                            <td className="py-2 px-3"></td>
+                            <td className="py-2 px-3 border-r border-black"></td>
                           </tr>
                         </tbody>
                       );
@@ -500,7 +516,8 @@ export default async function ComptableJournalPage({
                         <td className="py-3 px-3 text-right font-bold border-r border-black">
                           {formatAmount(totalClientDebit)}
                         </td>
-                        <td className="py-3 px-3 text-right font-bold">{formatAmount(totalClientCredit)}</td>
+                        <td className="py-3 px-3 text-right font-bold border-r border-black">{formatAmount(totalClientCredit)}</td>
+                        <td className="py-3 px-3"></td>
                       </tr>
                     </tfoot>
                   </table>
