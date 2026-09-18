@@ -1,5 +1,5 @@
 import { isCsvMimeType } from "./image-preprocessing";
-import { extractDocumentData, type ExtractedData } from "./text-extractor";
+import { extractDocumentData, type ExtractedData, type CompanyContext } from "./text-extractor";
 
 export interface OcrResult {
   rawText: string;
@@ -60,7 +60,7 @@ export async function runOcr(
   buffer: Buffer,
   filename: string,
   mimeType: string,
-  companyName: string = ""
+  companyInput: string | CompanyContext = ""
 ): Promise<OcrResult> {
   const startMs = Date.now();
 
@@ -137,7 +137,7 @@ export async function runOcr(
     }
   }
 
-  const extracted = extractDocumentData(rawText, filename, companyName);
+  const extracted = extractDocumentData(rawText, filename, companyInput);
 
   return {
     rawText,

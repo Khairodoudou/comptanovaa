@@ -92,7 +92,14 @@ export async function POST(req: NextRequest) {
 
   if (!manualOverride) {
     try {
-      const fullResult = await runOcr(buffer, file.name, file.type, company.name);
+      const companyContext = {
+        name: company.name,
+        raisonSociale: company.raisonSociale,
+        nif: company.nif,
+        nrc: company.nrc,
+        regimeFiscal: company.regimeFiscal,
+      };
+      const fullResult = await runOcr(buffer, file.name, file.type, companyContext);
       extracted = fullResult.extracted as typeof extracted;
       ocrResult = {
         rawText:             fullResult.rawText,
@@ -134,10 +141,18 @@ export async function POST(req: NextRequest) {
   const date = extracted.date ?? new Date().toISOString().split("T")[0];
   const supplier = extracted.supplier ?? "Inconnu";
 
-  const computedHT  = Math.round((amountTTC / 1.19) * 100) / 100;
-  const computedTVA = Math.round((amountTTC - computedHT) * 100) / 100;
-  const htForEntries  = extracted.amountHT  ?? computedHT;
-  const tvaForEntries = extracted.amountTVA ?? computedTVA;
+  const isIfu = Boolean(
+    company.regimeFiscal &&
+      (company.regimeFiscal.toUpperCase().includes("FORFAIT") ||
+        company.regimeFiscal.toUpperCase().includes("IFU"))
+  );
+
+  const htForEntries = isIfu ? amountTTC : extracted.amountHT;
+  const tvaForEntries = isIfu ? 0 : extracted.amountTVA;
+  const computedHT = isIfu ? amountTTC : Math.round((amountTTC / 1.19) * 100) / 100;
+  const computedTVA = isIfu ? 0 : Math.round((amountTTC - computedHT) * 100) / 100;
+  const displayHT = htForEntries ?? computedHT;
+  const displayTVA = tvaForEntries ?? computedTVA;
   const refNumber: string | null = extracted.invoiceNumber ?? null;
 
   // ── Persist file to disk (public/uploads) ──────────────────────────────────
@@ -198,7 +213,17 @@ export async function POST(req: NextRequest) {
 
   // ── Generate PROPOSED journal entries + JournalEntryVersion (AI_PROPOSAL) ──
   const rawDesc = ocrResult.rawText !== "MANUAL_ENTRY" ? ocrResult.rawText : supplier;
-  const entrySpecs = generateEntries(docType, amountTTC, supplier, refNumber, rawDesc, subAccounts, htForEntries, tvaForEntries);
+  const entrySpecs = generateEntries(
+    docType,
+    amountTTC,
+    supplier,
+    refNumber,
+    rawDesc,
+    subAccounts,
+    htForEntries,
+    tvaForEntries,
+    company.regimeFiscal
+  );
 
   const journalEntries = await Promise.all(
     entrySpecs.map(async (spec) => {
@@ -291,10 +316,10 @@ export async function POST(req: NextRequest) {
       ocrResult: {
         date,
         amountTTC: amountTTC.toFixed(2),
-        amountHT:  htForEntries.toFixed(2),
-        amountTVA: tvaForEntries.toFixed(2),
+        amountHT:  displayHT.toFixed(2),
+        amountTVA: displayTVA.toFixed(2),
         htFromPDF: !!(extracted.amountHT),
-        tvaRate:   `${TVA_RATE * 100}%`,
+        tvaRate:   isIfu ? "0% (IFU)" : `${TVA_RATE * 100}%`,
         supplier,
         reference: refNumber ?? "",
         type: docType,

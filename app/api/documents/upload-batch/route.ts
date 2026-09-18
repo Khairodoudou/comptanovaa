@@ -58,6 +58,14 @@ export async function POST(req: NextRequest) {
   const input: BatchInput = {
     companyId,
     companyName: company.name,
+    companyContext: {
+      name: company.name,
+      raisonSociale: company.raisonSociale,
+      nif: company.nif,
+      nrc: company.nrc,
+      regimeFiscal: company.regimeFiscal,
+    },
+    regimeFiscal: company.regimeFiscal,
     subAccounts,
     documents: [
       { filename: file1.name, buffer: buffer1, mimeType: file1.type || "application/octet-stream" },

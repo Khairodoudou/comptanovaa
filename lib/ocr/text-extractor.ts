@@ -17,6 +17,14 @@ export interface ExtractedData {
   rawMatches: Record<string, string>;
 }
 
+export interface CompanyContext {
+  name: string;
+  raisonSociale?: string | null;
+  nif?: string | null;
+  nrc?: string | null;
+  regimeFiscal?: string | null;
+}
+
 export type DocumentType =
   | "FACTURE_FOURNISSEUR"
   | "FACTURE_CLIENT"
@@ -131,7 +139,7 @@ function parseHTAmount(text: string): number | null {
   return null;
 }
 
-// FIX 1: Enhanced amount normalization — handles 120.000,00 format
+// Enhanced amount normalization — handles European & Algerian formats
 function normalizeAmountStr(raw: string): number | null {
   let s = raw.replace(/[\s\u00a0]/g, "").replace(/[^\d.,]+$/g, "").replace(/^[^\d]+/g, "");
   if (!s || s.length === 0) return null;
@@ -160,22 +168,37 @@ function normalizeAmountStr(raw: string): number | null {
     s = s.replace(/[.,]/g, "");
   }
 
+  // Reject Algerian telephone numbers: 05/06/07/02/03/04 followed by 7-8 digits (e.g. 0550123456)
+  if (/^0[2-7]\d{7,8}$/.test(s) || /^213[2-7]\d{8}$/.test(s)) {
+    return null;
+  }
+  // Reject 15-digit NIF or 20-digit RIB
+  if (/^\d{15}$/.test(s) || /^\d{20}$/.test(s)) {
+    return null;
+  }
+
   const val = parseFloat(s);
-  if (!isNaN(val) && val > 0 && val < 100_000_000) return val;
+  if (!isNaN(val) && val > 0 && val < 50_000_000) return val;
   return null;
 }
 
 function parseAmount(text: string): number | null {
+  // 1. Try explicit TTC / NET À PAYER patterns first
   for (const pattern of TTC_PATTERNS) {
     const regex = new RegExp(pattern.source, pattern.flags);
     let m: RegExpExecArray | null;
     while ((m = regex.exec(text)) !== null) {
       if (m[1]) {
+        // Discard if preceded by capital or tel
+        const preContext = text.slice(Math.max(0, m.index - 30), m.index).toLowerCase();
+        if (/\b(capital|t[eé]l|phone|fax|nif|rc|rib)\b/.test(preContext)) continue;
         const val = normalizeAmountStr(m[1]);
         if (val !== null && val > 0) return val;
       }
     }
   }
+
+  // 2. Try explicit HT patterns if TVA is explicitly zero
   for (const pattern of THT_PATTERNS) {
     const regex = new RegExp(pattern.source, pattern.flags);
     let m: RegExpExecArray | null;
@@ -189,40 +212,39 @@ function parseAmount(text: string): number | null {
       }
     }
   }
+
+  // 3. Try general AMOUNT_PATTERNS with currency or Total keywords
   const candidates: number[] = [];
   for (const pattern of AMOUNT_PATTERNS) {
     const regex = new RegExp(pattern.source, pattern.flags);
     let match: RegExpExecArray | null;
     while ((match = regex.exec(text)) !== null) {
       const raw = match[1] ?? match[0];
+      const preContext = text.slice(Math.max(0, match.index - 35), match.index).toLowerCase();
+      // Skip numbers belonging to metadata (phones, tax IDs, capital)
+      if (/\b(capital|t[eé]l|phone|fax|nif|rc|rib|ccp|nis|article|code)\b/.test(preContext)) continue;
       const val = normalizeAmountStr(raw);
       if (val !== null) candidates.push(val);
     }
   }
-  if (candidates.length > 0) return Math.max(...candidates);
-  const allNumbers: number[] = [];
-  const megaRegex = /(\d[\d\s.,]*\d)/g;
-  let megaMatch: RegExpExecArray | null;
-  while ((megaMatch = megaRegex.exec(text)) !== null) {
-    const val = normalizeAmountStr(megaMatch[1]);
-    if (val !== null && val >= 100) allNumbers.push(val);
+  if (candidates.length > 0) {
+    return Math.max(...candidates);
   }
-  if (allNumbers.length > 0) return Math.max(...allNumbers);
+
   return null;
 }
 
 const SUPPLIER_PATTERNS: RegExp[] = [
-  /(?:FOURNISSEUR|VENDEUR|EMETTEUR|ÉMETTEUR|FROM|DE LA PART DE|CLIENT|DESTINATAIRE|ACHETEUR|DOIT|FACTUR[EÉ]\s*[AÀ])\s*:?\s*([^\n\r,]{3,80})/i,
-  /(?:المورد|البائع|المصدر|الزبون|المشتري|المرسل إليه)\s*:?\s*([^\n\r,]{3,80})/,
+  /(?:FOURNISSEUR|VENDEUR|EMETTEUR|ÉMETTEUR|FROM|DE LA PART DE)\s*:?\s*([^\n\r,]{3,80})/i,
+  /(?:المورد|البائع|المصدر)\s*:?\s*([^\n\r,]{3,80})/,
   /\b((?:SARL|SPA|EURL|EI|SNC|EPIC|SARL-U|SAS)\s+[A-ZÀ-Úa-zà-ú0-9\s\-&'.]{2,60})/,
   /\b((?:S\.A\.R\.L|S\.P\.A|E\.U\.R\.L|S\.A\.S)\s+[A-ZÀ-Úa-zà-ú0-9\s\-&'.]{2,60})/,
   /(?:RAISON\s*SOCIALE|SOCIÉTÉ|ENTREPRISE|ETABLISSEMENT|GROUPE)\s*:?\s*([^\n\r,]{3,80})/i,
   /(?:الشركة|المؤسسة)\s*:?\s*([^\n\r,]{3,80})/,
-  // FIX 2: Cheque specific — "A l'ordre de"
   /(?:A\s*L['']ORDRE\s*DE|لأمر)\s*:?\s*([^\n\r,]{3,80})/i,
 ];
 
-// FIX 2: Supplier cleanup — remove cheque-specific trailing text and table headers
+// Supplier cleanup — remove addresses, phones, RC, NIF and table headers
 function cleanSupplierCandidate(raw: string): string {
   return raw
     .trim()
@@ -233,45 +255,73 @@ function cleanSupplierCandidate(raw: string): string {
     .replace(/\s*-{3,}.*/g, '')
     // Stop at cheque-specific phrases
     .replace(/\s*(Payable\s*[àa]|A\s*l['']ordre|payez|contre\s*ce\s*ch[eè]que|prière|zone\s*blanche).*/i, '')
-    // Stop at address-like words
-    .replace(/\s*(agence|bp|av\.|avenue|rue|cité|cite|wilaya|commune|BP\s*\d).*/i, '')
+    // Stop at address, contact info, tax IDs
+    .replace(/\s*(ADRESSE|ADR|TEL|TÉLÉPHONE|TELEPHONE|FAX|RC|NRC|NIF|NIS|AI|RIB|CCP|COMPTE|EMAIL|SITE|BP|AV\.|AVENUE|RUE|CITÉ|CITE|WILAYA|COMMUNE).*/i, '')
     // Remove leftover punctuation at end
     .replace(/[,;:\-–—]+$/, '')
-    .substring(0, 80)
+    .substring(0, 70)
     .trim();
 }
 
-function parseSupplier(text: string, companyName: string = ""): string | null {
+function parseSupplier(text: string, companyInput?: string | CompanyContext): string | null {
   const lines = text.split(/[\n\r]+/).map((l) => l.trim()).filter(Boolean);
-  
+
   const isUserCompany = (c: string) => {
-    if (!companyName || companyName.length < 3) return false;
-    const cName = companyName.toLowerCase().replace(/[^a-z0-9]/g, '');
-    const cand = c.toLowerCase().replace(/[^a-z0-9]/g, '');
-    return cand.includes(cName) || cName.includes(cand);
+    if (!companyInput) return false;
+    const targets: string[] = [];
+    if (typeof companyInput === "string") {
+      if (companyInput.trim().length >= 3) targets.push(companyInput);
+    } else {
+      if (companyInput.name && companyInput.name.trim().length >= 3) targets.push(companyInput.name);
+      if (companyInput.raisonSociale && companyInput.raisonSociale.trim().length >= 3) targets.push(companyInput.raisonSociale);
+      if (companyInput.nif && companyInput.nif.trim().length >= 5) targets.push(companyInput.nif);
+      if (companyInput.nrc && companyInput.nrc.trim().length >= 5) targets.push(companyInput.nrc);
+    }
+    const candNorm = c.toLowerCase().replace(/[^a-z0-9]/g, '');
+    return targets.some((t) => {
+      const tNorm = t.toLowerCase().replace(/[^a-z0-9]/g, '');
+      return candNorm.includes(tNorm) || tNorm.includes(candNorm);
+    });
   };
 
-  for (const pattern of SUPPLIER_PATTERNS) {
+  // 1. Explicit supplier/emitter pattern (FOURNISSEUR, VENDEUR, EMETTEUR, A L'ORDRE DE)
+  for (const pattern of [SUPPLIER_PATTERNS[0], SUPPLIER_PATTERNS[1], SUPPLIER_PATTERNS[6]]) {
     const m = text.match(pattern);
     if (m?.[1]) {
       const candidate = cleanSupplierCandidate(m[1]);
       if (candidate.length >= 3 && !isUserCompany(candidate)) return candidate;
     }
   }
-  for (const line of lines.slice(0, 15)) {
+
+  // 2. Look at header lines (0-12) for company forms (SARL, EURL, SPA, etc.)
+  for (const line of lines.slice(0, 12)) {
     if (/\b(SARL|SPA|EURL|EI|SNC|EPIC|SARL-U|SAS)\b/i.test(line)) {
-      const idx = lines.indexOf(line);
-      return cleanSupplierCandidate(line);
+      const candidate = cleanSupplierCandidate(line);
+      if (candidate.length >= 3 && !isUserCompany(candidate)) return candidate;
     }
   }
-  for (const line of lines.slice(0, 8)) {
+
+  // 3. Look at header lines (0-6) for individual names (e.g. "Célia Naudin")
+  for (const line of lines.slice(0, 6)) {
     if (
-      /^[A-ZÀ-Ü0-9\s\-&'.]{4,60}$/.test(line) &&
-      !/^(FACTURE|INVOICE|DEVIS|BON|BON DE LIVRAISON|RELEV[EÉ]|TOTAL|MONTANT|DATE|R[EÉ]F[EÉ]RENCE|HEURE|N[°O]|QUINCAILLERIE|DROGUERIE|TEL|ADRESSE|DESIGNATION|QTE|PRIX|CHIFFRE|PAYEZ|CHEQUE|CHÈQUE|BANQUE|PAYABLE)$/i.test(line.trim())
+      /^[A-ZÀ-Ü][a-zà-ü]+(?:\s+[A-ZÀ-Ü][a-zà-ü]+){1,3}$/.test(line) &&
+      !/facture|invoice|total|date|montant|description|bon|livraison|devis|payez|cheque|chèque|banque|ordre|client/i.test(line)
     ) {
-      return cleanSupplierCandidate(line);
+      const candidate = cleanSupplierCandidate(line);
+      if (candidate.length >= 3 && !isUserCompany(candidate)) return candidate;
     }
   }
+
+  // 4. Other patterns (RAISON SOCIALE, SOCIETE, ENTREPRISE...)
+  for (const pattern of SUPPLIER_PATTERNS.slice(2)) {
+    const m = text.match(pattern);
+    if (m?.[1]) {
+      const candidate = cleanSupplierCandidate(m[1]);
+      if (candidate.length >= 3 && !isUserCompany(candidate)) return candidate;
+    }
+  }
+
+  // 5. Lines starting with DE / FROM / PAR
   for (let i = 0; i < lines.length - 1; i++) {
     if (/^(DE|FROM|PAR|ÉMIS PAR|EMIS PAR|VENDEUR)\s*:?$/i.test(lines[i])) {
       const next = lines[i + 1];
@@ -281,14 +331,18 @@ function parseSupplier(text: string, companyName: string = ""): string | null {
       }
     }
   }
-  for (const line of lines.slice(0, 10)) {
+
+  // 6. Header uppercase company names
+  for (const line of lines.slice(0, 8)) {
     if (
-      /^[A-ZÀ-Ü][a-zà-ü]+(\s[A-ZÀ-Ü][a-zà-ü]+){1,3}$/.test(line) &&
-      !/facture|invoice|total|date|montant|description|bon|livraison|devis|payez|cheque|chèque|banque/i.test(line)
+      /^[A-ZÀ-Ü0-9\s\-&'.]{4,60}$/.test(line) &&
+      !/^(FACTURE|INVOICE|DEVIS|BON|BON DE LIVRAISON|RELEV[EÉ]|TOTAL|MONTANT|DATE|R[EÉ]F[EÉ]RENCE|HEURE|N[°O]|QUINCAILLERIE|DROGUERIE|TEL|ADRESSE|DESIGNATION|QTE|PRIX|CHIFFRE|PAYEZ|CHEQUE|CHÈQUE|BANQUE|PAYABLE)$/i.test(line.trim())
     ) {
-      if (!isUserCompany(line)) return line;
+      const candidate = cleanSupplierCandidate(line);
+      if (candidate.length >= 3 && !isUserCompany(candidate)) return candidate;
     }
   }
+
   return null;
 }
 
@@ -301,14 +355,15 @@ const INVOICE_LABEL_PATTERNS: RegExp[] = [
   /(?:رقم\s*الفاتورة|فاتورة\s*رقم|رقم\s*الوصل|رقم)\s*:?\s*([A-Z0-9][A-Z0-9\-\/\.]{1,29})/g,
   /(?:رقم\s*الفاتورة|فاتورة\s*رقم|رقم)\s*:?\s*([\u0660-\u0669]{2,10})/g,
   /(?:B\.L\.?|BL|BON\s*DE\s*LIVRAISON|LIVRAISON)\s*[N°NnOo°\.]{0,3}[\s°.]*:?\s*([A-Z0-9][A-Z0-9\-\/\.]{1,29})/gi,
+  /#([A-Z0-9]{3,20})\b/gi,
 ];
 
 const INVOICE_CODE_PATTERNS: RegExp[] = [
   /\b(FA[CT]{0,2}[-\/]\d{2,}(?:[-\/]\d+)*)\b/gi,
   /\b(INV[-\/]\d{2,}(?:[-\/]\d+)*)\b/gi,
   /\b(F\d{4,})\b/gi,
-  /\b((?:19|20)\d{2}\/\d{2,6})\b/g,
-  /\b(\d{2,6}\/(?:19|20)\d{2})\b/g,
+  /(?<![\/\d])((?:19|20)\d{2}\/[A-Z0-9\-]{2,10})(?![\/\d])/gi,
+  /(?<![\/\d])([A-Z0-9\-]{2,10}\/(?:19|20)\d{2})(?![\/\d])/gi,
   /#([A-Z0-9]{3,20})\b/gi,
 ];
 
@@ -322,9 +377,13 @@ function cleanInvoiceCandidate(raw: string): string {
 
 function isValidInvoiceNumber(candidate: string): boolean {
   if (!candidate || candidate.length < 2) return false;
+  // Exclude full dates
   if (/^\d{2}[\/\-]\d{2}[\/\-]\d{4}$/.test(candidate)) return false;
   if (/^\d{4}[\/\-]\d{2}[\/\-]\d{2}$/.test(candidate)) return false;
-  if (/^\d+$/.test(candidate) && parseInt(candidate, 10) > 9999) return false;
+  // Exclude MM/YYYY or DD/YYYY date fragments (e.g. 01/2026, 05/2024, 09/2026)
+  if (/^\d{1,2}\/(?:19|20)\d{2}$/.test(candidate)) return false;
+  if (/^(?:19|20)\d{2}\/\d{1,2}$/.test(candidate)) return false;
+  if (/^\d+$/.test(candidate) && parseInt(candidate, 10) > 9999999) return false;
   if (/^\d{1,2}$/.test(candidate)) return false;
   if (!/\d/.test(candidate)) return false;
   return true;
@@ -502,16 +561,24 @@ const TYPE_KEYWORDS: Array<{ type: DocumentType; keywords: string[] }> = [
     keywords: ["chèque", "cheque", "chq", "شيك", "ordre de paiement", "payez contre", "a l'ordre de", "à l'ordre de"],
   },
   {
-    type: "FACTURE_FOURNISSEUR",
-    keywords: ["facture fournisseur", "facture d'achat", "purchase invoice", "فاتورة شراء", "avoir fournisseur", "ticket de caisse", "reçu de paiement"],
+    type: "FACTURE_CLIENT",
+    keywords: ["facture client", "facture de vente", "sales invoice", "فاتورة بيع"],
   },
   {
-    type: "FACTURE_CLIENT",
-    keywords: ["facture", "invoice", "fact.", "f a c t u r e", "فاتورة", "quittance", "reçu", "ticket", "receipt", "note d'honoraire", "note"],
+    type: "FACTURE_FOURNISSEUR",
+    keywords: [
+      "facture fournisseur", "facture d'achat", "purchase invoice", "فاتورة شراء",
+      "avoir fournisseur", "ticket de caisse", "reçu de paiement", "quittance", "note d'honoraire", "note",
+      "facture", "invoice", "fact.", "f a c t u r e", "فاتورة"
+    ],
   },
 ];
 
-function detectDocumentType(text: string, filename: string, companyName: string = ""): DocumentType {
+function detectDocumentType(
+  text: string,
+  filename: string,
+  companyInput?: string | CompanyContext
+): DocumentType {
   const haystack = `${text} ${filename}`.toLowerCase();
   let baseType: DocumentType = "AUTRE";
   for (const { type, keywords } of TYPE_KEYWORDS) {
@@ -521,42 +588,52 @@ function detectDocumentType(text: string, filename: string, companyName: string 
     }
   }
 
-  // Refine ambiguous "facture" matches
-  if (baseType === "FACTURE_CLIENT" && companyName && companyName.length >= 3) {
-    const cName = companyName.toLowerCase().replace(/[^a-z0-9]/g, '');
-    const lines = text.split(/[\n\r]+/).map(l => l.trim().toLowerCase());
-    
-    const recipientMarkers = ["doit", "client", "destinataire", "acheteur", "facturé à", "facture a"];
+  // Refine using company context (who is the company: issuer or recipient?)
+  const lines = text.split(/[\n\r]+/).map((l) => l.trim().toLowerCase());
+  const targets: string[] = [];
+  if (companyInput) {
+    if (typeof companyInput === "string") {
+      if (companyInput.trim().length >= 3) targets.push(companyInput.toLowerCase().replace(/[^a-z0-9]/g, ''));
+    } else {
+      if (companyInput.name && companyInput.name.trim().length >= 3) targets.push(companyInput.name.toLowerCase().replace(/[^a-z0-9]/g, ''));
+      if (companyInput.raisonSociale && companyInput.raisonSociale.trim().length >= 3) targets.push(companyInput.raisonSociale.toLowerCase().replace(/[^a-z0-9]/g, ''));
+      if (companyInput.nif && companyInput.nif.trim().length >= 5) targets.push(companyInput.nif.toLowerCase().replace(/[^a-z0-9]/g, ''));
+      if (companyInput.nrc && companyInput.nrc.trim().length >= 5) targets.push(companyInput.nrc.toLowerCase().replace(/[^a-z0-9]/g, ''));
+    }
+  }
+
+  if (targets.length > 0 && (baseType === "FACTURE_FOURNISSEUR" || baseType === "FACTURE_CLIENT" || baseType === "AUTRE")) {
+    const recipientMarkers = ["doit", "client", "destinataire", "acheteur", "facturé à", "facture a", "livré à", "livre a", "زبون", "المشتري", "المرسل إليه"];
     let isUserRecipient = false;
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
-      if (recipientMarkers.some(m => line.includes(m))) {
-        // Check this line and the next line
-        const combined = line + (lines[i+1] || "");
-        if (combined.replace(/[^a-z0-9]/g, '').includes(cName)) {
+      if (recipientMarkers.some((m) => line.includes(m))) {
+        const combined = (line + " " + (lines[i + 1] || "") + " " + (lines[i + 2] || "")).replace(/[^a-z0-9]/g, '');
+        if (targets.some((t) => combined.includes(t))) {
           isUserRecipient = true;
           break;
         }
       }
     }
-    
+
     let isUserEmitter = false;
     for (const line of lines.slice(0, 5)) {
-      if (line.replace(/[^a-z0-9]/g, '').includes(cName)) {
-        isUserEmitter = true;
-        break;
+      const norm = line.replace(/[^a-z0-9]/g, '');
+      if (targets.some((t) => norm.includes(t))) {
+        if (!recipientMarkers.some((m) => line.includes(m))) {
+          isUserEmitter = true;
+          break;
+        }
       }
     }
-    
+
     if (isUserRecipient) return "FACTURE_FOURNISSEUR";
     if (isUserEmitter) return "FACTURE_CLIENT";
-    
-    // Default to purchase invoice if ambiguous (most common case for manual uploads)
-    return "FACTURE_FOURNISSEUR";
+    if (baseType.includes("FACTURE")) return "FACTURE_FOURNISSEUR";
   }
 
-  // If no company name is provided, default generic invoices to FOURNISSEUR
-  if (baseType === "FACTURE_CLIENT" && haystack.includes("facture") && !haystack.includes("facture client")) {
+  // If ambiguous or generic invoice, default to purchase invoice
+  if (baseType === "FACTURE_CLIENT" && !haystack.includes("facture client") && !haystack.includes("facture de vente") && !haystack.includes("فاتورة بيع")) {
     return "FACTURE_FOURNISSEUR";
   }
 
@@ -579,22 +656,20 @@ function scoreConfidence(data: Omit<ExtractedData, "confidence">): "high" | "med
 export function extractDocumentData(
   rawText: string,
   filename: string = "",
-  companyName: string = ""
+  companyInput?: string | CompanyContext
 ): ExtractedData {
   const date = parseDate(rawText);
   const chequeDate = parseChequeDate(rawText) || date;
   const amount = parseAmount(rawText);
-  const supplier = parseSupplier(rawText, companyName);
+  const supplier = parseSupplier(rawText, companyInput);
   const invoiceNumber = parseInvoiceNumber(rawText);
   const chequeNumber = parseChequeNumber(rawText);
-  let documentType = detectDocumentType(rawText, filename, companyName);
+  let documentType = detectDocumentType(rawText, filename, companyInput);
 
-  if (documentType === "AUTRE" || (documentType === "FACTURE_FOURNISSEUR" && chequeNumber)) {
-    if (chequeNumber) {
-      documentType = "CHEQUE";
-    } else if (invoiceNumber) {
-      documentType = "FACTURE_CLIENT";
-    }
+  if (chequeNumber && (documentType === "AUTRE" || documentType === "FACTURE_FOURNISSEUR")) {
+    documentType = "CHEQUE";
+  } else if (documentType === "AUTRE" && invoiceNumber) {
+    documentType = "FACTURE_FOURNISSEUR";
   }
 
   let amountHT = parseHTAmount(rawText);

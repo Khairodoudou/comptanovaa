@@ -1,5 +1,5 @@
 import { runOcr } from "@/lib/ocr/professional-ocr";
-import { extractDocumentData, ExtractedData } from "@/lib/ocr/text-extractor";
+import { extractDocumentData, ExtractedData, type CompanyContext } from "@/lib/ocr/text-extractor";
 import { generateEntries, EntrySpec } from "@/lib/entry-generator";
 
 export interface BatchInput {
@@ -10,6 +10,8 @@ export interface BatchInput {
   }>;
   companyId: string;
   companyName: string;
+  companyContext?: CompanyContext;
+  regimeFiscal?: string | null;
   subAccounts: Array<{ parentAccount: string; subAccount: string; name: string }>;
 }
 
@@ -55,7 +57,8 @@ export async function processBatch(input: BatchInput): Promise<BatchResponse> {
   const ocrResults = await Promise.all(
     input.documents.map(async (doc) => {
       try {
-        const res = await runOcr(doc.buffer, doc.filename, doc.mimeType, input.companyName);
+        const companyCtx = input.companyContext || input.companyName;
+        const res = await runOcr(doc.buffer, doc.filename, doc.mimeType, companyCtx);
         return res;
       } catch (e: any) {
         throw new Error(`OCR_FAILED: ${e.message}`);
@@ -161,11 +164,15 @@ export async function processBatch(input: BatchInput): Promise<BatchResponse> {
   const refNumberFacture = factureDoc.data.invoiceNumber ?? null;
   const rawDescFacture = factureDoc.ocrData.rawText;
   
-  // Use extracted HT/TVA from the invoice
-  const computedHT  = Math.round((amountTTC / 1.19) * 100) / 100;
-  const computedTVA = Math.round((amountTTC - computedHT) * 100) / 100;
-  const htForEntries  = factureDoc.data.amountHT  ?? computedHT;
-  const tvaForEntries = factureDoc.data.amountTVA ?? computedTVA;
+  const regimeFiscal = input.regimeFiscal || input.companyContext?.regimeFiscal;
+  const isIfu = Boolean(
+    regimeFiscal &&
+      (regimeFiscal.toUpperCase().includes("FORFAIT") ||
+        regimeFiscal.toUpperCase().includes("IFU"))
+  );
+
+  const htForEntries  = isIfu ? amountTTC : (factureDoc.data.amountHT ?? undefined);
+  const tvaForEntries = isIfu ? 0 : (factureDoc.data.amountTVA ?? undefined);
 
   const ecritures_facture = generateEntries(
     docTypeToUse,
@@ -175,7 +182,8 @@ export async function processBatch(input: BatchInput): Promise<BatchResponse> {
     rawDescFacture,
     input.subAccounts,
     htForEntries,
-    tvaForEntries
+    tvaForEntries,
+    regimeFiscal
   );
 
   return {

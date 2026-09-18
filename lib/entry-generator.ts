@@ -1,17 +1,35 @@
 /**
- * Shared accounting entry generator — PCN Algérien.
+ * Shared accounting entry generator — PCN / SCF Algérien.
  *
- * Extracted from /api/documents/upload/route.ts so both the single-upload
- * and batch-upload routes can share the same entry-generation logic.
+ * Multi-entry accounting with TVA (19% standard, 9% reduced, 0% exempt)
+ * and full support for Regime Fiscal (REEL vs IFU / Forfaitaire):
  *
- * Multi-entry accounting with TVA 19%:
- *   - FACTURE_FOURNISSEUR : Débit 380.x (HT) + Débit 44566 (TVA) / Crédit 401.x (TTC)
- *   - BON_RECEPTION       : Débit 30.x (stock) / Crédit 380.x (HT) — transfert stock
- *   - FACTURE_CLIENT      : Débit 411.x (TTC) / Crédit 700 (HT) + Crédit 44571 (TVA)
- *   - CHEQUE (émis)       : Débit 401.x / Crédit 512 — règlement fournisseur
- *   - RELEVE_BANCAIRE     : Débit 512 / Crédit 401.x
- *   - BON_LIVRAISON       : Débit 600 / Crédit 30.x — sortie de stock au coût d'achat
- *   - AUTRE/Charge        : Débit 607|626 + Débit 44566 / Crédit 401.x|512|53
+ * 1. FACTURE_FOURNISSEUR:
+ *    - IFU: Débit 380/6xx (100% TTC) / Crédit 401.x (100% TTC) [Pas de TVA déductible]
+ *    - RÉEL: Débit 380/6xx (HT) + Débit 44566 (TVA) / Crédit 401.x (TTC)
+ * 2. FACTURE_CLIENT:
+ *    - IFU: Débit 411.x (100% TTC) / Crédit 700 (100% TTC) [Pas de TVA collectée]
+ *    - RÉEL: Débit 411.x (TTC) / Crédit 700 (HT) + Crédit 44571 (TVA)
+ * 3. BON_RECEPTION:
+ *    - Débit 30.x (stock) / Crédit 380.x (HT) — entrée en stock
+ * 4. BON_LIVRAISON:
+ *    - Débit 600 / Crédit 30.x — sortie de stock
+ * 5. CHEQUE (émis):
+ *    - Débit 401.x / Crédit 512 — règlement fournisseur
+ * 6. RELEVE_BANCAIRE:
+ *    - Débit 512 / Crédit 401.x
+ * 7. CHARGES (SCF):
+ *    - 607: Électricité, eau, gaz (Sonelgaz, SEAAL, ADE)
+ *    - 602: Fournitures de bureau consommables
+ *    - 613: Locations / Loyer commercial
+ *    - 615: Entretien et réparations
+ *    - 616: Primes d'assurances (SAA, CAAT, CAAR, etc.)
+ *    - 622: Rémunérations d'intermédiaires et honoraires (avocat, expert comptable)
+ *    - 623: Publicité, relations publiques
+ *    - 624: Transports de biens
+ *    - 625: Déplacements, missions et réceptions (hôtels, Air Algérie)
+ *    - 626: Frais postaux et télécoms (Mobilis, Djezzy, Ooredoo, Algérie Télécom)
+ *    - 627: Services bancaires
  */
 
 export const TVA_RATE = 0.19;
@@ -38,35 +56,105 @@ export function supplierSuffix(supplier: string): string {
   return n.toString().padStart(3, "0");
 }
 
-// ─── Helper: detect charge account (607 goods vs 626 services) ─────────────
-// 626 = frais postaux, téléphone, publicité, honoraires, transport, internet
-// 607 = électricité, eau, gaz (Achats non stockés)
-const CHARGE_KEYWORDS =
-  /t[eé]l[eé]phone|internet|abonnement|honoraires?|publicit[eé]|transport|poste|courrier|assurance|locat|maint|conseil|formation|nettoyage|gardiennage|[eé]lectricit[eé]|eau|gaz|sonelgaz|seaal|djezzy|mobilis|ooredoo|t[eé]l[eé]com/i;
+// ─── Helper: detect SCF account for expenses / purchases ───────────────────
+export function detectScfAccount(description: string, supplier: string): string {
+  const text = `${description} ${supplier}`.toLowerCase();
 
-export function isCharge(description: string, supplier: string): boolean {
-  return CHARGE_KEYWORDS.test(description) || CHARGE_KEYWORDS.test(supplier);
+  // 1. Sonelgaz, Eau, Gaz, Électricité -> 607 (Achats non stockés de matières et fournitures)
+  if (
+    /sonelgaz|seaal|ade\b|alg[eé]rienne des eaux|[eé]lectricit[eé]|gaz\b|eau potable|fluide/i.test(text)
+  ) {
+    return "607";
+  }
+
+  // 2. Postes & Télécoms (Mobilis, Djezzy, Ooredoo, Algérie Télécom, etc.) -> 626
+  if (
+    /mobilis|djezzy|ooredoo|alg[eé]rie t[eé]l[eé]com|t[eé]l[eé]phone|internet|adsl|fibre|4g|5g|forfait mobile|poste\b|timbre|yalidine|ems\b|courrier|envoi colis/i.test(text)
+  ) {
+    return "626";
+  }
+
+  // 3. Locations (Loyer, bail, leasing) -> 613
+  if (/loyer|location|bail\b|leasing|cr[eé]dit-bail/i.test(text)) {
+    return "613";
+  }
+
+  // 4. Entretien et réparations -> 615
+  if (
+    /entretien|r[eé]paration|maintenance|vidange|m[eé]canique|d[eé]pannage|pi[eè]ces? d[eé]tach[eé]es?|pi[eè]ces? de rechange/i.test(text)
+  ) {
+    return "615";
+  }
+
+  // 5. Primes d'assurances -> 616
+  if (
+    /assurance|prime d'assurance|saa\b|caat\b|caar\b|ciar\b|cash assurances?|alliance assurances?|axa\b|macir/i.test(text)
+  ) {
+    return "616";
+  }
+
+  // 6. Rémunérations d'intermédiaires et honoraires -> 622
+  if (
+    /honoraires?|avocat|notaire|expert.?comptable|commissaire aux comptes|consultant|conseil juridique|audit/i.test(text)
+  ) {
+    return "622";
+  }
+
+  // 7. Publicité, publications, relations publiques -> 623
+  if (
+    /publicit|marketing|annonce|flyer|sponsoring|communication|r[eé]gie|foire|salon\b/i.test(text)
+  ) {
+    return "623";
+  }
+
+  // 8. Transports de biens -> 624
+  if (/transport de biens|fret\b|livraison|d[eé]m[eé]nagement/i.test(text)) {
+    return "624";
+  }
+
+  // 9. Déplacements, missions et réceptions -> 625
+  if (
+    /h[oô]tel|h[eé]bergement|billet d'avion|air alg[eé]rie|tassili|restaurant|d[eé]placement|mission/i.test(text)
+  ) {
+    return "625";
+  }
+
+  // 10. Fournitures de bureau consommables -> 602
+  if (/fournitures? de bureau|papeterie|cartouches?|toner|rame de papier/i.test(text)) {
+    return "602";
+  }
+
+  // 11. Frais bancaires -> 627
+  if (/agios|frais bancaires?|frais de tenue de compte|commission de tenue/i.test(text)) {
+    return "627";
+  }
+
+  // 12. Matières premières -> 381
+  if (/mati[eè]res? premi[eè]res?/i.test(text)) {
+    return "381";
+  }
+
+  // Par défaut: 380 (Achats de marchandises)
+  return "380";
 }
 
-export function chargeAccount(description: string): "607" | "626" {
-  // Electricité / Eau are usually 607 (Achat non stocké), telecom is 626
-  if (/[eé]lectricit[eé]|eau|gaz|sonelgaz|seaal/i.test(description)) return "607";
-  return "626";
+export function isCharge(description: string, supplier: string): boolean {
+  const acc = detectScfAccount(description, supplier);
+  return acc.startsWith("6");
+}
+
+export function chargeAccount(description: string): string {
+  return detectScfAccount(description, "");
 }
 
 // ─── Helper: detect credit account (401 supplier credit vs 512 bank vs 53 cash) ─
-// If description mentions virement / prélèvement / banque → 512
-// If it mentions espèces / caisse / liquide → 53
-// Default: 401 (supplier credit — paid later)
-const BANK_KEYWORDS = /virement|pr[eé]l[eè]vement|banque|CB|carte/i;
-const CASH_KEYWORDS = /esp[eè]ces?|caisse|liquide|cash/i;
+const BANK_KEYWORDS = /virement|pr[eé]l[eè]vement|banque|carte|cb|ch[eè]que/i;
+const CASH_KEYWORDS = /esp[eè]ces?|caisse|liquide|cash|quittance/i;
 
-export function creditForCharge(description: string): "401" | "512" | "53" {
+export function creditForCharge(description: string, defaultCredit: string = "401"): string {
   if (CASH_KEYWORDS.test(description)) return "53";
-  // Default: 512 (Banque) — charges are almost always paid by bank transfer or cheque
-  // Only use 401 if description explicitly mentions "crédit", "terme", "facture à payer"
-  if (/cr[eé]dit|terme|facture.{0,20}pay|débit[eé]|pr[eé]l[eè]v/i.test(description)) return "401";
-  return "512";
+  if (BANK_KEYWORDS.test(description)) return "512";
+  return defaultCredit;
 }
 
 export function findSubAccount(
@@ -74,10 +162,10 @@ export function findSubAccount(
   parent: string,
   label: string
 ): string {
-  const matches = subAccounts.filter(s => s.parentAccount === parent);
+  const matches = subAccounts.filter((s) => s.parentAccount === parent);
   if (matches.length === 0) return parent;
   const exact = matches.find(
-    s =>
+    (s) =>
       s.name.toLowerCase().includes(label.toLowerCase()) ||
       label.toLowerCase().includes(s.name.toLowerCase())
   );
@@ -93,6 +181,7 @@ export function findSubAccount(
 
 /**
  * Generates one or more journal entry specifications for a document.
+ * Adheres strictly to Algerian SCF and the company's fiscal regime (REEL vs IFU).
  */
 export function generateEntries(
   docType: string,
@@ -102,100 +191,158 @@ export function generateEntries(
   rawDesc: string = "",
   subAccounts: { parentAccount: string; subAccount: string; name: string }[] = [],
   htOverride?: number,
-  tvaOverride?: number
+  tvaOverride?: number,
+  regimeFiscal?: string | null
 ): EntrySpec[] {
-  // Use OCR-extracted HT/TVA if provided; otherwise compute from TTC
-  const ht  = htOverride  ?? Math.round((amountTTC / (1 + TVA_RATE)) * 100) / 100;
-  const tva = tvaOverride ?? Math.round((amountTTC - ht) * 100) / 100;
+  const isIfu = Boolean(
+    regimeFiscal &&
+      (regimeFiscal.toUpperCase().includes("FORFAIT") ||
+        regimeFiscal.toUpperCase().includes("IFU"))
+  );
 
-  const label  = supplier || "Inconnu";
+  const lowerText = `${rawDesc} ${supplier}`.toLowerCase();
+  let detectedTvaRate = TVA_RATE;
+  if (
+    lowerText.includes("tva 9%") ||
+    lowerText.includes("taux 9%") ||
+    (lowerText.includes("9%") && lowerText.includes("tva"))
+  ) {
+    detectedTvaRate = 0.09;
+  } else if (
+    lowerText.includes("exonér") ||
+    lowerText.includes("exoner") ||
+    lowerText.includes("tva 0%") ||
+    lowerText.includes("taux 0%") ||
+    lowerText.includes("franchise de tva") ||
+    lowerText.includes("sans tva")
+  ) {
+    detectedTvaRate = 0;
+  }
+
+  let ht: number;
+  let tva: number;
+
+  if (isIfu) {
+    // Régime IFU / Forfaitaire: non-assujetti à la TVA. 100% TTC direct en charge ou achat.
+    ht = amountTTC;
+    tva = 0;
+  } else if (tvaOverride !== undefined && tvaOverride >= 0) {
+    tva = Math.round(tvaOverride * 100) / 100;
+    ht =
+      htOverride !== undefined && htOverride > 0
+        ? Math.round(htOverride * 100) / 100
+        : Math.round((amountTTC - tva) * 100) / 100;
+  } else if (htOverride !== undefined && htOverride > 0 && htOverride <= amountTTC) {
+    ht = Math.round(htOverride * 100) / 100;
+    tva = Math.round((amountTTC - ht) * 100) / 100;
+  } else if (detectedTvaRate === 0) {
+    ht = amountTTC;
+    tva = 0;
+  } else {
+    ht = Math.round((amountTTC / (1 + detectedTvaRate)) * 100) / 100;
+    tva = Math.round((amountTTC - ht) * 100) / 100;
+  }
+
+  const label = supplier || "Inconnu";
   const suffix = supplierSuffix(label);
-  
+
   const acc380 = findSubAccount(subAccounts, "380", label);
   const acc401 = findSubAccount(subAccounts, "401", label);
   const acc411 = findSubAccount(subAccounts, "411", label);
-  const acc30  = findSubAccount(subAccounts, "30", label);
+  const acc30 = findSubAccount(subAccounts, "30", label);
 
   switch (docType) {
-    // ── Achat marchandises (Facturation seule) ─────────────────────────────
-    case "FACTURE_FOURNISSEUR":
-      // ── Les charges (override pour factures d'électricité, eau, téléphone) ──
-      if (isCharge(rawDesc, supplier)) {
-        const chargeAcc = chargeAccount(rawDesc || label);
-        const creditAcc = creditForCharge(rawDesc || label);
-        const credit = creditAcc === "401" ? acc401 : creditAcc;
-        return [
-          {
-            debitAccount:  chargeAcc,
-            creditAccount: credit,
-            amount: amountTTC,
-            description: `Charge TTC — ${label}`,
-            reference: refNumber,
-          }
-        ];
-      }
+    // ── Facture Fournisseur (Achat ou Charge d'exploitation) ───────────────
+    case "FACTURE_FOURNISSEUR": {
+      const detectedAcc = detectScfAccount(rawDesc, supplier);
+      const isChargeDoc = detectedAcc.startsWith("6");
+      const baseDebitAcc = isChargeDoc
+        ? detectedAcc
+        : findSubAccount(subAccounts, detectedAcc, label);
 
-      // Safety: if acc380 resolved to a 6xx charge account (plan comptable misconfigured),
-      // treat as a charge entry to avoid generating a wrong 44566 TVA entry
-      if (/^6/.test(acc380)) {
-        const credit = creditForCharge(rawDesc || label);
-        const creditAcc = credit === "401" ? acc401 : credit;
+      const creditTarget = creditForCharge(rawDesc, acc401);
+      const creditAcc = creditTarget === "401" ? acc401 : creditTarget;
+
+      // Si régime IFU ou facture exonérée: enregistrement 100% TTC
+      if (isIfu || tva === 0) {
         return [
           {
-            debitAccount:  acc380,
+            debitAccount: baseDebitAcc,
             creditAccount: creditAcc,
             amount: amountTTC,
-            description: `Charge TTC — ${label}`,
+            description: isIfu
+              ? `${isChargeDoc ? "Charge" : "Achat marchandises"} TTC (Régime IFU) — ${label}`
+              : `${isChargeDoc ? "Charge" : "Achat marchandises"} exonéré TVA — ${label}`,
             reference: refNumber,
-          }
+          },
         ];
       }
 
-      // ── Achat normal (avec TVA) ──
+      // Régime Réel standard: Débit Charge/Stock (HT) + Débit 44566 (TVA) / Crédit 401 (TTC)
+      const tvaLabel = detectedTvaRate === 0.09 ? "9%" : "19%";
       return [
         {
-          debitAccount:  acc380,
-          creditAccount: acc401,
+          debitAccount: baseDebitAcc,
+          creditAccount: creditAcc,
           amount: ht,
-          description: `Achat marchandises HT — ${label}`,
+          description: `${isChargeDoc ? "Charge" : "Achat marchandises"} HT — ${label}`,
           reference: refNumber,
         },
         {
-          debitAccount:  "44566",
-          creditAccount: acc401,
+          debitAccount: "44566",
+          creditAccount: creditAcc,
           amount: tva,
-          description: `TVA déductible 19% — ${label}`,
+          description: `TVA déductible ${tvaLabel} — ${label}`,
           reference: refNumber,
         },
       ];
+    }
 
-    // ── Vente (Facturation seule) ──────────────────────────────────────────
-    // PCN Algérien: le client est DÉBITEUR (411) ; le produit est CRÉDITEUR (700)
-    case "FACTURE_CLIENT":
+    // ── Facture Client (Vente) ─────────────────────────────────────────────
+    // PCN / SCF Algérien: le client est DÉBITEUR (411) ; le produit est CRÉDITEUR (700)
+    case "FACTURE_CLIENT": {
+      // Si régime IFU ou vente exonérée: 100% TTC au compte 700, pas de 44571
+      if (isIfu || tva === 0) {
+        return [
+          {
+            debitAccount: acc411,
+            creditAccount: "700",
+            amount: amountTTC,
+            description: isIfu
+              ? `Vente TTC (Régime IFU) — ${label}`
+              : `Vente exonérée TVA — ${label}`,
+            reference: refNumber,
+          },
+        ];
+      }
+
+      // Régime Réel standard: Débit 411 (TTC) / Crédit 700 (HT) + Crédit 44571 (TVA collectée)
+      const tvaLabel = detectedTvaRate === 0.09 ? "9%" : "19%";
       return [
         {
-          debitAccount:  acc411,   // 411.x — Client (créance à recouvrer)
-          creditAccount: "700",    // 700   — Ventes de marchandises
+          debitAccount: acc411,
+          creditAccount: "700",
           amount: ht,
           description: `Vente HT — ${label}`,
           reference: refNumber,
         },
         {
-          debitAccount:  acc411,   // 411.x — Client (TTC = HT + TVA collectée)
-          creditAccount: "44571",  // 44571 — TVA collectée
+          debitAccount: acc411,
+          creditAccount: "44571",
           amount: tva,
-          description: `TVA collectée 19% — ${label}`,
+          description: `TVA collectée ${tvaLabel} — ${label}`,
           reference: refNumber,
         },
       ];
+    }
 
-    // ── Chèque émis / Paiement fournisseur ────────────────────────────────────
-    // PCN Algérien: le chèque émis règle le fournisseur (401 débiteur) via banque (512 créditeur)
+    // ── Chèque émis / Paiement fournisseur ──────────────────────────────────
+    // Débit 401.x (Fournisseur soldé) / Crédit 512 (Banque sortie trésorerie)
     case "CHEQUE":
       return [
         {
-          debitAccount:  acc401,  // 401.x — Fournisseur (soldé)
-          creditAccount: "512",   // 512   — Banque (sortie de trésorerie)
+          debitAccount: acc401,
+          creditAccount: "512",
           amount: amountTTC,
           description: `Règlement chèque fournisseur — ${label}`,
           reference: refNumber,
@@ -206,7 +353,7 @@ export function generateEntries(
     case "RELEVE_BANCAIRE":
       return [
         {
-          debitAccount:  "512",
+          debitAccount: "512",
           creditAccount: acc401,
           amount: amountTTC,
           description: `Mouvement bancaire — ${label}`,
@@ -218,9 +365,9 @@ export function generateEntries(
     case "BON_RECEPTION":
       return [
         {
-          debitAccount:  acc30,
+          debitAccount: acc30,
           creditAccount: acc380,
-          amount: ht, // Le stockage se fait toujours au coût d'achat HT
+          amount: ht,
           description: `Entrée en stock — ${label}`,
           reference: refNumber,
         },
@@ -230,33 +377,47 @@ export function generateEntries(
     case "BON_LIVRAISON":
       return [
         {
-          debitAccount:  "600",
+          debitAccount: "600",
           creditAccount: acc30,
-          amount: ht, // Le déstockage se fait au coût d'achat HT
+          amount: ht,
           description: `Sortie de stock — ${label}`,
           reference: refNumber,
         },
       ];
 
     // ── Charges générales / Autre ──────────────────────────────────────────
-    // Fix 3.3: auto-detect 607 vs 626; auto-detect 401 / 512 / 531
     default: {
-      const chargeAcc = chargeAccount(rawDesc || label);
-      const creditAcc = creditForCharge(rawDesc || label);
-      const credit    = creditAcc === "401" ? `401.${suffix}` : creditAcc;
+      const detectedAcc = detectScfAccount(rawDesc, supplier);
+      const chargeAcc = detectedAcc.startsWith("6") ? detectedAcc : "607";
+      const creditTarget = creditForCharge(rawDesc || label, `401.${suffix}`);
+      const creditAcc = creditTarget === "401" ? acc401 : creditTarget;
+
+      if (isIfu || tva === 0) {
+        return [
+          {
+            debitAccount: chargeAcc,
+            creditAccount: creditAcc,
+            amount: amountTTC,
+            description: `Charge TTC — ${label}`,
+            reference: refNumber,
+          },
+        ];
+      }
+
+      const tvaLabel = detectedTvaRate === 0.09 ? "9%" : "19%";
       return [
         {
-          debitAccount:  chargeAcc,
-          creditAccount: credit,
+          debitAccount: chargeAcc,
+          creditAccount: creditAcc,
           amount: ht,
           description: `Charge HT — ${label}`,
           reference: refNumber,
         },
         {
-          debitAccount:  "44566",
-          creditAccount: credit,
+          debitAccount: "44566",
+          creditAccount: creditAcc,
           amount: tva,
-          description: `TVA déductible 19% — ${label}`,
+          description: `TVA déductible ${tvaLabel} — ${label}`,
           reference: refNumber,
         },
       ];
