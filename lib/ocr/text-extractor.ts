@@ -405,15 +405,16 @@ function parseSupplier(
 }
 
 const INVOICE_LABEL_PATTERNS: RegExp[] = [
-  /(?:FACTURES?|FACT\.?)\s*[N°NnOo°\.]{1,3}[\s°.]*:?\s*([A-Z0-9][A-Z0-9\-\/\.]{1,29})/gi,
-  /\bN[\s°º\.]*[°oO0]?[\s]*:?\s*([A-Z0-9][A-Z0-9\-\/\.]{1,29})/gi,
-  /(?:NUM[EÉ]RO|NUM\.?|NUMÉRO)\s*(?:DE\s*FACTURE)?\s*:?\s*([A-Z0-9][A-Z0-9\-\/\.]{1,29})/gi,
-  /(?:INVOICE|INV\.?)\s*(?:NO\.?|N[°º]?|#|NUMBER)?\s*:?\s*([A-Z0-9][A-Z0-9\-\/\.]{1,29})/gi,
-  /(?:R[EÉ]F[EÉ]RENCE|R[EÉ]F\.?)\s*(?:FACTURE)?\s*:?\s*([A-Z0-9][A-Z0-9\-\/\.]{1,29})/gi,
-  /(?:رقم\s*الفاتورة|فاتورة\s*رقم|رقم\s*الوصل|رقم)\s*:?\s*([A-Z0-9][A-Z0-9\-\/\.]{1,29})/g,
-  /(?:رقم\s*الفاتورة|فاتورة\s*رقم|رقم)\s*:?\s*([\u0660-\u0669]{2,10})/g,
-  /(?:B\.L\.?|BL|BON\s*DE\s*LIVRAISON|LIVRAISON)\s*[N°NnOo°\.]{0,3}[\s°.]*:?\s*([A-Z0-9][A-Z0-9\-\/\.]{1,29})/gi,
-  /#([A-Z0-9]{3,20})\b/gi,
+  /(?:FACTURES?|FACT\.?)\s*(?:DE\s+VENTE|D['']ACHAT|CLIENT|FOURNISSEUR|PROFORMA|AVOIR)?\s*[N°NnOo°\.]{1,3}[\s°.:#]*([A-Z0-9][A-Z0-9\-\/\.]{0,29})/gi,
+  /(?:FACTURES?|FACT\.?)\s*(?:DE\s+VENTE|D['']ACHAT|CLIENT|FOURNISSEUR|PROFORMA|AVOIR)?\s*[:#]\s*([A-Z0-9][A-Z0-9\-\/\.]{0,29})/gi,
+  /\bN[\s°º\.]*[°oO0]?[\s]*[:#]?\s*([A-Z0-9][A-Z0-9\-\/\.]{0,29})/gi,
+  /(?:NUM[EÉ]RO|NUM\.?|NUMÉRO)\s*(?:DE\s*FACTURE)?\s*[:#]?\s*([A-Z0-9][A-Z0-9\-\/\.]{0,29})/gi,
+  /(?:INVOICE|INV\.?)\s*(?:NO\.?|N[°º]?|#|NUMBER)?\s*[:#]?\s*([A-Z0-9][A-Z0-9\-\/\.]{0,29})/gi,
+  /(?:R[EÉ]F[EÉ]RENCE|R[EÉ]F\.?)\s*(?:FACTURE|DOC|DOCUMENT)?\s*[:#]?\s*([A-Z0-9][A-Z0-9\-\/\.]{0,29})/gi,
+  /(?:رقم\s*الفاتورة|فاتورة\s*رقم|رقم\s*الوصل|رقم)\s*[:#]?\s*([A-Z0-9][A-Z0-9\-\/\.]{0,29})/g,
+  /(?:رقم\s*الفاتورة|فاتورة\s*رقم|رقم)\s*[:#]?\s*([\u0660-\u0669]{1,10})/g,
+  /(?:B\.L\.?|BL|BON\s*DE\s*LIVRAISON|LIVRAISON)\s*[N°NnOo°\.]{0,3}[\s°.]*[:#]?\s*([A-Z0-9][A-Z0-9\-\/\.]{0,29})/gi,
+  /#([A-Z0-9]{2,20})\b/gi,
 ];
 
 const INVOICE_CODE_PATTERNS: RegExp[] = [
@@ -422,7 +423,7 @@ const INVOICE_CODE_PATTERNS: RegExp[] = [
   /\b(F\d{4,})\b/gi,
   /(?<![\/\d])((?:19|20)\d{2}\/[A-Z0-9\-]{2,10})(?![\/\d])/gi,
   /(?<![\/\d])([A-Z0-9\-]{2,10}\/(?:19|20)\d{2})(?![\/\d])/gi,
-  /#([A-Z0-9]{3,20})\b/gi,
+  /#([A-Z0-9]{2,20})\b/gi,
 ];
 
 function cleanInvoiceCandidate(raw: string): string {
@@ -434,20 +435,22 @@ function cleanInvoiceCandidate(raw: string): string {
 }
 
 function isValidInvoiceNumber(candidate: string): boolean {
-  if (!candidate || candidate.length < 2) return false;
+  if (!candidate || candidate.length < 1) return false;
   // Exclude full dates
   if (/^\d{2}[\/\-]\d{2}[\/\-]\d{4}$/.test(candidate)) return false;
   if (/^\d{4}[\/\-]\d{2}[\/\-]\d{2}$/.test(candidate)) return false;
   // Exclude MM/YYYY or DD/YYYY date fragments (e.g. 01/2026, 05/2024, 09/2026)
   if (/^\d{1,2}\/(?:19|20)\d{2}$/.test(candidate)) return false;
   if (/^(?:19|20)\d{2}\/\d{1,2}$/.test(candidate)) return false;
-  if (/^\d+$/.test(candidate) && parseInt(candidate, 10) > 9999999) return false;
-  if (/^\d{1,2}$/.test(candidate)) return false;
-  if (!/\d/.test(candidate)) return false;
+  if (/^\d+$/.test(candidate) && candidate.length > 10) return false;
+  // Exclude words that are not invoice numbers
+  if (/^(DATE|TOTAL|MONTANT|TTC|HT|TVA|PAGE|LE|DU|AU|SARL|EURL|SPA|CLIENT|FOURNISSEUR)$/i.test(candidate)) return false;
+  // Must contain at least one digit or arabic numeral
+  if (!/[0-9٠-٩]/.test(candidate)) return false;
   return true;
 }
 
-function parseInvoiceNumber(text: string): string | null {
+function parseInvoiceNumber(text: string, filename: string = ""): string | null {
   for (const pattern of INVOICE_LABEL_PATTERNS) {
     const regex = new RegExp(pattern.source, pattern.flags);
     let m: RegExpExecArray | null;
@@ -456,7 +459,6 @@ function parseInvoiceNumber(text: string): string | null {
       if (!raw) continue;
       const candidate = cleanInvoiceCandidate(raw);
       if (isValidInvoiceNumber(candidate)) {
-        console.log(`[parseInvoiceNumber] label match: "${m[0]}" → "${candidate}"`);
         return candidate;
       }
     }
@@ -468,12 +470,23 @@ function parseInvoiceNumber(text: string): string | null {
       const raw = m[1] ?? m[0];
       const candidate = cleanInvoiceCandidate(raw);
       if (isValidInvoiceNumber(candidate)) {
-        console.log(`[parseInvoiceNumber] code match: "${m[0]}" → "${candidate}"`);
         return candidate;
       }
     }
   }
-  console.log("[parseInvoiceNumber] No invoice number found.");
+
+  // Fallback to filename if text yielded no invoice number
+  if (filename) {
+    const cleanName = filename.replace(/\.[a-zA-Z0-9]+$/, "").trim();
+    const fnMatch = cleanName.match(/(?:facture|fact|inv|invoice|bl|bon)[\s_\-]*(?:de\s+vente|d['']achat)?[\s_\-]*(?:n[°o\.]*)?[\s_\-]*([A-Z0-9][A-Z0-9\-\/]{0,20})$/i);
+    if (fnMatch?.[1]) {
+      const candidate = cleanInvoiceCandidate(fnMatch[1]);
+      if (isValidInvoiceNumber(candidate)) {
+        return candidate;
+      }
+    }
+  }
+
   return null;
 }
 
@@ -718,7 +731,7 @@ export function extractDocumentData(
   companyInput?: string | CompanyContext
 ): ExtractedData {
   let documentType = detectDocumentType(rawText, filename, companyInput);
-  const invoiceNumber = parseInvoiceNumber(rawText);
+  const invoiceNumber = parseInvoiceNumber(rawText, filename);
   const chequeNumber = parseChequeNumber(rawText);
 
   if (chequeNumber && (documentType === "AUTRE" || documentType === "FACTURE_FOURNISSEUR")) {

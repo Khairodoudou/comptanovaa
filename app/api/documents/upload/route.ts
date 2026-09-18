@@ -88,6 +88,7 @@ export async function POST(req: NextRequest) {
     date?: string;
     supplier?: string;
     invoiceNumber?: string;
+    chequeNumber?: string;
   } = {};
 
   if (!manualOverride) {
@@ -153,7 +154,7 @@ export async function POST(req: NextRequest) {
   const computedTVA = isIfu ? 0 : Math.round((amountTTC - computedHT) * 100) / 100;
   const displayHT = htForEntries ?? computedHT;
   const displayTVA = tvaForEntries ?? computedTVA;
-  const refNumber: string | null = extracted.invoiceNumber ?? null;
+  const refNumber: string | null = extracted.invoiceNumber ?? extracted.chequeNumber ?? null;
 
   // ── Persist file to disk (public/uploads) ──────────────────────────────────
   const uniqueFilename = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
