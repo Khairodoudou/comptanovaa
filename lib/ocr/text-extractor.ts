@@ -235,56 +235,71 @@ function parseAmount(text: string): number | null {
 }
 
 const SUPPLIER_PATTERNS: RegExp[] = [
-  /(?:FOURNISSEUR|VENDEUR|EMETTEUR|ÉMETTEUR|FROM|DE LA PART DE)\s*:?\s*([^\n\r,]{3,80})/i,
-  /(?:المورد|البائع|المصدر)\s*:?\s*([^\n\r,]{3,80})/,
+  /(?:^|[\n\r]|\b)\s*(?:FOURNISSEUR|VENDEUR|EMETTEUR|ÉMETTEUR|FROM|DE LA PART DE)\s*[:\-–]\s*([^\n\r,]{3,80})/i,
+  /(?:^|[\n\r])\s*(?:FOURNISSEUR|VENDEUR|EMETTEUR|ÉMETTEUR)\s*[:\-–]?\s*([^\n\r,]{3,80})/i,
+  /(?:^|[\n\r]|\b)\s*(?:المورد|البائع|المصدر)\s*[:\-–]?\s*([^\n\r,]{3,80})/,
   /\b((?:SARL|SPA|EURL|EI|SNC|EPIC|SARL-U|SAS)\s+[A-ZÀ-Úa-zà-ú0-9\s\-&'.]{2,60})/,
   /\b((?:S\.A\.R\.L|S\.P\.A|E\.U\.R\.L|S\.A\.S)\s+[A-ZÀ-Úa-zà-ú0-9\s\-&'.]{2,60})/,
-  /(?:RAISON\s*SOCIALE|SOCIÉTÉ|ENTREPRISE|ETABLISSEMENT|GROUPE)\s*:?\s*([^\n\r,]{3,80})/i,
-  /(?:الشركة|المؤسسة)\s*:?\s*([^\n\r,]{3,80})/,
-  /(?:A\s*L['']ORDRE\s*DE|لأمر)\s*:?\s*([^\n\r,]{3,80})/i,
+  /(?:RAISON\s*SOCIALE|SOCIÉTÉ|ENTREPRISE|ETABLISSEMENT|GROUPE)\s*[:\-–]?\s*([^\n\r,]{3,80})/i,
+  /(?:الشركة|المؤسسة)\s*[:\-–]?\s*([^\n\r,]{3,80})/,
+  /(?:A\s*L['']ORDRE\s*DE|لأمر)\s*[:\-–]?\s*([^\n\r,]{3,80})/i,
 ];
 
-// Supplier cleanup — remove addresses, phones, RC, NIF and table headers
+const CLIENT_PATTERNS: RegExp[] = [
+  /(?:^|[\n\r]|\b)\s*(?:CLIENT|DESTINATAIRE|DOIT|FACTUR[EÉ]\s*[AÀ]|LIVR[EÉ]\s*[AÀ]|ACHETEUR)\s*[:\-–]\s*([^\n\r,]{3,80})/i,
+  /(?:^|[\n\r])\s*(?:CLIENT|DESTINATAIRE|DOIT|ACHETEUR)\s*[:\-–]?\s*([^\n\r,]{3,80})/i,
+  /(?:الزبون|المشتري|المرسل\s*إليه|إلى|السيد|السادة)\s*[:\-–]?\s*([^\n\r,]{3,80})/,
+];
+
+// Supplier / Client cleanup — remove addresses, phones, RC, NIF, table headers and OCR artifacts
 function cleanSupplierCandidate(raw: string): string {
   return raw
     .trim()
     .replace(/\s+/g, ' ')
-    // Remove file extension artifacts (e.g. "img-0.jpeg", "scan.png", "doc.pdf")
-    .replace(/\b[\w\-]+\.(?:jpe?g|png|gif|bmp|pdf|tiff?|webp|heic|svg)\b/gi, '')
+    // Remove markdown image syntax e.g. "![img-0.jpeg](img-0.jpeg)" or "! img-0.jpeg (img-0.jpeg)"
+    .replace(/!?\[.*?\](?:\(.*?\))?/gi, '')
+    // Remove file extension artifacts with optional parens
+    .replace(/!?\b[\w\-]+\.(?:jpe?g|png|gif|bmp|pdf|tiff?|webp|heic|svg)\b(?:\s*\([^)]*\))?/gi, '')
+    .replace(/\([^)]*\.(?:jpe?g|png|gif|bmp|pdf|tiff?|webp|heic|svg)[^)]*\)/gi, '')
     // Stop at table headers / column titles
     .replace(/\s*(N[°º]\s*D[eé]signation|D[eé]signation|Quantit[eé]|Prix\s*Unit|Montant|Qt[eé]|Unit[eé]|P\.U\.|Réf\.?|Référence|Libellé|Description|Article|Code)(\s|$).*/i, '')
     // Stop at horizontal separators
     .replace(/\s*-{3,}.*/g, '')
     // Stop at cheque-specific phrases
     .replace(/\s*(Payable\s*[àa]|A\s*l['']ordre|payez|contre\s*ce\s*ch[eè]que|prière|zone\s*blanche).*/i, '')
-    // Stop at address, contact info, tax IDs
-    .replace(/\s*(ADRESSE|ADR|TEL|TÉLÉPHONE|TELEPHONE|FAX|RC|NRC|NIF|NIS|AI|RIB|CCP|COMPTE|EMAIL|SITE|BP|AV\.|AVENUE|RUE|CITÉ|CITE|WILAYA|COMMUNE).*/i, '')
-    // Remove leftover punctuation at end
-    .replace(/[,;:\-–—]+$/, '')
+    // Stop at address, contact info, tax IDs, or field labels
+    .replace(/\s*(ADRESSE|ADR|TEL|TÉLÉPHONE|TELEPHONE|FAX|RC|NRC|NIF|NIS|AI|RIB|CCP|COMPTE|EMAIL|SITE|BP|AV\.|AVENUE|RUE|CITÉ|CITE|WILAYA|COMMUNE)\s*[:\-–].*/i, '')
+    // Remove leading and trailing punctuation/symbols
+    .replace(/^[^a-zA-ZÀ-ÿ\u0600-\u06FF0-9]+/, '')
+    .replace(/[^a-zA-ZÀ-ÿ\u0600-\u06FF0-9]+$/, '')
     .substring(0, 70)
     .trim();
 }
 
 // Rejects supplier candidates that are clearly OCR noise or system artifacts
-const SUPPLIER_NOISE_WORDS = /^(IMG|DESTINAT|DESTINATION|RECTO|VERSO|SCAN|PAGE|FILE|IMAGE|DOCUMENT|SPECIMEN|MODELE|BLANK|SAMPLE|TEST|DRAFT|COPY|ORIGINAL|UNDEFINED|NULL|NONE|UNKNOWN)$/i;
-const FILE_EXTENSION_RE = /\.(jpe?g|png|gif|bmp|pdf|tiff?|webp|heic|svg)$/i;
+const SUPPLIER_NOISE_WORDS = /^(IMG|DESTINAT|DESTINATION|DESTINATAIRE|CLIENT|FOURNISSEUR|RECTO|VERSO|SCAN|PAGE|FILE|IMAGE|DOCUMENT|SPECIMEN|MODELE|BLANK|SAMPLE|TEST|DRAFT|COPY|ORIGINAL|UNDEFINED|NULL|NONE|UNKNOWN|FACTURE|INVOICE|CHEQUE|CHÈQUE)$/i;
+const FILE_EXTENSION_RE = /\.(jpe?g|png|gif|bmp|pdf|tiff?|webp|heic|svg)/i;
 
 function isValidSupplierCandidate(candidate: string): boolean {
-  if (!candidate || candidate.length < 3) return false;
-  // Contains a file extension → filename leaked into OCR text
+  if (!candidate) return false;
+  const stripped = candidate.replace(/^[^a-zA-ZÀ-ÿ\u0600-\u06FF0-9]+|[^a-zA-ZÀ-ÿ\u0600-\u06FF0-9]+$/g, '').trim();
+  if (stripped.length < 3) return false;
+  // Contains a file extension anywhere → filename leaked into OCR text
   if (FILE_EXTENSION_RE.test(candidate)) return false;
   // Is purely a known noise word
-  if (SUPPLIER_NOISE_WORDS.test(candidate.trim())) return false;
+  if (SUPPLIER_NOISE_WORDS.test(stripped)) return false;
   // Is purely numeric
-  if (/^\d+$/.test(candidate)) return false;
-  // Contains parentheses wrapping a filename: "img-0.jpeg (img-0.jpeg)"
-  if (/\.(?:jpe?g|png|gif|bmp|pdf|tiff?|webp|heic|svg)\s*\(/i.test(candidate)) return false;
+  if (/^\d+$/.test(stripped)) return false;
   // Has no letter at all
-  if (!/[a-zA-ZÀ-ÿ\u0600-\u06FF]/.test(candidate)) return false;
+  if (!/[a-zA-ZÀ-ÿ\u0600-\u06FF]/.test(stripped)) return false;
   return true;
 }
 
-function parseSupplier(text: string, companyInput?: string | CompanyContext): string | null {
+function parseSupplier(
+  text: string,
+  companyInput?: string | CompanyContext,
+  docTypeHint?: DocumentType
+): string | null {
   const lines = text.split(/[\n\r]+/).map((l) => l.trim()).filter(Boolean);
 
   const isUserCompany = (c: string) => {
@@ -305,8 +320,19 @@ function parseSupplier(text: string, companyInput?: string | CompanyContext): st
     });
   };
 
+  // If this is known to be a sales invoice (FACTURE_CLIENT), prioritize client/recipient patterns
+  if (docTypeHint === "FACTURE_CLIENT") {
+    for (const pattern of CLIENT_PATTERNS) {
+      const m = text.match(pattern);
+      if (m?.[1]) {
+        const candidate = cleanSupplierCandidate(m[1]);
+        if (isValidSupplierCandidate(candidate) && !isUserCompany(candidate)) return candidate;
+      }
+    }
+  }
+
   // 1. Explicit supplier/emitter pattern (FOURNISSEUR, VENDEUR, EMETTEUR, A L'ORDRE DE)
-  for (const pattern of [SUPPLIER_PATTERNS[0], SUPPLIER_PATTERNS[1], SUPPLIER_PATTERNS[6]]) {
+  for (const pattern of [SUPPLIER_PATTERNS[0], SUPPLIER_PATTERNS[1], SUPPLIER_PATTERNS[2], SUPPLIER_PATTERNS[7]]) {
     const m = text.match(pattern);
     if (m?.[1]) {
       const candidate = cleanSupplierCandidate(m[1]);
@@ -334,7 +360,7 @@ function parseSupplier(text: string, companyInput?: string | CompanyContext): st
   }
 
   // 4. Other patterns (RAISON SOCIALE, SOCIETE, ENTREPRISE...)
-  for (const pattern of SUPPLIER_PATTERNS.slice(2)) {
+  for (const pattern of [SUPPLIER_PATTERNS[5], SUPPLIER_PATTERNS[6]]) {
     const m = text.match(pattern);
     if (m?.[1]) {
       const candidate = cleanSupplierCandidate(m[1]);
@@ -353,11 +379,20 @@ function parseSupplier(text: string, companyInput?: string | CompanyContext): st
     }
   }
 
-  // 6. Header uppercase company names (last resort — very permissive regex, needs strict validation)
+  // 6. Check CLIENT_PATTERNS if supplier patterns didn't match (e.g. sales invoice where emitter matched company)
+  for (const pattern of CLIENT_PATTERNS) {
+    const m = text.match(pattern);
+    if (m?.[1]) {
+      const candidate = cleanSupplierCandidate(m[1]);
+      if (isValidSupplierCandidate(candidate) && !isUserCompany(candidate)) return candidate;
+    }
+  }
+
+  // 7. Header uppercase company names (last resort — very permissive regex, needs strict validation)
   for (const line of lines.slice(0, 8)) {
     if (
       /^[A-ZÀ-Ü0-9\s\-&'.]{4,60}$/.test(line) &&
-      !/^(FACTURE|INVOICE|DEVIS|BON|BON DE LIVRAISON|RELEV[EÉ]|TOTAL|MONTANT|DATE|R[EÉ]F[EÉ]RENCE|HEURE|N[°O]|QUINCAILLERIE|DROGUERIE|TEL|ADRESSE|DESIGNATION|QTE|PRIX|CHIFFRE|PAYEZ|CHEQUE|CHÈQUE|BANQUE|PAYABLE|IMG|SCAN|PAGE|DOCUMENT|IMAGE|FICHIER|DESTINAT|DESTINATION|SPECIMEN)$/i.test(line.trim()) &&
+      !/^(FACTURE|INVOICE|DEVIS|BON|BON DE LIVRAISON|RELEV[EÉ]|TOTAL|MONTANT|DATE|R[EÉ]F[EÉ]RENCE|HEURE|N[°O]|QUINCAILLERIE|DROGUERIE|TEL|ADRESSE|DESIGNATION|QTE|PRIX|CHIFFRE|PAYEZ|CHEQUE|CHÈQUE|BANQUE|PAYABLE|IMG|SCAN|PAGE|DOCUMENT|IMAGE|FICHIER|DESTINAT|DESTINATION|DESTINATAIRE|CLIENT|FOURNISSEUR|SPECIMEN)$/i.test(line.trim()) &&
       // Must not look like a filename (contains a dot followed by an extension)
       !FILE_EXTENSION_RE.test(line)
     ) {
@@ -640,7 +675,7 @@ function detectDocumentType(
     }
 
     let isUserEmitter = false;
-    for (const line of lines.slice(0, 5)) {
+    for (const line of lines.slice(0, 15)) {
       const norm = line.replace(/[^a-z0-9]/g, '');
       if (targets.some((t) => norm.includes(t))) {
         if (!recipientMarkers.some((m) => line.includes(m))) {
@@ -652,6 +687,7 @@ function detectDocumentType(
 
     if (isUserRecipient) return "FACTURE_FOURNISSEUR";
     if (isUserEmitter) return "FACTURE_CLIENT";
+    if (baseType === "FACTURE_CLIENT") return "FACTURE_CLIENT";
     if (baseType.includes("FACTURE")) return "FACTURE_FOURNISSEUR";
   }
 
@@ -681,19 +717,20 @@ export function extractDocumentData(
   filename: string = "",
   companyInput?: string | CompanyContext
 ): ExtractedData {
-  const date = parseDate(rawText);
-  const chequeDate = parseChequeDate(rawText) || date;
-  const amount = parseAmount(rawText);
-  const supplier = parseSupplier(rawText, companyInput);
+  let documentType = detectDocumentType(rawText, filename, companyInput);
   const invoiceNumber = parseInvoiceNumber(rawText);
   const chequeNumber = parseChequeNumber(rawText);
-  let documentType = detectDocumentType(rawText, filename, companyInput);
 
   if (chequeNumber && (documentType === "AUTRE" || documentType === "FACTURE_FOURNISSEUR")) {
     documentType = "CHEQUE";
   } else if (documentType === "AUTRE" && invoiceNumber) {
     documentType = "FACTURE_FOURNISSEUR";
   }
+
+  const date = parseDate(rawText);
+  const chequeDate = parseChequeDate(rawText) || date;
+  const amount = parseAmount(rawText);
+  const supplier = parseSupplier(rawText, companyInput, documentType);
 
   let amountHT = parseHTAmount(rawText);
   let amountTVA = parseTVAAmount(rawText);

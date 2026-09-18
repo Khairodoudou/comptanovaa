@@ -101,6 +101,9 @@ export async function runOcr(
         const data = await response.json();
         markdown = data.pages?.map((p: any) => p.markdown).join("\n") ?? "";
         rawText = markdown
+          .replace(/!\[.*?\](?:\(.*?\))?/g, " ")
+          .replace(/<img[^>]*>/gi, " ")
+          .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
           .replace(/[#*_`~>\[\]]/g, " ")
           .replace(/\|/g, " ")
           .replace(/\s{2,}/g, " ")
