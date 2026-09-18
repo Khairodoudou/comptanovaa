@@ -249,6 +249,8 @@ function cleanSupplierCandidate(raw: string): string {
   return raw
     .trim()
     .replace(/\s+/g, ' ')
+    // Remove file extension artifacts (e.g. "img-0.jpeg", "scan.png", "doc.pdf")
+    .replace(/\b[\w\-]+\.(?:jpe?g|png|gif|bmp|pdf|tiff?|webp|heic|svg)\b/gi, '')
     // Stop at table headers / column titles
     .replace(/\s*(N[°º]\s*D[eé]signation|D[eé]signation|Quantit[eé]|Prix\s*Unit|Montant|Qt[eé]|Unit[eé]|P\.U\.|Réf\.?|Référence|Libellé|Description|Article|Code)(\s|$).*/i, '')
     // Stop at horizontal separators
@@ -261,6 +263,25 @@ function cleanSupplierCandidate(raw: string): string {
     .replace(/[,;:\-–—]+$/, '')
     .substring(0, 70)
     .trim();
+}
+
+// Rejects supplier candidates that are clearly OCR noise or system artifacts
+const SUPPLIER_NOISE_WORDS = /^(IMG|DESTINAT|DESTINATION|RECTO|VERSO|SCAN|PAGE|FILE|IMAGE|DOCUMENT|SPECIMEN|MODELE|BLANK|SAMPLE|TEST|DRAFT|COPY|ORIGINAL|UNDEFINED|NULL|NONE|UNKNOWN)$/i;
+const FILE_EXTENSION_RE = /\.(jpe?g|png|gif|bmp|pdf|tiff?|webp|heic|svg)$/i;
+
+function isValidSupplierCandidate(candidate: string): boolean {
+  if (!candidate || candidate.length < 3) return false;
+  // Contains a file extension → filename leaked into OCR text
+  if (FILE_EXTENSION_RE.test(candidate)) return false;
+  // Is purely a known noise word
+  if (SUPPLIER_NOISE_WORDS.test(candidate.trim())) return false;
+  // Is purely numeric
+  if (/^\d+$/.test(candidate)) return false;
+  // Contains parentheses wrapping a filename: "img-0.jpeg (img-0.jpeg)"
+  if (/\.(?:jpe?g|png|gif|bmp|pdf|tiff?|webp|heic|svg)\s*\(/i.test(candidate)) return false;
+  // Has no letter at all
+  if (!/[a-zA-ZÀ-ÿ\u0600-\u06FF]/.test(candidate)) return false;
+  return true;
 }
 
 function parseSupplier(text: string, companyInput?: string | CompanyContext): string | null {
@@ -289,7 +310,7 @@ function parseSupplier(text: string, companyInput?: string | CompanyContext): st
     const m = text.match(pattern);
     if (m?.[1]) {
       const candidate = cleanSupplierCandidate(m[1]);
-      if (candidate.length >= 3 && !isUserCompany(candidate)) return candidate;
+      if (isValidSupplierCandidate(candidate) && !isUserCompany(candidate)) return candidate;
     }
   }
 
@@ -297,7 +318,7 @@ function parseSupplier(text: string, companyInput?: string | CompanyContext): st
   for (const line of lines.slice(0, 12)) {
     if (/\b(SARL|SPA|EURL|EI|SNC|EPIC|SARL-U|SAS)\b/i.test(line)) {
       const candidate = cleanSupplierCandidate(line);
-      if (candidate.length >= 3 && !isUserCompany(candidate)) return candidate;
+      if (isValidSupplierCandidate(candidate) && !isUserCompany(candidate)) return candidate;
     }
   }
 
@@ -308,7 +329,7 @@ function parseSupplier(text: string, companyInput?: string | CompanyContext): st
       !/facture|invoice|total|date|montant|description|bon|livraison|devis|payez|cheque|chèque|banque|ordre|client/i.test(line)
     ) {
       const candidate = cleanSupplierCandidate(line);
-      if (candidate.length >= 3 && !isUserCompany(candidate)) return candidate;
+      if (isValidSupplierCandidate(candidate) && !isUserCompany(candidate)) return candidate;
     }
   }
 
@@ -317,7 +338,7 @@ function parseSupplier(text: string, companyInput?: string | CompanyContext): st
     const m = text.match(pattern);
     if (m?.[1]) {
       const candidate = cleanSupplierCandidate(m[1]);
-      if (candidate.length >= 3 && !isUserCompany(candidate)) return candidate;
+      if (isValidSupplierCandidate(candidate) && !isUserCompany(candidate)) return candidate;
     }
   }
 
@@ -327,19 +348,21 @@ function parseSupplier(text: string, companyInput?: string | CompanyContext): st
       const next = lines[i + 1];
       if (next && next.length >= 3 && !/^\d+$/.test(next)) {
         const cand = cleanSupplierCandidate(next);
-        if (cand.length >= 3 && !isUserCompany(cand)) return cand;
+        if (isValidSupplierCandidate(cand) && !isUserCompany(cand)) return cand;
       }
     }
   }
 
-  // 6. Header uppercase company names
+  // 6. Header uppercase company names (last resort — very permissive regex, needs strict validation)
   for (const line of lines.slice(0, 8)) {
     if (
       /^[A-ZÀ-Ü0-9\s\-&'.]{4,60}$/.test(line) &&
-      !/^(FACTURE|INVOICE|DEVIS|BON|BON DE LIVRAISON|RELEV[EÉ]|TOTAL|MONTANT|DATE|R[EÉ]F[EÉ]RENCE|HEURE|N[°O]|QUINCAILLERIE|DROGUERIE|TEL|ADRESSE|DESIGNATION|QTE|PRIX|CHIFFRE|PAYEZ|CHEQUE|CHÈQUE|BANQUE|PAYABLE)$/i.test(line.trim())
+      !/^(FACTURE|INVOICE|DEVIS|BON|BON DE LIVRAISON|RELEV[EÉ]|TOTAL|MONTANT|DATE|R[EÉ]F[EÉ]RENCE|HEURE|N[°O]|QUINCAILLERIE|DROGUERIE|TEL|ADRESSE|DESIGNATION|QTE|PRIX|CHIFFRE|PAYEZ|CHEQUE|CHÈQUE|BANQUE|PAYABLE|IMG|SCAN|PAGE|DOCUMENT|IMAGE|FICHIER|DESTINAT|DESTINATION|SPECIMEN)$/i.test(line.trim()) &&
+      // Must not look like a filename (contains a dot followed by an extension)
+      !FILE_EXTENSION_RE.test(line)
     ) {
       const candidate = cleanSupplierCandidate(line);
-      if (candidate.length >= 3 && !isUserCompany(candidate)) return candidate;
+      if (isValidSupplierCandidate(candidate) && !isUserCompany(candidate)) return candidate;
     }
   }
 
