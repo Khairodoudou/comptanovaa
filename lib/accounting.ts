@@ -35,12 +35,15 @@ export const SCF_ACCOUNT_LABELS: Record<string, string> = {
 
   // Classe 6 : Comptes de charges
   "600": "Achats de marchandises vendues",
+  "602": "Fournitures de bureau non stockables",
   "607": "Achats non stockés de matières et fournitures",
   "613": "Locations",
   "615": "Entretien et réparations",
   "616": "Primes d'assurances",
+  "622": "Rémunérations d'intermédiaires et honoraires",
   "623": "Publicité, publications, relations publiques",
   "624": "Transports de biens et collectif du personnel",
+  "625": "Déplacements, missions et réceptions",
   "626": "Frais postaux et de télécommunications",
   "627": "Services bancaires et assimilés",
   "631": "Impôts, taxes et versements assimilés",
@@ -132,15 +135,25 @@ export function getAccountTitle(account: string, entityName?: string): string {
   let label = SCF_ACCOUNT_LABELS[clean] || SCF_ACCOUNT_LABELS[account.trim()];
 
   if (!label) {
-    if (clean.startsWith("380")) label = "Achats de marchandises";
+    if (clean.startsWith("381")) label = "Achats de matières premières";
+    else if (clean.startsWith("380")) label = "Achats de marchandises";
     else if (clean.startsWith("4456")) label = "TVA déductible";
     else if (clean.startsWith("4457")) label = "TVA collectée";
     else if (clean.startsWith("401")) label = "Fournisseurs";
     else if (clean.startsWith("411")) label = "Clients";
     else if (clean.startsWith("512")) label = "Banques";
     else if (clean.startsWith("53")) label = "Caisses";
+    else if (clean.startsWith("602")) label = "Fournitures de bureau non stockables";
     else if (clean.startsWith("607")) label = "Achats non stockés de matières et fournitures";
+    else if (clean.startsWith("613")) label = "Locations";
+    else if (clean.startsWith("615")) label = "Entretien et réparations";
+    else if (clean.startsWith("616")) label = "Primes d'assurances";
+    else if (clean.startsWith("622")) label = "Rémunérations d'intermédiaires et honoraires";
+    else if (clean.startsWith("623")) label = "Publicité, publications, relations publiques";
+    else if (clean.startsWith("624")) label = "Transports de biens";
+    else if (clean.startsWith("625")) label = "Déplacements, missions et réceptions";
     else if (clean.startsWith("626")) label = "Frais postaux et de télécommunications";
+    else if (clean.startsWith("627")) label = "Services bancaires et assimilés";
     else if (clean.startsWith("600")) label = "Achats de marchandises vendues";
     else if (clean.startsWith("30")) label = "Stocks de marchandises";
     else if (clean.startsWith("70")) label = "Ventes de marchandises";

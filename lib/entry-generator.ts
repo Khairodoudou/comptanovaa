@@ -148,7 +148,10 @@ export function chargeAccount(description: string): string {
 }
 
 // ─── Helper: detect credit account (401 supplier credit vs 512 bank vs 53 cash) ─
-const BANK_KEYWORDS = /virement|pr[eé]l[eè]vement|banque|carte|cb|ch[eè]que/i;
+// Only use 512 when there's explicit evidence of a bank transfer or direct debit.
+// "chèque" is deliberately excluded: a purchase invoice mentioning "règlement par chèque"
+// still credits 401 (the payable), not 512 (the bank) — the cheque settles 401 later.
+const BANK_KEYWORDS = /virement|pr[eé]l[eè]vement|d[eé]bit[eé]|d[eé]bit direct|cb|carte bancaire/i;
 const CASH_KEYWORDS = /esp[eè]ces?|caisse|liquide|cash|quittance/i;
 
 export function creditForCharge(description: string, defaultCredit: string = "401"): string {
