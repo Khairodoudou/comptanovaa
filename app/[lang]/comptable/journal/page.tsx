@@ -69,8 +69,8 @@ export default async function ComptableJournalPage({
         document: { include: { company: { include: { client: { select: { id: true, name: true } } } } } },
         validatedBy: { select: { name: true } },
       },
-      orderBy: { date: "desc" },
-      take: 300,
+      orderBy: { createdAt: "asc" },
+      take: 500,
     }),
     db.user.findMany({
       where: {
@@ -256,21 +256,33 @@ export default async function ComptableJournalPage({
             // Regroupement des lignes d'écriture appartenant à la même opération comptable
             const opsMap = clientData.entries.reduce((acc, entry) => {
               const opKey = getOpKey(entry);
+              const entryTime = (entry.validatedAt || entry.createdAt)
+                ? new Date(entry.validatedAt || entry.createdAt).getTime()
+                : new Date(entry.date).getTime();
+
               if (!acc[opKey]) {
                 acc[opKey] = {
                   document: entry.document,
                   entries: [],
                   date: entry.date,
                   source: entry.source,
+                  timestamp: entryTime,
                 };
+              } else {
+                if (entryTime > acc[opKey].timestamp) {
+                  acc[opKey].timestamp = entryTime;
+                }
               }
               acc[opKey].entries.push(entry);
               return acc;
-            }, {} as Record<string, { document: any; entries: typeof entries; date: Date; source?: string }>);
+            }, {} as Record<string, { document: any; entries: typeof entries; date: Date; source?: string; timestamp: number }>);
 
-            const sortedOps = Object.values(opsMap).sort(
-              (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
-            );
+            const sortedOps = Object.values(opsMap).sort((a, b) => {
+              if (a.timestamp !== b.timestamp) {
+                return a.timestamp - b.timestamp;
+              }
+              return new Date(a.date).getTime() - new Date(b.date).getTime();
+            });
 
             let totalClientDebit = 0;
             let totalClientCredit = 0;

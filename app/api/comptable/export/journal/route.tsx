@@ -97,7 +97,7 @@ export async function GET(req: NextRequest) {
       company: true,
       document: { include: { company: true } },
     },
-    orderBy: { date: "asc" },
+    orderBy: [{ createdAt: "asc" }, { date: "asc" }],
   });
 
   if (format === "csv") {
