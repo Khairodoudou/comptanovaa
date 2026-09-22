@@ -111,11 +111,17 @@ export async function POST(req: NextRequest) {
         method:              fullResult.method,
       };
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Impossible de lire ce document.";
-      return NextResponse.json(
-        { error: "OCR_FAILED", message: msg, confidence: 0 },
-        { status: 422 }
-      );
+      // OCR failed → graceful fallback to manual mode (don't return 422)
+      // Frontend will detect needsManualReview=true and show the form
+      console.error("[upload] OCR pipeline failed, falling back to manual mode:", err);
+      extracted = {};
+      ocrResult = {
+        rawText: "",
+        tesseractConfidence: 0,
+        needsManualReview: true,
+        processingMs: 0,
+        method: "manual_fallback",
+      };
     }
   } else {
     extracted = {
