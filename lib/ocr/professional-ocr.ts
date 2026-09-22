@@ -149,9 +149,52 @@ export async function runOcr(
         if (response.status === 401) {
           ocrErrorDetail = "Clé API Mistral invalide ou expirée.";
         } else if (response.status === 429) {
-          ocrErrorDetail = "Quota de requêtes Mistral dépassé (crédits gratuits épuisés).";
+          ocrErrorDetail = "Quota mistral-ocr-latest dépassé (Pay-As-You-Go requis sur Mistral pour les PDF).";
         } else {
           ocrErrorDetail = `Erreur API Mistral (${response.status}).`;
+        }
+
+        // Si c'est une image (PNG/JPG), essayer Pixtral Vision (disponible sur le plan gratuit de Mistral)
+        if (!isPdf) {
+          try {
+            const pixRes = await fetch("https://api.mistral.ai/v1/chat/completions", {
+              method: "POST",
+              signal: AbortSignal.timeout(20000),
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${mistralKey}`,
+              },
+              body: JSON.stringify({
+                model: "pixtral-12b-2409",
+                messages: [
+                  {
+                    role: "user",
+                    content: [
+                      {
+                        type: "text",
+                        text: "Extrais l'intégralité du texte et des données de cette facture ou chèque comptable algérien (Fournisseur/Client, N° Facture, Date, Montant TTC/HT/TVA). Rends uniquement le texte brut.",
+                      },
+                      {
+                        type: "image_url",
+                        image_url: `data:${mimeType || "image/jpeg"};base64,${base64}`,
+                      },
+                    ],
+                  },
+                ],
+              }),
+            });
+            if (pixRes.ok) {
+              const pixData = await pixRes.json();
+              const pixText = pixData.choices?.[0]?.message?.content ?? "";
+              if (pixText.trim().length > 10) {
+                rawText = pixText.trim();
+                method = "mistral_ocr";
+                confidence = 90;
+              }
+            }
+          } catch (pixErr) {
+            console.warn("[Pixtral Vision] Fallback error:", pixErr);
+          }
         }
       }
     } catch (mistralErr: any) {
@@ -168,7 +211,7 @@ export async function runOcr(
   if (!rawText && geminiKey) {
     try {
       const geminiMime = isPdf ? "application/pdf" : mimeType || "image/jpeg";
-      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`;
+      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${geminiKey}`;
       const response = await fetch(geminiUrl, {
         method: "POST",
         signal: AbortSignal.timeout(20000),
