@@ -14,10 +14,10 @@ process.env.GEMINI_API_KEY = env.GEMINI_API_KEY;
 process.env.MISTRAL_API_KEY = env.MISTRAL_API_KEY;
 
 import('../lib/ocr/professional-ocr').then(async ({ runOcr }) => {
-  const buf = readFileSync('C:/Users/APPLe/Downloads/Facture achat Industri Colle.pdf');
+  const buf = readFileSync('C:/Users/APPLe/Downloads/Facture de vente 02.pdf');
   const start = Date.now();
   try {
-    const res = await runOcr(buf, 'Facture achat Industri Colle.pdf', 'application/pdf');
+    const res = await runOcr(buf, 'Facture de vente 02.pdf', 'application/pdf');
     console.log('SUCCESS in', Date.now() - start, 'ms');
     console.log('Method:', res.method, '| Confidence:', res.tesseractConfidence);
     console.log('RawText snippet:', res.rawText.slice(0, 400));

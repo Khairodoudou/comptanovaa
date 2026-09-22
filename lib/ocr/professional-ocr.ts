@@ -107,8 +107,56 @@ export async function runOcr(
   let confidence = 80;
   let ocrErrorDetail = "";
 
-  // 1. If Mistral API key is configured, try Mistral OCR first (20s timeout)
-  if (mistralKey) {
+  // Helper: call Gemini Flash
+  async function callGemini(): Promise<boolean> {
+    if (!geminiKey) return false;
+    try {
+      const geminiMime = isPdf ? "application/pdf" : mimeType || "image/jpeg";
+      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${geminiKey}`;
+      const response = await fetch(geminiUrl, {
+        method: "POST",
+        signal: AbortSignal.timeout(20000),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [
+                {
+                  text: "Extrais l'intégralité du texte et des données de cette facture ou chèque comptable algérien (Fournisseur/Client, N° Facture, Date, Montant TTC/HT/TVA). Rends uniquement le texte brut extrait.",
+                },
+                { inline_data: { mime_type: geminiMime, data: base64 } },
+              ],
+            },
+          ],
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const candText = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+        if (candText.trim().length > 10) {
+          rawText = candText.trim();
+          method = "gemini_ocr";
+          confidence = 95;
+          return true;
+        }
+      } else {
+        const errText = await response.text().catch(() => "");
+        console.warn(`[Gemini OCR] HTTP ${response.status}:`, errText);
+      }
+    } catch (geminiErr) {
+      console.warn("[Gemini OCR] Request error:", geminiErr);
+    }
+    return false;
+  }
+
+  // 1. For PDFs: Gemini Flash is free, supports PDFs natively, and does not hit Mistral's paid PDF requirement.
+  if (isPdf && geminiKey) {
+    await callGemini();
+  }
+
+  // 2. If no text yet and Mistral API key is configured, try Mistral OCR
+  if (!rawText && mistralKey) {
     try {
       const response = await fetch("https://api.mistral.ai/v1/ocr", {
         method: "POST",
@@ -203,48 +251,11 @@ export async function runOcr(
         ocrErrorDetail = "Délai d'attente dépassé auprès de l'API Mistral OCR.";
       }
     }
-  } else if (!geminiKey) {
-    ocrErrorDetail = "Clé MISTRAL_API_KEY non configurée dans l'environnement.";
   }
 
-  // 2. If Gemini API key is configured and no text yet, try Gemini Flash (Fast + Free Tier)
+  // 3. If still no text and Gemini API key is configured (for images or if step 1 didn't run)
   if (!rawText && geminiKey) {
-    try {
-      const geminiMime = isPdf ? "application/pdf" : mimeType || "image/jpeg";
-      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${geminiKey}`;
-      const response = await fetch(geminiUrl, {
-        method: "POST",
-        signal: AbortSignal.timeout(20000),
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [
-            {
-              parts: [
-                {
-                  text: "Extrais l'intégralité du texte et des données de cette facture ou chèque comptable algérien (Fournisseur/Client, N° Facture, Date, Montant TTC/HT/TVA). Rends uniquement le texte brut extrait.",
-                },
-                { inline_data: { mime_type: geminiMime, data: base64 } },
-              ],
-            },
-          ],
-        }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const candText = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-        if (candText.trim().length > 10) {
-          rawText = candText.trim();
-          method = "gemini_ocr";
-          confidence = 95;
-        }
-      } else {
-        const errText = await response.text().catch(() => "");
-        console.warn(`[Gemini OCR] HTTP ${response.status}:`, errText);
-      }
-    } catch (geminiErr) {
-      console.warn("[Gemini OCR] Request error:", geminiErr);
-    }
+    await callGemini();
   }
 
   // 3. If PDF and no text yet, try native PDF text reader (fast, max 5s)
