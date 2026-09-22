@@ -111,54 +111,48 @@ export async function runOcr(
   async function callGemini(): Promise<boolean> {
     if (!geminiKey) return false;
     const geminiMime = isPdf ? "application/pdf" : mimeType || "image/jpeg";
-    const modelsToTry = ["gemini-3.6-flash", "gemini-3.1-flash-lite"];
+    const modelsToTry = [
+      "gemini-3.6-flash",
+      "gemini-flash-lite-latest",
+      "gemini-3.1-flash-lite",
+      "gemini-3.5-flash-lite",
+    ];
 
     for (const model of modelsToTry) {
-      for (let attempt = 0; attempt < 2; attempt++) {
-        try {
-          const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`;
-          const response = await fetch(geminiUrl, {
-            method: "POST",
-            signal: AbortSignal.timeout(18000),
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              contents: [
-                {
-                  parts: [
-                    {
-                      text: "Extrais l'intégralité du texte et des données de cette facture ou chèque comptable algérien (Fournisseur/Client, N° Facture, Date, Montant TTC/HT/TVA). Rends uniquement le texte brut extrait.",
-                    },
-                    { inline_data: { mime_type: geminiMime, data: base64 } },
-                  ],
-                },
-              ],
-            }),
-          });
+      try {
+        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`;
+        const response = await fetch(geminiUrl, {
+          method: "POST",
+          signal: AbortSignal.timeout(15000),
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [
+              {
+                parts: [
+                  {
+                    text: "Extrais l'intégralité du texte et des données de cette facture ou chèque comptable algérien (Fournisseur/Client, N° Facture, Date, Montant TTC/HT/TVA). Rends uniquement le texte brut extrait.",
+                  },
+                  { inline_data: { mime_type: geminiMime, data: base64 } },
+                ],
+              },
+            ],
+          }),
+        });
 
-          if (response.ok) {
-            const data = await response.json();
-            const candText = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-            if (candText.trim().length > 10) {
-              rawText = candText.trim();
-              method = "gemini_ocr";
-              confidence = 95;
-              return true;
-            }
-          } else {
-            const status = response.status;
-            // 503 (Overloaded) or 429 (Rate limit) → wait briefly and retry or try next model
-            if ((status === 503 || status === 429) && attempt === 0) {
-              console.warn(`[Gemini OCR ${model}] HTTP ${status} — retrying after 1s...`);
-              await new Promise((r) => setTimeout(r, 1000));
-              continue;
-            }
-            console.warn(`[Gemini OCR ${model}] HTTP ${status}, switching model...`);
-            break; // Try next model in modelsToTry
+        if (response.ok) {
+          const data = await response.json();
+          const candText = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+          if (candText.trim().length > 10) {
+            rawText = candText.trim();
+            method = "gemini_ocr";
+            confidence = 95;
+            return true;
           }
-        } catch (geminiErr) {
-          console.warn(`[Gemini OCR ${model}] Request error:`, geminiErr);
-          break; // Try next model
+        } else {
+          console.warn(`[Gemini OCR ${model}] HTTP ${response.status}, failover to next model...`);
         }
+      } catch (geminiErr) {
+        console.warn(`[Gemini OCR ${model}] Request error:`, geminiErr);
       }
     }
     return false;
