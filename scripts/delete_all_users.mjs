@@ -42,13 +42,19 @@ async function deleteAll() {
     ["User",                "DELETE FROM User"],
   ];
 
+  await client.execute("PRAGMA foreign_keys = OFF");
+
   for (const [label, sql] of steps) {
     process.stdout.write(`Deleting ${label}... `);
     const res = await client.execute(sql);
     console.log(`✓ (${res.rowsAffected} rows)`);
   }
 
-  console.log("\n✅ All data deleted successfully!");
+  await client.execute("PRAGMA foreign_keys = ON");
+
+  const check = await client.execute("SELECT COUNT(*) as count FROM User");
+  console.log(`\nRemaining users in database: ${check.rows[0].count}`);
+  console.log("✅ All users and associated data deleted successfully!");
 }
 
 deleteAll()

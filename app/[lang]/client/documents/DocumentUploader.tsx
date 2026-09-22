@@ -308,7 +308,7 @@ export function DocumentUploader({
         const data = await res.json().catch(() => ({}));
         if (res.status === 422 && data.error === "OCR_FAILED") {
           setManualMode(true);
-          throw new Error("L'analyse OCR a échoué pour ce fichier. Veuillez saisir les informations manuellement.");
+          throw new Error(data.message || "L'analyse OCR a échoué pour ce fichier. Veuillez saisir les informations manuellement.");
         }
         throw new Error(data.message ?? data.error ?? `Erreur serveur (${res.status})`);
       }
@@ -339,7 +339,8 @@ export function DocumentUploader({
     } catch (err: unknown) {
       clearTimeout(timeoutId);
       if (err instanceof DOMException && err.name === "AbortError") {
-        setError("Délai dépassé (90s). L'OCR prend trop de temps.");
+        setError("Délai d'attente dépassé (120s). Le traitement prend trop de temps. Veuillez utiliser la saisie manuelle.");
+        setManualMode(true);
       } else {
         setError(err instanceof Error ? err.message : "Erreur inconnue");
       }

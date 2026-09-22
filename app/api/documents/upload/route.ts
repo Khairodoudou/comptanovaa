@@ -12,6 +12,7 @@ import fs from "fs";
 import path from "path";
 
 export const runtime = "nodejs"; // sharp + Tesseract
+export const maxDuration = 60;
 
 const MAX_SIZE = 10 * 1024 * 1024; // 10 MB
 

@@ -8,7 +8,7 @@ export interface OcrResult {
   tesseractConfidence: number;
   needsManualReview: boolean;
   processingMs: number;
-  method: "mistral_ocr" | "tesseract" | "pdfreader" | "csv_skip" | "fallback";
+  method: "mistral_ocr" | "gemini_ocr" | "tesseract" | "pdfreader" | "csv_skip" | "fallback";
 }
 
 function extractFromCsv(content: string): OcrResult {
@@ -26,33 +26,61 @@ function extractFromCsv(content: string): OcrResult {
 
 async function extractTextFromPdf(pdfBuffer: Buffer): Promise<string> {
   return new Promise((resolve) => {
+    let resolved = false;
+    const timer = setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        resolve("");
+      }
+    }, 5000);
+
     try {
-      import("pdfreader").then(({ PdfReader }) => {
-        let text = "";
-        new PdfReader().parseBuffer(pdfBuffer, (err: any, item: any) => {
-          if (err || !item) {
-            resolve(text.trim());
-          } else if (item.text) {
-            text += " " + item.text;
+      import("pdfreader")
+        .then(({ PdfReader }) => {
+          let text = "";
+          new PdfReader().parseBuffer(pdfBuffer, (err: any, item: any) => {
+            if (err || !item) {
+              if (!resolved) {
+                resolved = true;
+                clearTimeout(timer);
+                resolve(text.trim());
+              }
+            } else if (item.text) {
+              text += " " + item.text;
+            }
+          });
+        })
+        .catch(() => {
+          if (!resolved) {
+            resolved = true;
+            clearTimeout(timer);
+            resolve("");
           }
         });
-      }).catch(() => resolve(""));
     } catch {
-      resolve("");
+      if (!resolved) {
+        resolved = true;
+        clearTimeout(timer);
+        resolve("");
+      }
     }
   });
 }
 
 async function extractTextWithTesseract(imageBuffer: Buffer): Promise<string> {
+  let worker: any = null;
   try {
     const { createWorker } = await import("tesseract.js");
-    const worker = await createWorker("fra");
+    worker = await createWorker("fra");
     const ret = await worker.recognize(imageBuffer);
-    await worker.terminate();
     return ret.data.text?.trim() || "";
   } catch (e) {
     console.warn("[Tesseract] Extraction failed or unavailable:", e);
     return "";
+  } finally {
+    if (worker) {
+      await worker.terminate().catch(() => {});
+    }
   }
 }
 
@@ -70,21 +98,24 @@ export async function runOcr(
 
   const isPdf = mimeType === "application/pdf" || filename.toLowerCase().endsWith(".pdf");
   const base64 = buffer.toString("base64");
-  const apiKey = process.env.MISTRAL_API_KEY;
+  const mistralKey = process.env.MISTRAL_API_KEY?.trim();
+  const geminiKey = process.env.GEMINI_API_KEY?.trim();
 
   let rawText = "";
   let markdown = "";
   let method: OcrResult["method"] = "fallback";
   let confidence = 80;
+  let ocrErrorDetail = "";
 
-  // 1. If Mistral API key is configured, try Mistral OCR first
-  if (apiKey) {
+  // 1. If Mistral API key is configured, try Mistral OCR first (20s timeout)
+  if (mistralKey) {
     try {
       const response = await fetch("https://api.mistral.ai/v1/ocr", {
         method: "POST",
+        signal: AbortSignal.timeout(20000),
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiKey}`,
+          Authorization: `Bearer ${mistralKey}`,
         },
         body: JSON.stringify({
           model: "mistral-ocr-latest",
@@ -92,7 +123,7 @@ export async function runOcr(
             type: isPdf ? "document_url" : "image_url",
             ...(isPdf
               ? { document_url: `data:application/pdf;base64,${base64}` }
-              : { image_url: `data:${mimeType};base64,${base64}` }),
+              : { image_url: `data:${mimeType || "image/jpeg"};base64,${base64}` }),
           },
         }),
       });
@@ -113,31 +144,105 @@ export async function runOcr(
           confidence = 95;
         }
       } else {
-        console.warn("[Mistral OCR] Response not ok:", response.status);
+        const errText = await response.text().catch(() => "");
+        console.warn(`[Mistral OCR] HTTP ${response.status}:`, errText);
+        if (response.status === 401) {
+          ocrErrorDetail = "Clé API Mistral invalide ou expirée.";
+        } else if (response.status === 429) {
+          ocrErrorDetail = "Quota de requêtes Mistral dépassé (crédits gratuits épuisés).";
+        } else {
+          ocrErrorDetail = `Erreur API Mistral (${response.status}).`;
+        }
       }
-    } catch (mistralErr) {
+    } catch (mistralErr: any) {
       console.warn("[Mistral OCR] Request error:", mistralErr);
+      if (mistralErr.name === "TimeoutError") {
+        ocrErrorDetail = "Délai d'attente dépassé auprès de l'API Mistral OCR.";
+      }
+    }
+  } else if (!geminiKey) {
+    ocrErrorDetail = "Clé MISTRAL_API_KEY non configurée dans l'environnement.";
+  }
+
+  // 2. If Gemini API key is configured and no text yet, try Gemini Flash (Fast + Free Tier)
+  if (!rawText && geminiKey) {
+    try {
+      const geminiMime = isPdf ? "application/pdf" : mimeType || "image/jpeg";
+      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`;
+      const response = await fetch(geminiUrl, {
+        method: "POST",
+        signal: AbortSignal.timeout(20000),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [
+                {
+                  text: "Extrais l'intégralité du texte et des données de cette facture ou chèque comptable algérien (Fournisseur/Client, N° Facture, Date, Montant TTC/HT/TVA). Rends uniquement le texte brut extrait.",
+                },
+                { inline_data: { mime_type: geminiMime, data: base64 } },
+              ],
+            },
+          ],
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const candText = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+        if (candText.trim().length > 10) {
+          rawText = candText.trim();
+          method = "gemini_ocr";
+          confidence = 95;
+        }
+      } else {
+        const errText = await response.text().catch(() => "");
+        console.warn(`[Gemini OCR] HTTP ${response.status}:`, errText);
+      }
+    } catch (geminiErr) {
+      console.warn("[Gemini OCR] Request error:", geminiErr);
     }
   }
 
-  // 2. If PDF and no text yet, try native PDF text reader
+  // 3. If PDF and no text yet, try native PDF text reader (fast, max 5s)
   if (!rawText && isPdf) {
-    const pdfText = await extractTextFromPdf(buffer);
-    if (pdfText && pdfText.length > 10) {
-      rawText = pdfText;
-      method = "pdfreader";
-      confidence = 90;
+    try {
+      const pdfText = await extractTextFromPdf(buffer);
+      if (pdfText && pdfText.length > 10) {
+        rawText = pdfText;
+        method = "pdfreader";
+        confidence = 90;
+      }
+    } catch (pdfErr) {
+      console.warn("[pdfreader] Extraction error:", pdfErr);
     }
   }
 
-  // 3. If image or scanned document and still no text, try local Tesseract OCR
-  if (!rawText) {
-    const tessText = await extractTextWithTesseract(buffer);
-    if (tessText && tessText.length > 5) {
-      rawText = tessText;
-      method = "tesseract";
-      confidence = 85;
+  // 4. Local Tesseract OCR — ONLY for images (PNG, JPG, WEBP), NEVER for PDFs
+  if (!rawText && !isPdf) {
+    try {
+      const tessText = await Promise.race([
+        extractTextWithTesseract(buffer),
+        new Promise<string>((_, reject) =>
+          setTimeout(() => reject(new Error("Timeout Tesseract (8s)")), 8000)
+        ),
+      ]);
+      if (tessText && tessText.length > 5) {
+        rawText = tessText;
+        method = "tesseract";
+        confidence = 85;
+      }
+    } catch (tessErr) {
+      console.warn("[Tesseract] Skipped or timed out:", tessErr);
     }
+  }
+
+  // If still no text detected at all:
+  if (!rawText) {
+    const reason = ocrErrorDetail
+      ? `Échec OCR : ${ocrErrorDetail}`
+      : "Aucun texte détectable dans ce document (document scanné ou image illisible). Saisie manuelle requise.";
+    throw new Error(reason);
   }
 
   const extracted = extractDocumentData(rawText, filename, companyInput);

@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { processBatch, BatchInput } from "@/lib/batch-processor";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 const MAX_SIZE = 10 * 1024 * 1024; // 10 MB
 

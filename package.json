@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "db:clear-users": "node scripts/delete_all_users.mjs"
   },
   "dependencies": {
     "@formatjs/intl-localematcher": "^0.8.6",
