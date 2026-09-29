@@ -770,14 +770,22 @@ export function extractDocumentData(
   // Strong cheque document markers (these appear on real cheque forms, not just in payment notes on invoices)
   const hasStrongChequeMarkers = /payez\s+contre|[àa]\s+l[''']ordre\s+de|ordre\s+de\s+paiement|à\s+l[''']ordre|signataire|banque.*[àa].*vue|specimen|شيك\s+بنكي|لأمر/i.test(rawText);
 
+  // Utility / Telecom invoice guard — these docs mention "chèque" as a payment option but are NOT cheques.
+  // Never reclassify a Sonelgaz / SEAAL / ADE / Telecom invoice as CHEQUE.
+  const isUtilityOrTelecomDoc = /sonelgaz|seaal|ade\b|alg[eé]rienne\s+des\s+eaux|[eé]lectricit[eé]|facture\s+de\s+consommation|gaz\b|eau\s+potable|mobilis|djezzy|ooredoo|alg[eé]rie\s+t[eé]l[eé]com|internet|adsl|fibre|4g|5g/i.test(
+    `${rawText} ${filename}`
+  );
+
   if (chequeNumber) {
     if (
-      documentType === "AUTRE" ||
-      documentType === "FACTURE_FOURNISSEUR"
+      !isUtilityOrTelecomDoc &&
+      hasStrongChequeMarkers &&
+      (documentType === "AUTRE" || documentType === "FACTURE_FOURNISSEUR")
     ) {
-      // Any cheque number in a generic or supplier invoice → reclassify as cheque
+      // Only reclassify as CHEQUE when strong cheque layout markers exist AND it is NOT a utility/telecom invoice
       documentType = "CHEQUE";
     } else if (
+      !isUtilityOrTelecomDoc &&
       (documentType === "BON_RECEPTION" ||
         documentType === "BON_LIVRAISON" ||
         documentType === "RELEVE_BANCAIRE") &&
