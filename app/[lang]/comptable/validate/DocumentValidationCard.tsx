@@ -121,55 +121,50 @@ export function DocumentValidationCard({
   // An issued  cheque  (règlement)    = Débit 401 / Crédit 512
   //
   // Detection strategy (highest → lowest priority):
-  //  1. OCR rawText: "À l'ordre de <beneficiary>" vs all company identifiers
-  //  2. Filename keywords: "vente"/"encaiss"/"recu" → received, "reglement"/"paiement"/"fournisseur" → issued
+  //  1. Filename keywords: "vente"/"encaiss"/"recu"/"client" → received (human explicit hint)
+  //  2. OCR rawText: "À l'ordre de <beneficiary>" vs company fingerprints
   //  3. Default: issued (safe fallback)
   const isChequeDocument = document.type === "CHEQUE";
   let chequeIsReceived = false;
 
   if (isChequeDocument) {
-    // Build normalized company fingerprints from ALL available identifiers
-    const normalize = (s: string) =>
-      (s || "")
-        .toLowerCase()
-        .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-        .replace(/\b(sarl|eurl|spa|snc|ets|ste|entreprise|societe)\b/gi, "")
-        .replace(/[^a-z0-9]/g, "")
-        .trim();
+    const fname = (document.originalName || "").toLowerCase();
+    const hasSaleKeyword = /vente|encaiss|recu|re\u00e7u|client|recette/i.test(fname);
+    const hasPurchaseKeyword = /reglement|paiement|fournisseur|achat|charge/i.test(fname);
 
-    const companyFingerprints = [
-      normalize(document.company?.name || ""),
-      normalize(document.company?.raisonSociale || ""),
-      normalize(document.company?.client?.name || ""),
-    ].filter((f) => f.length >= 4);
+    if (hasSaleKeyword) {
+      chequeIsReceived = true;
+    } else if (hasPurchaseKeyword) {
+      chequeIsReceived = false;
+    } else {
+      // Build normalized company fingerprints from ALL available identifiers
+      const normalize = (s: string) =>
+        (s || "")
+          .toLowerCase()
+          .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+          .replace(/\b(sarl|eurl|spa|snc|ets|ste|entreprise|societe)\b/gi, "")
+          .replace(/[^a-z0-9]/g, "")
+          .trim();
 
-    let detectedFromOcr = false;
+      const companyFingerprints = [
+        normalize(document.company?.name || ""),
+        normalize(document.company?.raisonSociale || ""),
+        normalize(document.company?.client?.name || ""),
+      ].filter((f) => f.length >= 4);
 
-    // 1. Try OCR rawText ─────────────────────────────────────────────
-    if (ocrRawText) {
-      const beneMatch = ocrRawText.match(
-        /(?:[Àà]\s*l['''`]\s*ordre\s+de|A\s+l['''`]ordre\s+de|ordre\s+de\s+paiement|payable\s+[\u00e0a])\s*[:\-–]?\s*([^\n\r,=|]{3,80})/i
-      );
-      if (beneMatch?.[1]) {
-        const bene = normalize(beneMatch[1]);
-        if (bene.length >= 4 && companyFingerprints.length > 0) {
-          detectedFromOcr = true;
-          chequeIsReceived = companyFingerprints.some(
-            (fp) => bene.includes(fp) || fp.includes(bene.substring(0, Math.min(bene.length, 14)))
-          );
+      if (ocrRawText) {
+        const beneMatch = ocrRawText.match(
+          /(?:[Àà]\s*l['''`]\s*ordre\s+de|A\s+l['''`]ordre\s+de|ordre\s+de\s+paiement|payable\s+[\u00e0a])\s*[:\-–]?\s*([^\n\r,=|]{3,80})/i
+        );
+        if (beneMatch?.[1]) {
+          const bene = normalize(beneMatch[1]);
+          if (bene.length >= 4 && companyFingerprints.length > 0) {
+            chequeIsReceived = companyFingerprints.some(
+              (fp) => bene.includes(fp) || fp.includes(bene.substring(0, Math.min(bene.length, 14)))
+            );
+          }
         }
       }
-    }
-
-    // 2. Filename fallback ─────────────────────────────────────────────
-    if (!detectedFromOcr) {
-      const fname = (document.originalName || "").toLowerCase();
-      if (/vente|encaiss|recu|re\u00e7u|client|recette/i.test(fname)) {
-        chequeIsReceived = true;
-      } else if (/reglement|paiement|fournisseur|achat|charge/i.test(fname)) {
-        chequeIsReceived = false;
-      }
-      // else default remains false (issued = safe default)
     }
   }
 
@@ -371,6 +366,62 @@ export function DocumentValidationCard({
         ];
   });
 
+  const locale = lang === "ar" ? "ar-DZ" : lang === "en" ? "en-US" : "fr-FR";
+
+  // Sens du chèque (Reçu / Émis) avec possibilité de bascule manuelle en 1 clic
+  const [chequeDirection, setChequeDirection] = useState<"RECEIVED" | "ISSUED">(() => {
+    return chequeIsReceived ? "RECEIVED" : "ISSUED";
+  });
+
+  const handleToggleChequeDirection = (newDir: "RECEIVED" | "ISSUED") => {
+    setChequeDirection(newDir);
+    const amount = ocrAmountTTC > 0 ? ocrAmountTTC : (totalDebit || totalCredit || 0);
+    const entity = supplierName && supplierName !== "Inconnu" ? supplierName : "";
+    if (newDir === "RECEIVED") {
+      setLines([
+        {
+          id: "deb-512",
+          type: "DEBIT",
+          account: "512",
+          label: "Banque",
+          debit: amount,
+          credit: 0,
+          originalEntryId: initialEntries[0]?.id,
+        },
+        {
+          id: "cred-411.0",
+          type: "CREDIT",
+          account: "411.0",
+          label: entity ? `Client (${entity})` : "Client",
+          debit: 0,
+          credit: amount,
+          originalEntryId: initialEntries[0]?.id,
+        },
+      ]);
+    } else {
+      setLines([
+        {
+          id: "deb-401.0",
+          type: "DEBIT",
+          account: "401.0",
+          label: entity ? `Fournisseur (${entity})` : "Fournisseur",
+          debit: amount,
+          credit: 0,
+          originalEntryId: initialEntries[0]?.id,
+        },
+        {
+          id: "cred-512",
+          type: "CREDIT",
+          account: "512",
+          label: "Banque",
+          debit: 0,
+          credit: amount,
+          originalEntryId: initialEntries[0]?.id,
+        },
+      ]);
+    }
+  };
+
   const [showAiOriginal, setShowAiOriginal] = useState(false);
   const [showDocPreview, setShowDocPreview] = useState(false);
   const [showRejectModal, setShowRejectModal] = useState(false);
@@ -391,6 +442,32 @@ export function DocumentValidationCard({
   const totalCredit = useMemo(() => lines.reduce((s, l) => s + (Number(l.credit) || 0), 0), [lines]);
   const difference = Math.abs(totalDebit - totalCredit);
   const isBalanced = difference < 0.01 && totalDebit > 0;
+
+  const displayComment = useMemo(() => {
+    if (isChequeDocument) {
+      const amountStr = (ocrAmountTTC > 0 ? ocrAmountTTC : (totalDebit || totalCredit || 0)).toLocaleString(locale, {
+        minimumFractionDigits: 2,
+      });
+      const refStr = reference ? ` N° ${reference}` : "";
+      const entityStr =
+        supplierName && supplierName !== "Inconnu"
+          ? supplierName
+          : chequeDirection === "RECEIVED"
+          ? (lang === "ar" ? "عميل" : "Client")
+          : (lang === "ar" ? "مورد" : "Fournisseur");
+
+      if (chequeDirection === "RECEIVED") {
+        return lang === "ar"
+          ? `قبض شيك من العميل${refStr} — مدين 512 (بنك) / دائن 411.0 (${entityStr}) بمبلغ ${amountStr} د.ج (وفق قواعد SCF).`
+          : `Encaissement client par chèque${refStr} — Débit 512 (Banque) / Crédit 411.0 (${entityStr}) pour ${amountStr} DA (Règle SCF obligatoire).`;
+      } else {
+        return lang === "ar"
+          ? `تسديد مورد بشيك${refStr} — مدين 401.0 (${entityStr}) / دائن 512 (بنك) بمبلغ ${amountStr} د.ج (وفق قواعد SCF).`
+          : `Règlement fournisseur par chèque${refStr} — Débit 401.0 (${entityStr}) / Crédit 512 (Banque) pour ${amountStr} DA (Règle SCF obligatoire).`;
+      }
+    }
+    return entryComment;
+  }, [isChequeDocument, chequeDirection, reference, supplierName, ocrAmountTTC, totalDebit, totalCredit, locale, lang, entryComment]);
 
   // Separate Debit lines & Credit lines for the classic 5-column journal layout
   const debitLines = useMemo(() => {
@@ -626,7 +703,6 @@ export function DocumentValidationCard({
     }
   }
 
-  const locale = lang === "ar" ? "ar-DZ" : lang === "en" ? "en-US" : "fr-FR";
   const rawDate = initialEntries[0]?.date || ocrDocDate;
   const docDate = rawDate
     ? new Date(rawDate).toLocaleDateString(locale, { day: "2-digit", month: "2-digit", year: "numeric" })
@@ -780,7 +856,7 @@ export function DocumentValidationCard({
       )}
 
       {/* ── AI / Memory Insight Pill ────────────────────────────────────────── */}
-      {entryComment && !isCorrected && (
+      {(displayComment || entryComment) && !isCorrected && (
         <div
           className={`p-3 rounded-xl text-xs border flex items-start gap-2.5 ${
             entrySource === "MEMORY"
@@ -799,7 +875,7 @@ export function DocumentValidationCard({
                 ? lang === "ar" ? "تفضيلك المحاسبي المحفوظ" : "Mémoire d'apprentissage active"
                 : lang === "ar" ? "تحليل الذكاء الاصطناعي (Gemini)" : "Analyse comptable Gemini SCF"}
             </span>
-            <p className="text-xs leading-relaxed font-medium">{entryComment}</p>
+            <p className="text-xs leading-relaxed font-medium">{displayComment || entryComment}</p>
           </div>
         </div>
       )}
@@ -845,6 +921,52 @@ export function DocumentValidationCard({
             ) : (
               <p className="text-slate-500 italic col-span-2">Proposition initiale enregistrée au format standard.</p>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Cheque Direction Switcher (Sens de l'écriture Chèque) ────────── */}
+      {isChequeDocument && (
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-3.5 bg-slate-50 border border-slate-200 rounded-xl">
+          <div className="flex items-center gap-2 text-xs">
+            <span className="font-bold text-slate-500">
+              {lang === "ar" ? "نوع معاملة الشيك :" : "Sens de l'opération :"}
+            </span>
+            <span
+              className={`px-2.5 py-1 rounded-md font-extrabold text-xs inline-flex items-center gap-1.5 ${
+                chequeDirection === "RECEIVED"
+                  ? "bg-emerald-100 text-emerald-800 border border-emerald-300/60"
+                  : "bg-blue-100 text-blue-800 border border-blue-300/60"
+              }`}
+            >
+              {chequeDirection === "RECEIVED"
+                ? (lang === "ar" ? "📥 شيك مقبوض (عميل) : مدين 512 / دائن 411" : "📥 Chèque Reçu (Client) : Débit 512 / Crédit 411")
+                : (lang === "ar" ? "📤 شيك صادر (مورد) : مدين 401 / دائن 512" : "📤 Chèque Émis (Fournisseur) : Débit 401 / Crédit 512")}
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5 bg-white p-1 rounded-lg border border-slate-200 shadow-2xs">
+            <button
+              type="button"
+              onClick={() => handleToggleChequeDirection("RECEIVED")}
+              className={`flex-1 sm:flex-none px-3.5 py-1.5 rounded-md text-xs font-black transition-all cursor-pointer ${
+                chequeDirection === "RECEIVED"
+                  ? "bg-emerald-600 text-white shadow-xs"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+              }`}
+            >
+              {lang === "ar" ? "📥 شيك مقبوض (512 / 411)" : "📥 Chèque Reçu (512 / 411)"}
+            </button>
+            <button
+              type="button"
+              onClick={() => handleToggleChequeDirection("ISSUED")}
+              className={`flex-1 sm:flex-none px-3.5 py-1.5 rounded-md text-xs font-black transition-all cursor-pointer ${
+                chequeDirection === "ISSUED"
+                  ? "bg-blue-600 text-white shadow-xs"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+              }`}
+            >
+              {lang === "ar" ? "📤 شيك صادر (401 / 512)" : "📤 Chèque Émis (401 / 512)"}
+            </button>
           </div>
         </div>
       )}

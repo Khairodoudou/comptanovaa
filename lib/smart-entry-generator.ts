@@ -60,6 +60,9 @@ export async function generateSmartEntries(
   // Détection : si le bénéficiaire "À l'ordre de" est la propre société → chèque reçu.
   if (docType === "CHEQUE") {
     // ── Detect cheque direction (received vs issued) ──────────────────────────
+    const hasSaleKeyword = /vente|encaiss|recu|re\u00e7u|client|recette/i.test(rawDesc);
+    const hasPurchaseKeyword = /reglement|paiement|fournisseur|achat|charge/i.test(rawDesc);
+
     const beneficiaryMatch = rawDesc.match(
       /(?:[Àà]\s+l[''']ordre\s+de|A\s+l[''']ordre\s+de|ordre\s+de\s+paiement|payable\s+[àa])\s*[:\-–]?\s*([^\n\r,=]{3,80})/i
     );
@@ -73,11 +76,13 @@ export async function generateSmartEntries(
       .replace(/[^a-z0-9]/g, "")
       .trim();
 
-    // Consider cheque RECEIVED if the beneficiary text contains the company name (min 4 chars match)
+    // Consider cheque RECEIVED if sale keyword in rawDesc OR beneficiary text contains company name
     const isReceivedCheque =
-      companyNorm.length >= 4 &&
-      beneficiary.length >= 4 &&
-      (beneficiary.includes(companyNorm) || companyNorm.includes(beneficiary.substring(0, Math.min(beneficiary.length, 12))));
+      hasSaleKeyword ||
+      (!hasPurchaseKeyword &&
+        companyNorm.length >= 4 &&
+        beneficiary.length >= 4 &&
+        (beneficiary.includes(companyNorm) || companyNorm.includes(beneficiary.substring(0, Math.min(beneficiary.length, 12)))));
 
     if (isReceivedCheque) {
       // ── Encaissement client : Débit 512 (Banque) / Crédit 411 (Client) ──────

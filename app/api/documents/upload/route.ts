@@ -222,7 +222,7 @@ export async function POST(req: NextRequest) {
   }
 
   // ── Generate PROPOSED journal entries + JournalEntryVersion (AI_PROPOSAL) ──
-  const rawDesc = ocrResult.rawText !== "MANUAL_ENTRY" ? ocrResult.rawText : supplier;
+  const rawDesc = [file.name, ocrResult.rawText !== "MANUAL_ENTRY" ? ocrResult.rawText : supplier].filter(Boolean).join(" ");
   const smartResult = await generateSmartEntries({
     companyId,
     companyName: company.name,
