@@ -162,6 +162,31 @@ export async function generateSmartEntries(
     };
   }
 
+  // 4. FACTURE ÉLECTRICITÉ, EAU, GAZ (Fluides non stockés : Sonelgaz, SEAAL, ADE, etc.)
+  // SCF Algérien direct : Débit 607 (Achat Non stocké : électricité, eau) / Crédit 512 (Banque) pour le montant TTC
+  const isUtilityInvoice =
+    /sonelgaz|seaal|ade\b|alg[eé]rienne des eaux|[eé]lectricit[eé]|gaz\b|eau potable|facture d['’]eau|facture d['’][eé]lectricit[eé]|facture électricité/i.test(
+      `${supplier} ${rawDesc} ${docType}`
+    );
+
+  if (isUtilityInvoice) {
+    const acc607 = findSubAccount(subAccounts, "607", "Achats non stockés");
+    const acc512 = findSubAccount(subAccounts, "512", "Banque");
+    return {
+      source: "FALLBACK",
+      explanation: `Facture électricité / eau N° ${refNumber || ""} — Débit ${acc607} (Achat Non stocké : électricité, eau) / Crédit ${acc512} (Banque) pour ${amountTTC} DA TTC (Règle SCF directe).`,
+      entries: [
+        {
+          debitAccount: acc607,
+          creditAccount: acc512,
+          amount: amountTTC,
+          description: `Achat Non stocké ( électricité, eau) — ${supplier}`,
+          reference: refNumber,
+        },
+      ],
+    };
+  }
+
   // ── Step 1: Check Accountant Preference Memory (pour Factures / Charges) ──
   let memoryMatch: AccountingMemoryMatch | null = null;
   try {

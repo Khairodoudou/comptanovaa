@@ -36,7 +36,7 @@ export const SCF_ACCOUNT_LABELS: Record<string, string> = {
   // Classe 6 : Comptes de charges
   "600": "Achats de marchandises vendues",
   "602": "Fournitures de bureau non stockables",
-  "607": "Achats non stockés de matières et fournitures",
+  "607": "Achat Non stocké ( électricité, eau)",
   "613": "Locations",
   "615": "Entretien et réparations",
   "616": "Primes d'assurances",
@@ -146,7 +146,7 @@ export function getAccountTitle(account: string, entityName?: string): string {
     else if (clean.startsWith("512")) label = "Banque";
     else if (clean.startsWith("53")) label = "Caisse";
     else if (clean.startsWith("602")) label = "Fournitures de bureau non stockables";
-    else if (clean.startsWith("607")) label = "Achats non stockés de matières et fournitures";
+    else if (clean.startsWith("607")) label = "Achat Non stocké ( électricité, eau)";
     else if (clean.startsWith("613")) label = "Locations";
     else if (clean.startsWith("615")) label = "Entretien et réparations";
     else if (clean.startsWith("616")) label = "Primes d'assurances";

@@ -391,6 +391,22 @@ export function generateEntries(
     // ── Charges générales / Autre ──────────────────────────────────────────
     default: {
       const detectedAcc = detectScfAccount(rawDesc, supplier);
+      const isUtility =
+        detectedAcc === "607" ||
+        /sonelgaz|seaal|ade\b|alg[eé]rienne des eaux|[eé]lectricit[eé]|gaz\b|eau potable/i.test(`${rawDesc} ${supplier}`);
+
+      if (isUtility) {
+        return [
+          {
+            debitAccount: "607",
+            creditAccount: "512",
+            amount: amountTTC,
+            description: `Achat Non stocké ( électricité, eau) — ${label}`,
+            reference: refNumber,
+          },
+        ];
+      }
+
       const chargeAcc = detectedAcc.startsWith("6") ? detectedAcc : "607";
       const creditTarget = creditForCharge(rawDesc || label, `401.${suffix}`);
       const creditAcc = creditTarget === "401" ? acc401 : creditTarget;

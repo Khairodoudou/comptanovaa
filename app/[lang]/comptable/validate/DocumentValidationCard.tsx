@@ -358,6 +358,42 @@ export function DocumentValidationCard({
       }
     }
 
+    // ── Facture Électricité / Eau / Gaz (Sonelgaz, SEAAL, ADE, etc.) ────────
+    // Règle SCF directe : Débit 607 (Achat Non stocké : électricité, eau) / Crédit 512 (Banque)
+    const isUtilityDocument =
+      /sonelgaz|seaal|ade\b|alg[eé]rienne des eaux|[eé]lectricit[eé]|gaz\b|eau potable|facture d['’]eau|facture d['’][eé]lectricit[eé]|facture électricité/i.test(
+        `${document.originalName} ${extractedSupplier} ${ocrRawText}`
+      );
+
+    if (isUtilityDocument) {
+      const hasDebit607 = list.some((l) => l.type === "DEBIT" && l.account.startsWith("607"));
+      const hasCredit512 = list.some((l) => l.type === "CREDIT" && (l.account.startsWith("512") || l.account.startsWith("53")));
+
+      if (!hasDebit607 || !hasCredit512 || list.length === 0) {
+        const totalAmount = ocrAmountTTC > 0 ? ocrAmountTTC : list.reduce((s, l) => Math.max(s, l.debit, l.credit), 0);
+        return [
+          {
+            id: "deb-607",
+            type: "DEBIT" as const,
+            account: "607",
+            label: "Achat Non stocké ( électricité, eau)",
+            debit: totalAmount,
+            credit: 0,
+            originalEntryId: initialEntries[0]?.id,
+          },
+          {
+            id: "cred-512",
+            type: "CREDIT" as const,
+            account: "512",
+            label: "Banque",
+            debit: 0,
+            credit: totalAmount,
+            originalEntryId: initialEntries[0]?.id,
+          },
+        ];
+      }
+    }
+
     return list.length > 0
       ? list
       : [
