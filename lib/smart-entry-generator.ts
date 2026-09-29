@@ -53,24 +53,69 @@ export async function generateSmartEntries(
   );
 
   // ── RÈGLES MÉTIER SCF STRICTES (Non polluées par la mémoire de charge) ──────
-  // 1. CHEQUE : Règlement Fournisseur obligatoire (Débit 401.0 / Crédit 512)
+  // 1. CHEQUE — Deux sens possibles selon SCF Algérien :
+  //    a) Chèque REÇU d'un client  → Débit 512 (Banque) / Crédit 411 (Client)   [Encaissement]
+  //    b) Chèque ÉMIS à un fournisseur → Débit 401 (Fournisseur) / Crédit 512 (Banque) [Règlement]
+  //
+  // Détection : si le bénéficiaire "À l'ordre de" est la propre société → chèque reçu.
   if (docType === "CHEQUE") {
-    const acc401 = findSubAccount(subAccounts, "401", supplier);
-    const debitAccount = acc401 === "401" ? "401.0" : acc401;
-    const creditAccount = findSubAccount(subAccounts, "512", "Banque");
-    return {
-      source: "FALLBACK",
-      explanation: `Règlement fournisseur par chèque N° ${refNumber || ""} — Débit ${debitAccount} (Fournisseur) / Crédit ${creditAccount} (Banque) pour ${amountTTC} DA (Règle SCF obligatoire).`,
-      entries: [
-        {
-          debitAccount,
-          creditAccount,
-          amount: amountTTC,
-          description: `Règlement fournisseur — ${supplier}`,
-          reference: refNumber,
-        },
-      ],
-    };
+    // ── Detect cheque direction (received vs issued) ──────────────────────────
+    const beneficiaryMatch = rawDesc.match(
+      /(?:[Àà]\s+l[''']ordre\s+de|A\s+l[''']ordre\s+de|ordre\s+de\s+paiement|payable\s+[àa])\s*[:\-–]?\s*([^\n\r,=]{3,80})/i
+    );
+    const beneficiary = (beneficiaryMatch?.[1] || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+
+    // Normalize company name for comparison (strip SARL/EURL prefixes, accents)
+    const companyNorm = (companyName || "")
+      .toLowerCase()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/\b(sarl|eurl|spa|snc|ets|ste)\b/gi, "")
+      .replace(/[^a-z0-9]/g, "")
+      .trim();
+
+    // Consider cheque RECEIVED if the beneficiary text contains the company name (min 4 chars match)
+    const isReceivedCheque =
+      companyNorm.length >= 4 &&
+      beneficiary.length >= 4 &&
+      (beneficiary.includes(companyNorm) || companyNorm.includes(beneficiary.substring(0, Math.min(beneficiary.length, 12))));
+
+    if (isReceivedCheque) {
+      // ── Encaissement client : Débit 512 (Banque) / Crédit 411 (Client) ──────
+      const acc512 = findSubAccount(subAccounts, "512", "Banque");
+      const acc411 = findSubAccount(subAccounts, "411", supplier);
+      const creditAccount = acc411 === "411" ? "411.0" : acc411;
+      return {
+        source: "FALLBACK",
+        explanation: `Encaissement client par chèque N° ${refNumber || ""} — Débit ${acc512} (Banque) / Crédit ${creditAccount} (Client) pour ${amountTTC} DA (Règle SCF obligatoire).`,
+        entries: [
+          {
+            debitAccount: acc512,
+            creditAccount,
+            amount: amountTTC,
+            description: `Encaissement client — ${supplier}`,
+            reference: refNumber,
+          },
+        ],
+      };
+    } else {
+      // ── Règlement fournisseur : Débit 401 (Fournisseur) / Crédit 512 (Banque) ──
+      const acc401 = findSubAccount(subAccounts, "401", supplier);
+      const debitAccount = acc401 === "401" ? "401.0" : acc401;
+      const creditAccount = findSubAccount(subAccounts, "512", "Banque");
+      return {
+        source: "FALLBACK",
+        explanation: `Règlement fournisseur par chèque N° ${refNumber || ""} — Débit ${debitAccount} (Fournisseur) / Crédit ${creditAccount} (Banque) pour ${amountTTC} DA (Règle SCF obligatoire).`,
+        entries: [
+          {
+            debitAccount,
+            creditAccount,
+            amount: amountTTC,
+            description: `Règlement fournisseur — ${supplier}`,
+            reference: refNumber,
+          },
+        ],
+      };
+    }
   }
 
   // 2. BON DE RÉCEPTION / ENTRÉE EN STOCK : Débit 30 (Stock) / Crédit 380 (Achat stocké)

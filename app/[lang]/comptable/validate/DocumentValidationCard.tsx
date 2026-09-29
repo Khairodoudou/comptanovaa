@@ -200,40 +200,79 @@ export function DocumentValidationCard({
     });
 
     if (isCheque) {
-      // A cheque is exclusively a supplier debt settlement (Débit 401.0 / Crédit 512).
-      // If previous bad memory or generation populated stock (30/380), charges (6xx), or TVA (44566),
-      // auto-repair immediately to the exact SCF standard (Image 2).
+      // Detect cheque direction from existing entries:
+      // - Received cheque (encaissement): Débit 512 / Crédit 411
+      // - Issued cheque (règlement):      Débit 401 / Crédit 512
+      const hasDebit512 = list.some((l) => l.type === "DEBIT" && l.account.startsWith("512"));
+      const hasCredit411 = list.some((l) => l.type === "CREDIT" && l.account.startsWith("411"));
+      const hasDebit401 = list.some((l) => l.type === "DEBIT" && l.account.startsWith("401"));
+      const hasCredit512 = list.some((l) => l.type === "CREDIT" && (l.account.startsWith("512") || l.account.startsWith("53")));
+
+      const isReceivedCheque = hasDebit512 && hasCredit411;
+      const isIssuedCheque = hasDebit401 && hasCredit512;
+
+      // Invalid accounts common to both cheque types (stock, charges, TVA)
       const hasInvalidAccounts = list.some(
         (l) => l.account === "30" || l.account === "380" || l.account.startsWith("6") || l.account.startsWith("445")
       );
-      const hasValidDebit = list.some((l) => l.type === "DEBIT" && l.account.startsWith("401"));
-      const hasValidCredit = list.some((l) => l.type === "CREDIT" && (l.account.startsWith("512") || l.account.startsWith("53")));
 
-      if (hasInvalidAccounts || !hasValidDebit || !hasValidCredit || list.length === 0) {
+      if (hasInvalidAccounts || (!isReceivedCheque && !isIssuedCheque) || list.length === 0) {
         const totalAmount = ocrAmountTTC > 0
           ? ocrAmountTTC
           : list.reduce((s, l) => Math.max(s, l.debit, l.credit), 0);
 
-        return [
-          {
-            id: "deb-401.0",
-            type: "DEBIT",
-            account: "401.0",
-            label: entityName ? `Fournisseur (${entityName})` : "Fournisseur",
-            debit: totalAmount,
-            credit: 0,
-            originalEntryId: initialEntries[0]?.id,
-          },
-          {
-            id: "cred-512",
-            type: "CREDIT",
-            account: "512",
-            label: "Banque",
-            debit: 0,
-            credit: totalAmount,
-            originalEntryId: initialEntries[0]?.id,
-          },
-        ];
+        // Default to issued cheque (401/512) if direction cannot be inferred from broken entries.
+        // The AI explanation text can help: if it mentions "encaissement" or "411", use 512/411.
+        const entryComment = initialEntries[0]?.comment || "";
+        const looksLikeReceivedCheque =
+          /encaissement|411|client/i.test(entryComment) ||
+          (hasDebit512 && !hasDebit401);
+
+        if (looksLikeReceivedCheque) {
+          // Auto-repair → encaissement client (Débit 512 / Crédit 411.0)
+          return [
+            {
+              id: "deb-512",
+              type: "DEBIT" as const,
+              account: "512",
+              label: "Banque",
+              debit: totalAmount,
+              credit: 0,
+              originalEntryId: initialEntries[0]?.id,
+            },
+            {
+              id: "cred-411.0",
+              type: "CREDIT" as const,
+              account: "411.0",
+              label: entityName ? `Client (${entityName})` : "Client",
+              debit: 0,
+              credit: totalAmount,
+              originalEntryId: initialEntries[0]?.id,
+            },
+          ];
+        } else {
+          // Auto-repair → règlement fournisseur (Débit 401.0 / Crédit 512)
+          return [
+            {
+              id: "deb-401.0",
+              type: "DEBIT" as const,
+              account: "401.0",
+              label: entityName ? `Fournisseur (${entityName})` : "Fournisseur",
+              debit: totalAmount,
+              credit: 0,
+              originalEntryId: initialEntries[0]?.id,
+            },
+            {
+              id: "cred-512",
+              type: "CREDIT" as const,
+              account: "512",
+              label: "Banque",
+              debit: 0,
+              credit: totalAmount,
+              originalEntryId: initialEntries[0]?.id,
+            },
+          ];
+        }
       }
     }
 

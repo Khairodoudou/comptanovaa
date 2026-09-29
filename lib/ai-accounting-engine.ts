@@ -95,14 +95,15 @@ ${(req.ocrText || "").substring(0, 1500)}
 4. BON DE LIVRAISON / BON DE SORTIE DE STOCK :
    - Sortie de stock : Débit 600 (Achats de marchandises vendues) / Crédit 30 (Stocks de marchandises).
    - Le montant est le coût HT de revient des marchandises sorties.
-5. CHÈQUE ÉMIS / RÈGLEMENT FOURNISSEUR PAR CHÈQUE (TRÈS IMPORTANT) :
-   - Si le document est un "Chèque", "CHQ", "Chèque N°", "payez contre ce chèque", ou contient un numéro de chèque (CMC7) :
-   - L'écriture est un RÈGLEMENT FOURNISSEUR : Débit 401 (Fournisseurs) / Crédit 512 (Banques).
-   - Le montant est TOUJOURS le montant TTC du chèque (montant inscrit sur le chèque).
+5. CHÈQUE — DEUX CAS OBLIGATOIRES À DISTINGUER (TRÈS IMPORTANT) :
+   a) CHÈQUE ÉMIS (Règlement fournisseur) — si "À l'ordre de" est un FOURNISSEUR (pas la société cliente) :
+      - L'entreprise PAIE → Débit 401 (Fournisseurs) / Crédit 512 (Banques).
+      - Exemple : Chèque BEA N° 456782 à l'ordre de SARL Nord Pack → Débit 401 (SARL Nord Pack) | Crédit 512 (BEA).
+   b) CHÈQUE REÇU (Encaissement client) — si "À l'ordre de" est la SOCIÉTÉ CLIENTE elle-même :
+      - L'entreprise ENCAISSE → Débit 512 (Banques) / Crédit 411 (Clients).
+      - Exemple : Chèque reçu à l'ordre de SARL Café Et Snack → Débit 512 (Banque) | Crédit 411 (Client).
    - Il n'y a JAMAIS de compte TVA (44566 ou 44571) dans une écriture de chèque.
-   - La référence est le numéro du chèque (ex: 7699291).
-   - Le bénéficiaire ("À l'ordre de") est le fournisseur → compte 401.xxx.
-   - Exemple : Chèque BADR N° 7699291 — 239 071 DA à l'ordre de SARL Color Print → Débit 401 (SARL Color Print) 239 071 DA | Crédit 512 (Banque BADR) 239 071 DA.
+   - Le montant est TOUJOURS le montant TTC inscrit sur le chèque.
 6. RELEVÉ BANCAIRE :
    - Entrée de trésorerie : Débit 512 (Banques) / Crédit 401 ou 411.
    - Sortie de trésorerie : Débit 401 / Crédit 512.
