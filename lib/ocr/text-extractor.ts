@@ -182,7 +182,7 @@ function normalizeAmountStr(raw: string): number | null {
   return null;
 }
 
-function parseAmount(text: string): number | null {
+function parseAmount(text: string, excludeNumber?: string | null): number | null {
   // 1. Try explicit TTC / NET À PAYER patterns first
   for (const pattern of TTC_PATTERNS) {
     const regex = new RegExp(pattern.source, pattern.flags);
@@ -193,7 +193,7 @@ function parseAmount(text: string): number | null {
         const preContext = text.slice(Math.max(0, m.index - 30), m.index).toLowerCase();
         if (/\b(capital|t[eé]l|phone|fax|nif|rc|rib)\b/.test(preContext)) continue;
         const val = normalizeAmountStr(m[1]);
-        if (val !== null && val > 0) return val;
+        if (val !== null && val > 0 && (!excludeNumber || val !== Number(excludeNumber.replace(/\D/g, '')))) return val;
       }
     }
   }
@@ -223,8 +223,13 @@ function parseAmount(text: string): number | null {
       const preContext = text.slice(Math.max(0, match.index - 35), match.index).toLowerCase();
       // Skip numbers belonging to metadata (phones, tax IDs, capital)
       if (/\b(capital|t[eé]l|phone|fax|nif|rc|rib|ccp|nis|article|code)\b/.test(preContext)) continue;
+      // Skip numbers directly preceded by cheque/serie/account labels
+      if (/(?:ch[eè]que|cheque|chq|s[ée]rie|compte|n°|num[eé]ro)\s*[:#\.\s]*$/i.test(preContext)) continue;
       const val = normalizeAmountStr(raw);
-      if (val !== null) candidates.push(val);
+      if (val !== null) {
+        if (excludeNumber && val === Number(excludeNumber.replace(/\D/g, ''))) continue;
+        candidates.push(val);
+      }
     }
   }
   if (candidates.length > 0) {
@@ -242,7 +247,7 @@ const SUPPLIER_PATTERNS: RegExp[] = [
   /\b((?:S\.A\.R\.L|S\.P\.A|E\.U\.R\.L|S\.A\.S)\s+[A-ZÀ-Úa-zà-ú0-9\s\-&'.]{2,60})/,
   /(?:RAISON\s*SOCIALE|SOCIÉTÉ|ENTREPRISE|ETABLISSEMENT|GROUPE)\s*[:\-–]?\s*([^\n\r,]{3,80})/i,
   /(?:الشركة|المؤسسة)\s*[:\-–]?\s*([^\n\r,]{3,80})/,
-  /(?:A\s*L['']ORDRE\s*DE|لأمر)\s*[:\-–]?\s*([^\n\r,]{3,80})/i,
+  /(?:A[vu\s]*l['’]?[o0]rdre(?:\s*de)?|Avordrede|لأمر)\s*[:\-–]?\s*([^\n\r,=]{3,80})/i,
 ];
 
 const CLIENT_PATTERNS: RegExp[] = [
@@ -256,6 +261,8 @@ function cleanSupplierCandidate(raw: string): string {
   return raw
     .trim()
     .replace(/\s+/g, ' ')
+    // Strip leading cheque beneficiary markers if they leaked in
+    .replace(/^(?:A[vu\s]*l['’]?[o0]rdre(?:\s*de)?|Avordrede|لأمر|Ordre\s+de)\s*[:\-–]?\s*/i, '')
     // Remove markdown image syntax e.g. "![img-0.jpeg](img-0.jpeg)" or "! img-0.jpeg (img-0.jpeg)"
     .replace(/!?\[.*?\](?:\(.*?\))?/gi, '')
     // Remove file extension artifacts with optional parens
@@ -328,6 +335,16 @@ function parseSupplier(
         const candidate = cleanSupplierCandidate(m[1]);
         if (isValidSupplierCandidate(candidate) && !isUserCompany(candidate)) return candidate;
       }
+    }
+  }
+
+  // If this is a cheque (CHEQUE) or contains cheque markers, prioritize beneficiary pattern ("A l'ordre de", "لأمر")
+  if (docTypeHint === "CHEQUE" || /ch[eè]que|payez\s+contre/i.test(text)) {
+    const chequeBeneficiaryPattern = /(?:A[vu\s]*l['’]?[o0]rdre(?:\s*de)?|Avordrede|لأمر|Ordre\s+de)\s*[:\-–]?\s*([^\n\r,=]{3,80})/i;
+    const m = text.match(chequeBeneficiaryPattern);
+    if (m?.[1]) {
+      const candidate = cleanSupplierCandidate(m[1]);
+      if (isValidSupplierCandidate(candidate) && !isUserCompany(candidate)) return candidate;
     }
   }
 
@@ -756,9 +773,10 @@ export function extractDocumentData(
     documentType = "FACTURE_FOURNISSEUR";
   }
 
-  const date = parseDate(rawText);
-  const chequeDate = parseChequeDate(rawText) || date;
-  const amount = parseAmount(rawText);
+  const chequeDate = parseChequeDate(rawText);
+  const parsedDate = parseDate(rawText);
+  const date = documentType === "CHEQUE" ? (chequeDate || parsedDate) : (parsedDate || chequeDate);
+  const amount = parseAmount(rawText, chequeNumber || invoiceNumber);
   const supplier = parseSupplier(rawText, companyInput, documentType);
 
   let amountHT = parseHTAmount(rawText);

@@ -276,10 +276,49 @@ function checkBalance(entries: ReturnType<typeof generateEntries>, expectedTTC: 
     undefined,
     "IFU"
   );
-  assert(entries.length === 1, "Facture Client IFU produces 1 entry (100% TTC)");
   assert(entries[0].debitAccount === "411" && entries[0].creditAccount === "700" && entries[0].amount === 238000, "Credit 700 is 100% TTC (238,000 DA)");
   assert(!entries.some((e) => e.creditAccount === "44571"), "No 44571 account for IFU client");
   checkBalance(entries, 238000, "Facture Client IFU");
+}
+
+// ── Test H: Chèque Émis / Règlement Fournisseur (SCF Algérien - Image 2 standard) ──
+{
+  const entries = generateEntries(
+    "CHEQUE",
+    239071,
+    "SARL Color Print",
+    "7699291",
+    "Règlement fournisseur par chèque",
+    [],
+    undefined,
+    undefined,
+    "REEL"
+  );
+  assert(entries.length === 1, "Règlement par chèque produces exactly 1 entry (Debit 401.0 / Credit 512)");
+  assert(entries[0].debitAccount === "401.0", "Debit is 401.0 (Fournisseur)");
+  assert(entries[0].creditAccount === "512", "Credit is 512 (Banque)");
+  assert(entries[0].amount === 239071, "Amount is 239,071 DA (TTC)");
+  assert(entries[0].reference === "7699291", "Reference is cheque number 7699291");
+  assert(!entries.some((e) => e.debitAccount === "44566" || e.creditAccount === "44571"), "No TVA accounts in cheque entry");
+  checkBalance(entries, 239071, "Règlement Chèque Fournisseur");
+}
+
+// ── Test I: Cheque OCR extraction with noisy beneficiary prefix ──────────────
+{
+  const chequeOcrText = `Chèque: 7699291 DA 239 071 DA
+BANQUE DE L'AGRICULTURE ET DU DEVELOPPENT RURAL
+Payez contre ce chèque DEUX CENT TRENTE-NEUF MILLE SOIXANTE ET ONZE
+Avordrede SARL Color Print =
+SARL Nord Pack
+Le 05/09/2026
+7699291 00300697000236130080`;
+
+  const res = extractDocumentData(chequeOcrText, "cheque.jpg", { name: "SARL Nord Pack" });
+  assert(res.documentType === "CHEQUE", "Document type is CHEQUE");
+  assert(res.chequeNumber === "7699291", "Cheque number is 7699291");
+  assert(res.supplier === "SARL Color Print", "Supplier cleaned as 'SARL Color Print' (Avordrede stripped)");
+  assert(res.amount === 239071, "Amount is 239,071 DA");
+  assert(res.date === "2026-09-05", "Date is 2026-09-05");
 }
 
 console.log(`\n${BOLD}─────────────────────────────────────`);

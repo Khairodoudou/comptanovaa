@@ -344,10 +344,10 @@ export function generateEntries(
     case "CHEQUE":
       return [
         {
-          debitAccount: acc401,
+          debitAccount: acc401 === "401" ? "401.0" : acc401,
           creditAccount: "512",
           amount: amountTTC,
-          description: `Règlement chèque fournisseur — ${label}`,
+          description: `Règlement fournisseur — ${label}`,
           reference: refNumber,
         },
       ];

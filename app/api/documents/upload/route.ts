@@ -88,6 +88,7 @@ export async function POST(req: NextRequest) {
     amountHT?: number;
     amountTVA?: number;
     date?: string;
+    chequeDate?: string;
     supplier?: string;
     invoiceNumber?: string;
     chequeNumber?: string;
@@ -147,7 +148,7 @@ export async function POST(req: NextRequest) {
   // ── Resolve document data ───────────────────────────────────────────────────
   const docType = extracted.documentType || "AUTRE";
   const amountTTC = extracted.amount ?? 0;
-  const date = extracted.date ?? new Date().toISOString().split("T")[0];
+  const date = extracted.date ?? extracted.chequeDate ?? new Date().toISOString().split("T")[0];
   const supplier = extracted.supplier ?? "Inconnu";
 
   const isIfu = Boolean(

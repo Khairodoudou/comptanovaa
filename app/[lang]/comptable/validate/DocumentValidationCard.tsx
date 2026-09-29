@@ -97,13 +97,17 @@ export function DocumentValidationCard({
   // Extract OCR metadata
   let ocrAmountTTC = 0;
   let extractedSupplier = "Inconnu";
-  let ocrInvoiceNumber = "";
+  let ocrRefNumber = "";
+  let ocrDocDate: string | null = null;
   if (document.ocrData) {
     try {
       const parsed = JSON.parse(document.ocrData);
       ocrAmountTTC = parsed.extracted?.amount || 0;
       extractedSupplier = cleanEntityName(parsed.supplier || parsed.extracted?.supplier || "Inconnu");
-      ocrInvoiceNumber = parsed.extracted?.invoiceNumber || "";
+      ocrRefNumber = parsed.extracted?.invoiceNumber || parsed.extracted?.chequeNumber || "";
+      if (parsed.extracted?.date || parsed.extracted?.chequeDate) {
+        ocrDocDate = parsed.extracted.date || parsed.extracted.chequeDate;
+      }
     } catch {}
   }
 
@@ -121,9 +125,9 @@ export function DocumentValidationCard({
   // Editable Supplier / Tiers state
   const [supplierName, setSupplierName] = useState(extractedSupplier);
 
-  // Reference state
+  // Reference state (supports chequeNumber and invoiceNumber)
   const [reference, setReference] = useState(
-    initialEntries.find((e) => e.reference)?.reference || ocrInvoiceNumber || ""
+    initialEntries.find((e) => e.reference)?.reference || ocrRefNumber || ""
   );
 
   const currentRefLabel = getRefLabel(reference, document.type, document.originalName);
@@ -132,13 +136,15 @@ export function DocumentValidationCard({
   const [lines, setLines] = useState<DisplayLine[]>(() => {
     const list: DisplayLine[] = [];
     const entityName = extractedSupplier !== "Inconnu" ? extractedSupplier : "";
+    const isCheque = document.type === "CHEQUE";
 
     const debitsMap: Record<string, { amount: number; entryId: string; label?: string }> = {};
     const creditsMap: Record<string, { amount: number; entryId: string; label?: string }> = {};
 
     initialEntries.forEach((e) => {
-      const cleanDebit = e.debitAccount.replace(/\.0$/, "");
-      const cleanCredit = e.creditAccount.replace(/\.0$/, "");
+      let cleanDebit = e.debitAccount;
+      if (isCheque && cleanDebit === "401") cleanDebit = "401.0";
+      const cleanCredit = e.creditAccount;
 
       const baseDesc = (e.description || "").split("—")[0]?.trim() || "";
 
@@ -146,13 +152,25 @@ export function DocumentValidationCard({
         debitsMap[cleanDebit] = {
           amount: 0,
           entryId: e.id,
-          label: baseDesc && !baseDesc.startsWith("Compte ") && baseDesc !== "Charge TTC" ? baseDesc : undefined,
+          label:
+            cleanDebit.startsWith("401") || cleanDebit.startsWith("411") || cleanDebit.startsWith("512") || cleanDebit.startsWith("53")
+              ? getAccountTitle(cleanDebit, entityName)
+              : baseDesc && !baseDesc.startsWith("Compte ") && baseDesc !== "Charge TTC" && !baseDesc.toLowerCase().includes("règlement")
+              ? baseDesc
+              : undefined,
         };
       }
       debitsMap[cleanDebit].amount += e.amount;
 
       if (!creditsMap[cleanCredit]) {
-        creditsMap[cleanCredit] = { amount: 0, entryId: e.id };
+        creditsMap[cleanCredit] = {
+          amount: 0,
+          entryId: e.id,
+          label:
+            cleanCredit.startsWith("401") || cleanCredit.startsWith("411") || cleanCredit.startsWith("512") || cleanCredit.startsWith("53")
+              ? getAccountTitle(cleanCredit, entityName)
+              : undefined,
+        };
       }
       creditsMap[cleanCredit].amount += e.amount;
     });
@@ -183,9 +201,14 @@ export function DocumentValidationCard({
 
     return list.length > 0
       ? list
+      : isCheque
+      ? [
+          { id: "1", type: "DEBIT", account: "401.0", label: entityName ? `Fournisseur (${entityName})` : "Fournisseur", debit: ocrAmountTTC, credit: 0 },
+          { id: "2", type: "CREDIT", account: "512", label: "Banque", debit: 0, credit: ocrAmountTTC },
+        ]
       : [
           { id: "1", type: "DEBIT", account: "380", label: "Achat de marchandise", debit: ocrAmountTTC, credit: 0 },
-          { id: "2", type: "CREDIT", account: "401", label: `Fournisseur (${entityName})`, debit: 0, credit: ocrAmountTTC },
+          { id: "2", type: "CREDIT", account: "401", label: entityName ? `Fournisseur (${entityName})` : "Fournisseur", debit: 0, credit: ocrAmountTTC },
         ];
   });
 
@@ -362,12 +385,16 @@ export function DocumentValidationCard({
           }
         }
 
+        const desc = d.label.includes(supplierName) || !supplierName || supplierName === "Inconnu"
+          ? d.label
+          : `${d.label} — ${supplierName}`;
+
         payloadEntries.push({
           id: entryId,
           debitAccount: d.account,
           creditAccount: c.account,
           amount: roundedSlice,
-          description: `${d.label} — ${supplierName}`,
+          description: desc,
           reference,
         });
 
@@ -378,12 +405,15 @@ export function DocumentValidationCard({
       if (payloadEntries.length === 0) {
         if (debits.length > 0) {
           debits.forEach((d, i) => {
+            const desc = d.label.includes(supplierName) || !supplierName || supplierName === "Inconnu"
+              ? d.label
+              : `${d.label} — ${supplierName}`;
             payloadEntries.push({
               id: d.originalEntryId || initialEntries[i]?.id,
               debitAccount: d.account,
               creditAccount: credits[0]?.account || "401",
               amount: Number(d.debit),
-              description: `${d.label} — ${supplierName}`,
+              description: desc,
               reference,
             });
           });
@@ -438,8 +468,9 @@ export function DocumentValidationCard({
   }
 
   const locale = lang === "ar" ? "ar-DZ" : lang === "en" ? "en-US" : "fr-FR";
-  const docDate = initialEntries[0]?.date
-    ? new Date(initialEntries[0].date).toLocaleDateString(locale, { day: "2-digit", month: "2-digit", year: "numeric" })
+  const rawDate = initialEntries[0]?.date || ocrDocDate;
+  const docDate = rawDate
+    ? new Date(rawDate).toLocaleDateString(locale, { day: "2-digit", month: "2-digit", year: "numeric" })
     : new Date().toLocaleDateString(locale);
 
   const viewUrl = `/api/documents/${document.id}/view`;
@@ -509,7 +540,11 @@ export function DocumentValidationCard({
               {/* Editable Supplier / Tiers input in Header */}
               <span className="flex items-center gap-1">
                 <span className="text-slate-500">
-                  {document.type === "FACTURE_CLIENT" ? "Client:" : "Fournisseur:"}
+                  {document.type === "FACTURE_CLIENT"
+                    ? "Client:"
+                    : document.type === "CHEQUE"
+                    ? "Bénéficiaire / Fournisseur:"
+                    : "Fournisseur:"}
                 </span>
                 <span className="relative inline-flex items-center group">
                   <input

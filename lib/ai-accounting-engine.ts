@@ -95,7 +95,18 @@ ${(req.ocrText || "").substring(0, 1500)}
 4. BON DE LIVRAISON / BON DE SORTIE DE STOCK :
    - Sortie de stock : Débit 600 (Achats de marchandises vendues) / Crédit 30 (Stocks de marchandises).
    - Le montant est le coût HT de revient des marchandises sorties.
-5. CLASSIFICATION INTELLIGENTE DU COMPTE DE CHARGE / ACHAT (Classe 6 / Classe 3 / Classe 2) :
+5. CHÈQUE ÉMIS / RÈGLEMENT FOURNISSEUR PAR CHÈQUE (TRÈS IMPORTANT) :
+   - Si le document est un "Chèque", "CHQ", "Chèque N°", "payez contre ce chèque", ou contient un numéro de chèque (CMC7) :
+   - L'écriture est un RÈGLEMENT FOURNISSEUR : Débit 401 (Fournisseurs) / Crédit 512 (Banques).
+   - Le montant est TOUJOURS le montant TTC du chèque (montant inscrit sur le chèque).
+   - Il n'y a JAMAIS de compte TVA (44566 ou 44571) dans une écriture de chèque.
+   - La référence est le numéro du chèque (ex: 7699291).
+   - Le bénéficiaire ("À l'ordre de") est le fournisseur → compte 401.xxx.
+   - Exemple : Chèque BADR N° 7699291 — 239 071 DA à l'ordre de SARL Color Print → Débit 401 (SARL Color Print) 239 071 DA | Crédit 512 (Banque BADR) 239 071 DA.
+6. RELEVÉ BANCAIRE :
+   - Entrée de trésorerie : Débit 512 (Banques) / Crédit 401 ou 411.
+   - Sortie de trésorerie : Débit 401 / Crédit 512.
+
    - 607 : Électricité, gaz, eau (Sonelgaz, SEAAL, ADE, etc.)
    - 626 : Postes & Télécoms (Mobilis, Djezzy, Ooredoo, Algérie Télécom, internet, 4G, timbres)
    - 613 : Locations et charges locatives (loyer bureau, dépôt, leasing)
@@ -112,7 +123,8 @@ ${(req.ocrText || "").substring(0, 1500)}
    - 380 : Achats de marchandises stockées (à utiliser uniquement comme Crédit dans un bon de réception/bon d'entrée)
    - 381 : Achats de matières premières
    - 30 : Stocks de marchandises (à utiliser comme Débit dans un bon de réception/bon d'entrée)
-6. ÉQUILIBRE OBLIGATOIRE :
+8. ÉQUILIBRE OBLIGATOIRE :
+
    - Chaque ligne d'écriture doit avoir debitAccount, creditAccount, amount (positif), description claire en français avec nom du tiers, et reference.
    - La somme des montants débités DOIT égaler exactement le montant utilisé (HT pour bons de stock, TTC pour factures).
 

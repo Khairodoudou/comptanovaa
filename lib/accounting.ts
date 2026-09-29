@@ -11,11 +11,11 @@ export const SCF_ACCOUNT_LABELS: Record<string, string> = {
   "381": "Achats de matières premières",
 
   // Classe 4 : Comptes de tiers
-  "401": "Fournisseurs",
-  "4010": "Fournisseurs de biens et services",
-  "404": "Fournisseurs d'immobilisations",
-  "411": "Clients",
-  "4110": "Clients - Ventes de biens et services",
+  "401": "Fournisseur",
+  "4010": "Fournisseur",
+  "404": "Fournisseur d'immobilisations",
+  "411": "Client",
+  "4110": "Client",
   "421": "Personnel - Rémunérations dues",
   "431": "Sécurité sociale (CNAS / CASNOS)",
   "444": "État - Impôts sur les bénéfices (IBS)",
@@ -27,11 +27,11 @@ export const SCF_ACCOUNT_LABELS: Record<string, string> = {
   "4452": "TVA due",
 
   // Classe 5 : Comptes financiers
-  "512": "Banques",
-  "5120": "Banques nationales",
+  "512": "Banque",
+  "5120": "Banque",
   "517": "Autres organismes financiers (CCP)",
-  "53": "Caisses",
-  "530": "Caisse principale",
+  "53": "Caisse",
+  "530": "Caisse",
 
   // Classe 6 : Comptes de charges
   "600": "Achats de marchandises vendues",
@@ -63,6 +63,8 @@ export const SCF_ACCOUNT_LABELS: Record<string, string> = {
 export function cleanEntityName(name?: string | null): string {
   if (!name) return "";
   let clean = name.trim();
+  // Strip leading cheque beneficiary markers if they leaked in (e.g. "Avordrede SARL Color Print", "A l'ordre de...")
+  clean = clean.replace(/^(?:A[vu\s]*l['’]?[o0]rdre(?:\s*de)?|Avordrede|لأمر|Ordre\s+de)\s*[:\-–]?\s*/i, "").trim();
   // Strip trailing OCR artifacts like "ADRESSE : TEL", "ADRESSE :", "TEL :", "ADR :"
   clean = clean.replace(/\s*(?:ADRESSE|ADR|TEL|TÉLÉPHONE|TELEPHONE)\s*:\s*(?:TEL\s*:?)?\s*$/i, "").trim();
   clean = clean.replace(/\s+(?:ADRESSE\s*:?|TEL\s*:?|TÉLÉPHONE\s*:?)+$/i, "").trim();
@@ -139,10 +141,10 @@ export function getAccountTitle(account: string, entityName?: string): string {
     else if (clean.startsWith("380")) label = "Achats de marchandises";
     else if (clean.startsWith("4456")) label = "TVA déductible";
     else if (clean.startsWith("4457")) label = "TVA collectée";
-    else if (clean.startsWith("401")) label = "Fournisseurs";
-    else if (clean.startsWith("411")) label = "Clients";
-    else if (clean.startsWith("512")) label = "Banques";
-    else if (clean.startsWith("53")) label = "Caisses";
+    else if (clean.startsWith("401")) label = "Fournisseur";
+    else if (clean.startsWith("411")) label = "Client";
+    else if (clean.startsWith("512")) label = "Banque";
+    else if (clean.startsWith("53")) label = "Caisse";
     else if (clean.startsWith("602")) label = "Fournitures de bureau non stockables";
     else if (clean.startsWith("607")) label = "Achats non stockés de matières et fournitures";
     else if (clean.startsWith("613")) label = "Locations";
