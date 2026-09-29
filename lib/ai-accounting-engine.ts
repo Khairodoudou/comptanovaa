@@ -82,11 +82,20 @@ ${(req.ocrText || "").substring(0, 1500)}
 1. RÉGIME FORFAITAIRE (IFU) :
    - Si l'entreprise est à l'IFU, IL EST STRICTEMENT INTERDIT de déduire ou collecter la TVA (aucun compte 44566 ou 44571).
    - L'intégralité du montant TTC (${req.amountTTC} DZD) est imputée directement au compte de charge/achat au Débit et Fournisseur 401 au Crédit.
-2. RÉGIME RÉEL :
+2. RÉGIME RÉEL (Factures fournisseurs) :
    - Décomposer rigoureusement : Montant HT au Débit (Charge 6xx, Stock 38x, ou Immo 21x) + Débit 44566 (TVA déductible 19% ou 9%) / Crédit 401 (Total TTC).
    - Si la facture est exonérée (ou TVA 0%), imputer 100% au Débit sans compte 44566.
    - Si FACTURE_CLIENT : Débit 411 (TTC) / Crédit 700/704 (HT) + Crédit 44571 (TVA collectée).
-3. CLASSIFICATION INTELLIGENTE DU COMPTE DE CHARGE / ACHAT (Classe 6 / Classe 3 / Classe 2) :
+3. BON DE RÉCEPTION / BON D'ENTRÉE EN STOCK (TRÈS IMPORTANT) :
+   - Si le document est un "Bon de réception", "Bon d'entrée", "BR N°", "BE N°", ou contient "entrée en stock" / "valeur d'entrée en stock" :
+   - L'écriture est une ENTRÉE EN STOCK : Débit 30 (Stocks de marchandises) ou Débit 32 (Approvisionnements) / Crédit 380 (Achats de marchandises).
+   - Le montant est TOUJOURS le montant HT (valeur d'entrée en stock, hors TVA).
+   - Il n'y a JAMAIS de compte 401, 44566 ou 44571 dans un bon d'entrée en stock.
+   - Exemple : Bon d'entrée 200 900 DA → Débit 30 / 200 900 DA | Crédit 380 / 200 900 DA.
+4. BON DE LIVRAISON / BON DE SORTIE DE STOCK :
+   - Sortie de stock : Débit 600 (Achats de marchandises vendues) / Crédit 30 (Stocks de marchandises).
+   - Le montant est le coût HT de revient des marchandises sorties.
+5. CLASSIFICATION INTELLIGENTE DU COMPTE DE CHARGE / ACHAT (Classe 6 / Classe 3 / Classe 2) :
    - 607 : Électricité, gaz, eau (Sonelgaz, SEAAL, ADE, etc.)
    - 626 : Postes & Télécoms (Mobilis, Djezzy, Ooredoo, Algérie Télécom, internet, 4G, timbres)
    - 613 : Locations et charges locatives (loyer bureau, dépôt, leasing)
@@ -100,11 +109,12 @@ ${(req.ocrText || "").substring(0, 1500)}
    - 606 : Achats non stockés (carburant Naftal, lubrifiants, petit outillage)
    - 627 : Services bancaires (commissions, agios)
    - 218 : Matériel informatique ou de bureau durable (> 30 000 DA)
-   - 380 : Achats de marchandises destinées à la revente
+   - 380 : Achats de marchandises stockées (à utiliser uniquement comme Crédit dans un bon de réception/bon d'entrée)
    - 381 : Achats de matières premières
-4. ÉQUILIBRE OBLIGATOIRE :
+   - 30 : Stocks de marchandises (à utiliser comme Débit dans un bon de réception/bon d'entrée)
+6. ÉQUILIBRE OBLIGATOIRE :
    - Chaque ligne d'écriture doit avoir debitAccount, creditAccount, amount (positif), description claire en français avec nom du tiers, et reference.
-   - La somme des montants débités DOIT égaler exactement le montant TTC (${req.amountTTC} DZD).
+   - La somme des montants débités DOIT égaler exactement le montant utilisé (HT pour bons de stock, TTC pour factures).
 
 Rends EXCLUSIVEMENT un objet JSON valide suivant ce schéma :
 {

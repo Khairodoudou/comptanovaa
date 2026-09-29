@@ -63,8 +63,10 @@ export async function generateSmartEntries(
   if (memoryMatch && amountTTC > 0) {
     console.log(`[SmartEntry] Found learned accountant preference for ${supplier}: Débit ${memoryMatch.debitAccount}, Crédit ${memoryMatch.creditAccount}`);
 
-    // If IFU or exempt: 100% TTC direct
-    if (isIfu || memoryMatch.isExempt || memoryMatch.tvaRate === 0) {
+    // STOCK MOVEMENTS: BON_RECEPTION and BON_LIVRAISON never have TVA — always a direct entry
+    const isStockMovement = docType === "BON_RECEPTION" || docType === "BON_LIVRAISON";
+    if (isStockMovement || isIfu || memoryMatch.isExempt || memoryMatch.tvaRate === 0) {
+      const amount = htOverride && htOverride > 0 && htOverride <= amountTTC ? htOverride : amountTTC;
       return {
         source: "MEMORY",
         memoryMatch,
@@ -73,8 +75,12 @@ export async function generateSmartEntries(
           {
             debitAccount: memoryMatch.debitAccount,
             creditAccount: memoryMatch.creditAccount,
-            amount: amountTTC,
-            description: memoryMatch.suggestedDesc || `${docType === "FACTURE_CLIENT" ? "Vente" : "Charge/Achat"} — ${supplier}`,
+            amount: isStockMovement ? amount : amountTTC,
+            description: memoryMatch.suggestedDesc || (
+              docType === "BON_RECEPTION" ? `Entrée en stock — ${supplier}` :
+              docType === "BON_LIVRAISON" ? `Sortie de stock — ${supplier}` :
+              `${docType === "FACTURE_CLIENT" ? "Vente" : "Charge/Achat"} — ${supplier}`
+            ),
             reference: refNumber,
           },
         ],

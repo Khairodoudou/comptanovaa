@@ -617,11 +617,27 @@ export function parseChequeDate(text: string): string | null {
 const TYPE_KEYWORDS: Array<{ type: DocumentType; keywords: string[] }> = [
   {
     type: "BON_RECEPTION",
-    keywords: ["bon de réception", "bon réception", "br n°", "وصل استلام", "bon de réce"],
+    keywords: [
+      // Standard French
+      "bon de réception", "bon réception", "br n°",
+      // Bon d'entrée (stock entry notes — very common in Algeria)
+      "bon d'entrée", "bon d'entree", "bon entree", "be n°", "be-",
+      // Stock value entry markers
+      "entrée en stock", "entree en stock", "valeur d'entrée en stock", "valeur d'entree en stock",
+      "total ht (valeur d'entrée", "total ht (valeur d'entree",
+      "réception marchandise", "reception marchandise", "réception de marchandise", "reception de marchandise",
+      // Arabic
+      "وصل استلام", "بوليصة الاستلام", "وصل دخول", "دخول مخزن",
+      // Other aliases
+      "bon de réce",
+    ],
   },
   {
     type: "BON_LIVRAISON",
-    keywords: ["bon de livraison", "bon livraison", "delivery note", "bl n°", "livraison"],
+    keywords: [
+      "bon de livraison", "bon livraison", "delivery note", "bl n°", "livraison",
+      "bon de sortie", "bon sortie", "bs n°", "sortie de stock", "sortie stock",
+    ],
   },
   {
     type: "RELEVE_BANCAIRE",
@@ -639,7 +655,7 @@ const TYPE_KEYWORDS: Array<{ type: DocumentType; keywords: string[] }> = [
     type: "FACTURE_FOURNISSEUR",
     keywords: [
       "facture fournisseur", "facture d'achat", "purchase invoice", "فاتورة شراء",
-      "avoir fournisseur", "ticket de caisse", "reçu de paiement", "quittance", "note d'honoraire", "note",
+      "avoir fournisseur", "ticket de caisse", "reçu de paiement", "quittance", "note d'honoraire",
       "facture", "invoice", "fact.", "f a c t u r e", "فاتورة"
     ],
   },
