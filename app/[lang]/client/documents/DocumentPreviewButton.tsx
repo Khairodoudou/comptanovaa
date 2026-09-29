@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { Eye, ExternalLink, Download, X, FileText, Loader2 } from "lucide-react";
 
 interface DocumentPreviewButtonProps {
@@ -14,6 +15,11 @@ export function DocumentPreviewButton({
 }: DocumentPreviewButtonProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const viewUrl = `/api/documents/${documentId}/view`;
   const downloadUrl = `/api/documents/${documentId}/download`;
@@ -42,30 +48,13 @@ export function DocumentPreviewButton({
     };
   }, [isOpen]);
 
-  return (
-    <>
-      {/* Eye trigger button in Actions column */}
-      <button
-        id={`view-doc-${documentId}`}
-        onClick={() => {
-          setIsLoading(true);
-          setIsOpen(true);
-        }}
-        title="Visualiser le document (PDF / Image)"
-        className="p-1.5 rounded-lg text-[#64748b] hover:text-teal-600 hover:bg-teal-50 transition-all cursor-pointer"
-        aria-label={`Visualiser ${documentName}`}
-      >
-        <Eye size={15} />
-      </button>
-
-      {/* Full Preview Modal */}
-      {isOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-xs p-3 sm:p-6 animate-in fade-in duration-200"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setIsOpen(false);
-          }}
-        >
+  const modal = isOpen ? (
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/70 backdrop-blur-xs p-3 sm:p-6 whitespace-normal text-left animate-in fade-in duration-200"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) setIsOpen(false);
+      }}
+    >
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl h-[88vh] flex flex-col border border-slate-200 overflow-hidden animate-in zoom-in-95 duration-150">
             {/* Modal Header */}
             <div className="flex items-center justify-between px-5 py-3.5 bg-[#0f172a] text-white border-b border-slate-800 shrink-0">
@@ -133,7 +122,26 @@ export function DocumentPreviewButton({
             </div>
           </div>
         </div>
-      )}
+      ) : null;
+
+  return (
+    <>
+      {/* Eye trigger button in Actions column */}
+      <button
+        id={`view-doc-${documentId}`}
+        onClick={() => {
+          setIsLoading(true);
+          setIsOpen(true);
+        }}
+        title="Visualiser le document (PDF / Image)"
+        className="p-1.5 rounded-lg text-[#64748b] hover:text-teal-600 hover:bg-teal-50 transition-all cursor-pointer"
+        aria-label={`Visualiser ${documentName}`}
+      >
+        <Eye size={15} />
+      </button>
+
+      {/* Full Preview Modal rendered via portal */}
+      {mounted && modal ? createPortal(modal, document.body) : modal}
     </>
   );
 }
