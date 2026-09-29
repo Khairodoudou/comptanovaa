@@ -59,110 +59,114 @@ export default async function ClientDocumentsPage({
             {d.documents.empty}
           </div>
         ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-100 bg-[#f8fafc]">
-                {[
-                  d.documents.filename,
-                  d.documents.type,
-                  "Fournisseur / Réf.",
-                  d.documents.size,
-                  d.documents.status,
-                  d.documents.date,
-                  d.documents.entries,
-                  "Actions",
-                ].map((h) => (
-                  <th
-                    key={h}
-                    className="text-left px-5 py-3 text-[#64748b] font-medium text-xs uppercase tracking-wide"
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {documents.map((doc: any) => {
-                let supplier = "Inconnu";
-                let ref = "";
-                try {
-                  if (doc.ocrData) {
-                    const data = JSON.parse(doc.ocrData);
-                    supplier = data?.supplier || data?.extracted?.supplier || "Inconnu";
-                    ref = data?.extracted?.invoiceNumber || data?.extracted?.chequeNumber || "";
-                  }
-                } catch (e) {}
-
-                return (
-                <tr key={doc.id} className="hover:bg-[#f8fafc] transition-colors">
-                  <td className="px-5 py-3.5">
-                    <p className="font-medium text-[#0f172a] truncate max-w-[180px]">
-                      {doc.originalName}
-                    </p>
-                  </td>
-                  <td className="px-5 py-3.5">
-                    <span className="text-xs text-[#64748b]">
-                      {{
-                        FACTURE_CLIENT: "Facture Client",
-                        FACTURE_FOURNISSEUR: "Facture Fournisseur",
-                        CHEQUE: "Chèque",
-                        RELEVE_BANCAIRE: "Relevé Bancaire",
-                        BON_LIVRAISON: "Bon de Livraison",
-                        BON_RECEPTION: "Bon de Réception",
-                      }[doc.type as string] ?? doc.type.replace(/_/g, " ")}
-                    </span>
-                  </td>
-                  <td className="px-5 py-3.5">
-                    <div className="flex flex-col">
-                      <span className={`text-xs font-medium ${supplier === "Inconnu" ? "text-[#94a3b8] italic" : "text-[#0f172a]"}`}>
-                        {supplier}
-                      </span>
-                      {ref && <span className="text-[10px] text-[#64748b]">{ref}</span>}
-                    </div>
-                  </td>
-                  <td className="px-5 py-3.5 text-xs text-[#64748b] whitespace-nowrap">
-                    {(doc.size / 1024).toFixed(0)} Ko
-                  </td>
-                  <td className="px-5 py-3.5">
-                    <StatusBadge
-                      status={doc.status as "UPLOADED" | "PROCESSING" | "REVIEWED" | "VALIDATED"}
-                      label={d.status[doc.status as keyof typeof d.status]}
-                    />
-                  </td>
-                  <td className="px-5 py-3.5 text-xs text-[#64748b] whitespace-nowrap">
-                    {new Date(doc.uploadedAt).toLocaleDateString(locale)}
-                  </td>
-                  <td className="px-5 py-3.5">
-                    {doc.journalEntries.length > 0 ? (
-                      <StatusBadge
-                        status={doc.journalEntries[0].status as "PROPOSED" | "VALIDATED" | "REJECTED"}
-                        label={d.status[doc.journalEntries[0].status as keyof typeof d.status]}
-                      />
-                    ) : (
-                      <span className="text-xs text-[#64748b]">—</span>
-                    )}
-                  </td>
-                  <td className="px-3 py-3.5">
-                    <div className="flex items-center gap-1">
-                      <DocumentPreviewButton
-                        documentId={doc.id}
-                        documentName={doc.originalName}
-                      />
-                      <DocumentDeleteButton
-                        documentId={doc.id}
-                        documentName={doc.originalName}
-                        hasValidatedEntries={doc.journalEntries.some(
-                          (e: any) => e.status === "VALIDATED"
-                        )}
-                      />
-                    </div>
-                  </td>
+          /* ── Horizontal scroll wrapper for responsive table ── */
+          <div className="overflow-x-auto w-full">
+            <table className="w-full min-w-[800px] text-sm">
+              <thead>
+                <tr className="border-b border-gray-100 bg-[#f8fafc]">
+                  {[
+                    d.documents.filename,
+                    d.documents.type,
+                    "Fournisseur / Réf.",
+                    d.documents.size,
+                    d.documents.status,
+                    d.documents.date,
+                    d.documents.entries,
+                    "Actions",
+                  ].map((h) => (
+                    <th
+                      key={h}
+                      className="text-left px-5 py-3 text-[#64748b] font-medium text-xs uppercase tracking-wide whitespace-nowrap"
+                    >
+                      {h}
+                    </th>
+                  ))}
                 </tr>
-              );
-              })}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {documents.map((doc: any) => {
+                  let supplier = "Inconnu";
+                  let ref = "";
+                  try {
+                    if (doc.ocrData) {
+                      const data = JSON.parse(doc.ocrData);
+                      supplier = data?.supplier || data?.extracted?.supplier || "Inconnu";
+                      ref = data?.extracted?.invoiceNumber || data?.extracted?.chequeNumber || "";
+                    }
+                  } catch (e) {}
+
+                  return (
+                  <tr key={doc.id} className="hover:bg-[#f8fafc] transition-colors">
+                    <td className="px-5 py-3.5">
+                      <p className="font-medium text-[#0f172a] truncate max-w-[180px]">
+                        {doc.originalName}
+                      </p>
+                    </td>
+                    <td className="px-5 py-3.5 whitespace-nowrap">
+                      <span className="text-xs text-[#64748b]">
+                        {{
+                          FACTURE_CLIENT: "Facture Client",
+                          FACTURE_FOURNISSEUR: "Facture Fournisseur",
+                          CHEQUE: "Chèque",
+                          RELEVE_BANCAIRE: "Relevé Bancaire",
+                          BON_LIVRAISON: "Bon de Livraison",
+                          BON_RECEPTION: "Bon de Réception",
+                        }[doc.type as string] ?? doc.type.replace(/_/g, " ")}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <div className="flex flex-col">
+                        <span className={`text-xs font-medium ${supplier === "Inconnu" ? "text-[#94a3b8] italic" : "text-[#0f172a]"}`}>
+                          {supplier}
+                        </span>
+                        {ref && <span className="text-[10px] text-[#64748b]">{ref}</span>}
+                      </div>
+                    </td>
+                    <td className="px-5 py-3.5 text-xs text-[#64748b] whitespace-nowrap">
+                      {(doc.size / 1024).toFixed(0)} Ko
+                    </td>
+                    <td className="px-5 py-3.5 whitespace-nowrap">
+                      <StatusBadge
+                        status={doc.status as "UPLOADED" | "PROCESSING" | "REVIEWED" | "VALIDATED"}
+                        label={d.status[doc.status as keyof typeof d.status]}
+                      />
+                    </td>
+                    <td className="px-5 py-3.5 text-xs text-[#64748b] whitespace-nowrap">
+                      {new Date(doc.uploadedAt).toLocaleDateString(locale)}
+                    </td>
+                    <td className="px-5 py-3.5 whitespace-nowrap">
+                      {doc.journalEntries.length > 0 ? (
+                        <StatusBadge
+                          status={doc.journalEntries[0].status as "PROPOSED" | "VALIDATED" | "REJECTED"}
+                          label={d.status[doc.journalEntries[0].status as keyof typeof d.status]}
+                        />
+                      ) : (
+                        <span className="text-xs text-[#64748b]">—</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-3.5 whitespace-nowrap">
+                      <div className="flex items-center gap-1">
+                        <DocumentPreviewButton
+                          documentId={doc.id}
+                          documentName={doc.originalName}
+                        />
+                        <DocumentDeleteButton
+                          documentId={doc.id}
+                          documentName={doc.originalName}
+                          hasValidatedEntries={doc.journalEntries.some(
+                            (e: any) => e.status === "VALIDATED"
+                          )}
+                        />
+                      </div>
+                    </td>
+                  </tr>
+                );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
+
       </div>
     </div>
   );
