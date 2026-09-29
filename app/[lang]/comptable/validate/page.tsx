@@ -29,12 +29,24 @@ export default async function ValidatePage({
         document: {
           include: {
             company: {
-              include: { client: { select: { name: true } } },
+              select: {
+                name: true,
+                raisonSociale: true,
+                nif: true,
+                nrc: true,
+                client: { select: { name: true } },
+              },
             },
           },
         },
         company: {
-          include: { client: { select: { name: true } } },
+          select: {
+            name: true,
+            raisonSociale: true,
+            nif: true,
+            nrc: true,
+            client: { select: { name: true } },
+          },
         },
         correctedBy: { select: { name: true } },
         versions: {

@@ -65,6 +65,9 @@ interface DocumentData {
   ocrData: string | null;
   company: {
     name: string;
+    raisonSociale?: string | null;
+    nif?: string | null;
+    nrc?: string | null;
     client: { name: string };
   };
 }
@@ -113,33 +116,60 @@ export function DocumentValidationCard({
     } catch {}
   }
 
-  // ── Cheque direction detection from OCR rawText ──────────────────────────────
-  // Compare "À l'ordre de <beneficiary>" against company name.
-  // If the company IS the beneficiary → received cheque (encaissement 512/411).
-  // If the company IS NOT the beneficiary → issued cheque (règlement 401/512).
+  // ── Cheque direction detection ──────────────────────────────────────────
+  // A received cheque  (encaissement) = Débit 512 / Crédit 411
+  // An issued  cheque  (règlement)    = Débit 401 / Crédit 512
+  //
+  // Detection strategy (highest → lowest priority):
+  //  1. OCR rawText: "À l'ordre de <beneficiary>" vs all company identifiers
+  //  2. Filename keywords: "vente"/"encaiss"/"recu" → received, "reglement"/"paiement"/"fournisseur" → issued
+  //  3. Default: issued (safe fallback)
   const isChequeDocument = document.type === "CHEQUE";
   let chequeIsReceived = false;
-  if (isChequeDocument && ocrRawText) {
-    const beneMatch = ocrRawText.match(
-      /(?:[Àà]\s+l['''`]ordre\s+de|A\s+l['''`]ordre\s+de|ordre\s+de\s+paiement|payable\s+[àa])\s*[:\-–]?\s*([^\n\r,=]{3,80})/i
-    );
-    const beneficiary = (beneMatch?.[1] || "")
-      .trim()
-      .toLowerCase()
-      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-      .replace(/\b(sarl|eurl|spa|snc|ets|ste)\b/gi, "")
-      .replace(/[^a-z0-9]/g, "")
-      .trim();
-    const companyNorm = (document.company?.name || "")
-      .toLowerCase()
-      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-      .replace(/\b(sarl|eurl|spa|snc|ets|ste)\b/gi, "")
-      .replace(/[^a-z0-9]/g, "")
-      .trim();
-    if (companyNorm.length >= 4 && beneficiary.length >= 4) {
-      chequeIsReceived =
-        beneficiary.includes(companyNorm) ||
-        companyNorm.includes(beneficiary.substring(0, Math.min(beneficiary.length, 12)));
+
+  if (isChequeDocument) {
+    // Build normalized company fingerprints from ALL available identifiers
+    const normalize = (s: string) =>
+      (s || "")
+        .toLowerCase()
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+        .replace(/\b(sarl|eurl|spa|snc|ets|ste|entreprise|societe)\b/gi, "")
+        .replace(/[^a-z0-9]/g, "")
+        .trim();
+
+    const companyFingerprints = [
+      normalize(document.company?.name || ""),
+      normalize(document.company?.raisonSociale || ""),
+      normalize(document.company?.client?.name || ""),
+    ].filter((f) => f.length >= 4);
+
+    let detectedFromOcr = false;
+
+    // 1. Try OCR rawText ─────────────────────────────────────────────
+    if (ocrRawText) {
+      const beneMatch = ocrRawText.match(
+        /(?:[Àà]\s*l['''`]\s*ordre\s+de|A\s+l['''`]ordre\s+de|ordre\s+de\s+paiement|payable\s+[\u00e0a])\s*[:\-–]?\s*([^\n\r,=|]{3,80})/i
+      );
+      if (beneMatch?.[1]) {
+        const bene = normalize(beneMatch[1]);
+        if (bene.length >= 4 && companyFingerprints.length > 0) {
+          detectedFromOcr = true;
+          chequeIsReceived = companyFingerprints.some(
+            (fp) => bene.includes(fp) || fp.includes(bene.substring(0, Math.min(bene.length, 14)))
+          );
+        }
+      }
+    }
+
+    // 2. Filename fallback ─────────────────────────────────────────────
+    if (!detectedFromOcr) {
+      const fname = (document.originalName || "").toLowerCase();
+      if (/vente|encaiss|recu|re\u00e7u|client|recette/i.test(fname)) {
+        chequeIsReceived = true;
+      } else if (/reglement|paiement|fournisseur|achat|charge/i.test(fname)) {
+        chequeIsReceived = false;
+      }
+      // else default remains false (issued = safe default)
     }
   }
 
