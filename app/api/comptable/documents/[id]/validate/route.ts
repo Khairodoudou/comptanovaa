@@ -2,6 +2,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { recordAccountingMemory } from "@/lib/accounting-memory";
 
 const EntryItemSchema = z.object({
   id: z.string().optional(),
@@ -334,6 +335,51 @@ export async function POST(
 
     return { action, count: submittedEntries.length, total: totalDebit };
   });
+
+  // ── Learn Accountant Preference into AccountingMemory ──────────────────────
+  if (action === "VALIDATE" || action === "SAVE") {
+    try {
+      let effectiveSupplier = supplier;
+      if (!effectiveSupplier && document.ocrData) {
+        try {
+          const parsed = JSON.parse(document.ocrData);
+          effectiveSupplier = parsed.supplier || parsed.extracted?.supplier;
+        } catch {}
+      }
+      if (!effectiveSupplier && submittedEntries[0]?.description) {
+        const parts = submittedEntries[0].description.split("—");
+        if (parts.length > 1 && parts[1].trim() && parts[1].trim() !== "Inconnu") {
+          effectiveSupplier = parts[1].trim();
+        }
+      }
+
+      if (effectiveSupplier && effectiveSupplier !== "Inconnu") {
+        // Find principal debit account (charge, stock, product, or asset, excluding TVA 445xx)
+        const primaryDebit =
+          submittedEntries.find(
+            (e) => !e.debitAccount.startsWith("445") && !e.debitAccount.startsWith("401")
+          )?.debitAccount || submittedEntries[0]?.debitAccount;
+
+        // Find principal credit account (excluding TVA 445xx)
+        const primaryCredit =
+          submittedEntries.find((e) => !e.creditAccount.startsWith("445"))?.creditAccount ||
+          submittedEntries[0]?.creditAccount;
+
+        if (primaryDebit && primaryCredit) {
+          await recordAccountingMemory({
+            companyId: document.companyId,
+            supplierName: effectiveSupplier,
+            documentType: document.type,
+            debitAccount: primaryDebit,
+            creditAccount: primaryCredit,
+            suggestedDesc: submittedEntries[0]?.description?.split("—")[0]?.trim(),
+          });
+        }
+      }
+    } catch (memErr) {
+      console.warn("[ValidateRoute] Could not record accounting memory:", memErr);
+    }
+  }
 
   return NextResponse.json({ success: true, result });
 }

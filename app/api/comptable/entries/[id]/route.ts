@@ -2,6 +2,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { recordAccountingMemory } from "@/lib/accounting-memory";
 
 const PatchSchema = z.object({
   status: z.enum(["VALIDATED", "REJECTED", "PROPOSED"]).optional(),
@@ -203,6 +204,35 @@ export async function PATCH(
 
     return updatedEntry;
   });
+
+  // ── Update Accountant Memory if corrected or validated ───────────────────
+  if (data.status === "VALIDATED" || data.debitAccount || data.creditAccount) {
+    try {
+      const descParts = (result.description || "").split("—");
+      let supplierName = descParts.length > 1 ? descParts[1].trim() : null;
+      if (!supplierName && entry.document?.ocrData) {
+        try {
+          const parsed = JSON.parse(entry.document.ocrData);
+          supplierName = parsed.supplier || parsed.extracted?.supplier;
+        } catch {}
+      }
+      if (supplierName && targetCompany?.id) {
+        const deb = result.debitAccount;
+        const cred = result.creditAccount;
+        if (!deb.startsWith("445") && !cred.startsWith("445")) {
+          await recordAccountingMemory({
+            companyId: targetCompany.id,
+            supplierName,
+            debitAccount: deb,
+            creditAccount: cred,
+            suggestedDesc: descParts[0]?.trim(),
+          });
+        }
+      }
+    } catch (memErr) {
+      console.warn("[EntryPATCH] Could not update accounting memory:", memErr);
+    }
+  }
 
   return NextResponse.json({ success: true, entry: result });
 }

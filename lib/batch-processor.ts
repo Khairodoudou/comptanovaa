@@ -1,6 +1,7 @@
 import { runOcr } from "@/lib/ocr/professional-ocr";
 import { extractDocumentData, ExtractedData, type CompanyContext } from "@/lib/ocr/text-extractor";
 import { generateEntries, EntrySpec } from "@/lib/entry-generator";
+import { generateSmartEntries } from "@/lib/smart-entry-generator";
 
 export interface BatchInput {
   documents: Array<{
@@ -174,17 +175,21 @@ export async function processBatch(input: BatchInput): Promise<BatchResponse> {
   const htForEntries  = isIfu ? amountTTC : (factureDoc.data.amountHT ?? undefined);
   const tvaForEntries = isIfu ? 0 : (factureDoc.data.amountTVA ?? undefined);
 
-  const ecritures_facture = generateEntries(
-    docTypeToUse,
+  const smartResult = await generateSmartEntries({
+    companyId: input.companyId,
+    companyName: input.companyName,
+    docType: docTypeToUse,
     amountTTC,
-    supplierFacture,
-    refNumberFacture,
-    rawDescFacture,
-    input.subAccounts,
-    htForEntries,
-    tvaForEntries,
-    regimeFiscal
-  );
+    supplier: supplierFacture,
+    refNumber: refNumberFacture,
+    rawDesc: rawDescFacture,
+    subAccounts: input.subAccounts,
+    htOverride: htForEntries,
+    tvaOverride: tvaForEntries,
+    regimeFiscal,
+  });
+
+  const ecritures_facture = smartResult.entries;
 
   return {
     documents_detectes: [

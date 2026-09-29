@@ -198,6 +198,7 @@ model Company {
   invitations      ComptableInvitation[]
   fiscalDeadlines  FiscalDeadline[]
   messages         Message[]
+  accountingMemories AccountingMemory[]
 }
 
 model Document {
@@ -394,6 +395,26 @@ model SubAccount {
   updatedAt     DateTime @updatedAt
 
   @@unique([subAccount, companyId])
+}
+
+model AccountingMemory {
+  id            String   @id @default(cuid())
+  companyId     String
+  company       Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  supplierName  String
+  documentType  String?
+  debitAccount  String
+  creditAccount String
+  tvaRate       Float?
+  isExempt      Boolean  @default(false)
+  suggestedDesc String?
+  usageCount    Int      @default(1)
+  lastUsedAt    DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([companyId, supplierName])
+  @@index([companyId])
 }
 
 // ─── Invoice ──────────────────────────────────────────────

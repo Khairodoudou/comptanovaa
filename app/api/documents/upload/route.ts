@@ -7,7 +7,8 @@ import { getCurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import { runOcr } from "@/lib/ocr/professional-ocr";
-import { generateEntries, TVA_RATE } from "@/lib/entry-generator";
+import { generateSmartEntries } from "@/lib/smart-entry-generator";
+import { TVA_RATE } from "@/lib/entry-generator";
 import fs from "fs";
 import path from "path";
 
@@ -221,17 +222,21 @@ export async function POST(req: NextRequest) {
 
   // ── Generate PROPOSED journal entries + JournalEntryVersion (AI_PROPOSAL) ──
   const rawDesc = ocrResult.rawText !== "MANUAL_ENTRY" ? ocrResult.rawText : supplier;
-  const entrySpecs = generateEntries(
+  const smartResult = await generateSmartEntries({
+    companyId,
+    companyName: company.name,
     docType,
     amountTTC,
     supplier,
     refNumber,
     rawDesc,
     subAccounts,
-    htForEntries,
-    tvaForEntries,
-    company.regimeFiscal
-  );
+    htOverride: htForEntries,
+    tvaOverride: tvaForEntries,
+    regimeFiscal: company.regimeFiscal,
+  });
+
+  const entrySpecs = smartResult.entries;
 
   const journalEntries = await Promise.all(
     entrySpecs.map(async (spec) => {
@@ -244,7 +249,8 @@ export async function POST(req: NextRequest) {
           amount: spec.amount,
           reference: spec.reference,
           status: "PROPOSED",
-          source: "AI",
+          source: smartResult.source,
+          comment: smartResult.explanation || null,
           companyId,
           documentId: document.id,
           sentToClient: false,
@@ -257,13 +263,16 @@ export async function POST(req: NextRequest) {
           journalEntryId: entry.id,
           versionNumber: 1,
           versionType: "AI_PROPOSAL",
-          actorType: "AI",
+          actorType: smartResult.source === "MEMORY" ? "SYSTEM" : "AI",
           debitAccount: spec.debitAccount,
           creditAccount: spec.creditAccount,
           amount: spec.amount,
           description: spec.description,
           reference: spec.reference,
-          reason: "Proposition automatique IA basée sur extraction OCR",
+          reason:
+            smartResult.source === "MEMORY"
+              ? `Mémoire d'apprentissage du comptable (${smartResult.memoryMatch?.supplierName || supplier})`
+              : smartResult.explanation || "Proposition intelligente IA (Gemini SCF)",
         },
       });
 

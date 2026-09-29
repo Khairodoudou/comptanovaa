@@ -16,6 +16,7 @@ import {
   Calendar,
   Sparkles,
   UserCheck,
+  Brain,
   ChevronDown,
   ChevronUp,
   Eye,
@@ -48,6 +49,7 @@ interface JournalEntryData {
   reference: string | null;
   status: string;
   source: string;
+  comment?: string | null;
   correctedById: string | null;
   correctedAt: string | Date | null;
   correctedBy?: { name: string } | null;
@@ -199,6 +201,8 @@ export function DocumentValidationCard({
   const isCorrected = initialEntries.some((e) => e.correctedById);
   const correctorName = initialEntries.find((e) => e.correctedBy?.name)?.correctedBy?.name;
   const correctedDate = initialEntries.find((e) => e.correctedAt)?.correctedAt;
+  const entrySource = initialEntries[0]?.source || "AI";
+  const entryComment = initialEntries[0]?.comment;
 
   // Calculate Totals & Balance
   const totalDebit = useMemo(() => lines.reduce((s, l) => s + (Number(l.debit) || 0), 0), [lines]);
@@ -477,14 +481,19 @@ export function DocumentValidationCard({
                 <span className="px-2.5 py-0.5 bg-blue-50 text-blue-800 border border-blue-200 rounded-full text-[10px] font-bold flex items-center gap-1">
                   <UserCheck size={11} className="text-blue-600" />
                   <span>
-                    Corrigée par {correctorName || "comptable"}
+                    {lang === "ar" ? "معدلة من المحاسب" : `Corrigée par ${correctorName || "comptable"}`}
                     {correctedDate ? ` (${new Date(correctedDate).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })})` : ""}
                   </span>
+                </span>
+              ) : entrySource === "MEMORY" ? (
+                <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-full text-[10px] font-bold flex items-center gap-1">
+                  <Brain size={11} className="text-emerald-600" />
+                  <span>{lang === "ar" ? "ذاكرة المحاسب المتعلمة" : "Mémoire comptable apprise"}</span>
                 </span>
               ) : (
                 <span className="px-2.5 py-0.5 bg-purple-50 text-purple-700 border border-purple-200 rounded-full text-[10px] font-bold flex items-center gap-1">
                   <Sparkles size={11} className="text-purple-600" />
-                  <span>Proposée par IA</span>
+                  <span>{lang === "ar" ? "مقترح الذكاء الاصطناعي (Gemini SCF)" : "Proposée par Gemini SCF"}</span>
                 </span>
               )}
             </div>
@@ -573,6 +582,31 @@ export function DocumentValidationCard({
         <div className="p-3.5 bg-teal-50 border border-teal-200 text-teal-800 rounded-xl text-xs font-bold flex items-center gap-2">
           <CheckCircle2 size={16} className="text-teal-600 shrink-0" />
           <span>{successMessage}</span>
+        </div>
+      )}
+
+      {/* ── AI / Memory Insight Pill ────────────────────────────────────────── */}
+      {entryComment && !isCorrected && (
+        <div
+          className={`p-3 rounded-xl text-xs border flex items-start gap-2.5 ${
+            entrySource === "MEMORY"
+              ? "bg-emerald-50/90 border-emerald-200 text-emerald-950"
+              : "bg-purple-50/90 border-purple-200 text-purple-950"
+          }`}
+        >
+          {entrySource === "MEMORY" ? (
+            <Brain size={16} className="text-emerald-600 shrink-0 mt-0.5" />
+          ) : (
+            <Sparkles size={16} className="text-purple-600 shrink-0 mt-0.5" />
+          )}
+          <div className="flex-1 space-y-0.5">
+            <span className="font-extrabold text-[11px] block uppercase tracking-wider text-opacity-80">
+              {entrySource === "MEMORY"
+                ? lang === "ar" ? "تفضيلك المحاسبي المحفوظ" : "Mémoire d'apprentissage active"
+                : lang === "ar" ? "تحليل الذكاء الاصطناعي (Gemini)" : "Analyse comptable Gemini SCF"}
+            </span>
+            <p className="text-xs leading-relaxed font-medium">{entryComment}</p>
+          </div>
         </div>
       )}
 
