@@ -187,6 +187,31 @@ export async function generateSmartEntries(
     };
   }
 
+  // 5. FACTURE TÉLÉPHONE, INTERNET, TÉLÉCOMS (Algérie Télécom, Mobilis, Djezzy, Ooredoo, etc.)
+  // SCF Algérien direct : Débit 626 (Frais postaux et de télécommunications) / Crédit 512 (Banque) pour le montant TTC
+  const isTelecomInvoice =
+    /mobilis|djezzy|ooredoo|alg[eé]rie t[eé]l[eé]com|t[eé]l[eé]phone|internet|adsl|fibre|4g|5g|forfait mobile|facture t[eé]l[eé]phone|facture internet|t[eé]l[eé]com/i.test(
+      `${supplier} ${rawDesc} ${docType}`
+    );
+
+  if (isTelecomInvoice) {
+    const acc626 = findSubAccount(subAccounts, "626", "Frais postaux et de télécommunications");
+    const acc512 = findSubAccount(subAccounts, "512", "Banque");
+    return {
+      source: "FALLBACK",
+      explanation: `Facture téléphone / internet N° ${refNumber || ""} — Débit ${acc626} (Frais postaux et de télécommunications) / Crédit ${acc512} (Banque) pour ${amountTTC} DA TTC (Règle SCF directe).`,
+      entries: [
+        {
+          debitAccount: acc626,
+          creditAccount: acc512,
+          amount: amountTTC,
+          description: `Frais postaux et de télécommunications — ${supplier}`,
+          reference: refNumber,
+        },
+      ],
+    };
+  }
+
   // ── Step 1: Check Accountant Preference Memory (pour Factures / Charges) ──
   let memoryMatch: AccountingMemoryMatch | null = null;
   try {

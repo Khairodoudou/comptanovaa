@@ -111,6 +111,9 @@ ${(req.ocrText || "").substring(0, 1500)}
 7. FACTURES ÉLECTRICITÉ, EAU, GAZ (Fluides : Sonelgaz, SEAAL, ADE, etc.) :
    - RÈGLE OBLIGATOIRE SCF : Débit 607 (Achat Non stocké : électricité, eau) / Crédit 512 (Banque) pour l'intégralité du montant TTC.
    - Ne JAMAIS créditer le compte 401 pour ces factures de fluides.
+8. FACTURES TÉLÉPHONE, INTERNET, TÉLÉCOMS (Algérie Télécom, Mobilis, Djezzy, Ooredoo, etc.) :
+   - RÈGLE OBLIGATOIRE SCF : Débit 626 (Frais postaux et de télécommunications) / Crédit 512 (Banque) pour l'intégralité du montant TTC.
+   - Ne JAMAIS créditer le compte 401 pour ces factures de télécommunications.
    - 607 : Électricité, gaz, eau (Sonelgaz, SEAAL, ADE, etc.)
    - 626 : Postes & Télécoms (Mobilis, Djezzy, Ooredoo, Algérie Télécom, internet, 4G, timbres)
    - 613 : Locations et charges locatives (loyer bureau, dépôt, leasing)

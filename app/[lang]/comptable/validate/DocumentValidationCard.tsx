@@ -394,6 +394,42 @@ export function DocumentValidationCard({
       }
     }
 
+    // ── Facture Téléphone / Internet (Algérie Télécom, Mobilis, Djezzy, Ooredoo, etc.) ──
+    // Règle SCF directe : Débit 626 (Frais postaux et de télécommunications) / Crédit 512 (Banque)
+    const isTelecomDocument =
+      /mobilis|djezzy|ooredoo|alg[eé]rie t[eé]l[eé]com|t[eé]l[eé]phone|internet|adsl|fibre|4g|5g|forfait mobile|facture t[eé]l[eé]phone|facture internet|t[eé]l[eé]com/i.test(
+        `${document.originalName} ${extractedSupplier} ${ocrRawText}`
+      );
+
+    if (isTelecomDocument) {
+      const hasDebit626 = list.some((l) => l.type === "DEBIT" && l.account.startsWith("626"));
+      const hasCredit512 = list.some((l) => l.type === "CREDIT" && (l.account.startsWith("512") || l.account.startsWith("53")));
+
+      if (!hasDebit626 || !hasCredit512 || list.length === 0) {
+        const totalAmount = ocrAmountTTC > 0 ? ocrAmountTTC : list.reduce((s, l) => Math.max(s, l.debit, l.credit), 0);
+        return [
+          {
+            id: "deb-626",
+            type: "DEBIT" as const,
+            account: "626",
+            label: "Frais postaux et de télécommunications",
+            debit: totalAmount,
+            credit: 0,
+            originalEntryId: initialEntries[0]?.id,
+          },
+          {
+            id: "cred-512",
+            type: "CREDIT" as const,
+            account: "512",
+            label: "Banque",
+            debit: 0,
+            credit: totalAmount,
+            originalEntryId: initialEntries[0]?.id,
+          },
+        ];
+      }
+    }
+
     return list.length > 0
       ? list
       : [

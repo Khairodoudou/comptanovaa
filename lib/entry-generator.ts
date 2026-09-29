@@ -407,6 +407,24 @@ export function generateEntries(
         ];
       }
 
+      const isTelecom =
+        detectedAcc === "626" ||
+        /mobilis|djezzy|ooredoo|alg[eé]rie t[eé]l[eé]com|t[eé]l[eé]phone|internet|adsl|fibre|4g|5g|forfait mobile|t[eé]l[eé]com/i.test(
+          `${rawDesc} ${supplier}`
+        );
+
+      if (isTelecom) {
+        return [
+          {
+            debitAccount: "626",
+            creditAccount: "512",
+            amount: amountTTC,
+            description: `Frais postaux et de télécommunications — ${label}`,
+            reference: refNumber,
+          },
+        ];
+      }
+
       const chargeAcc = detectedAcc.startsWith("6") ? detectedAcc : "607";
       const creditTarget = creditForCharge(rawDesc || label, `401.${suffix}`);
       const creditAcc = creditTarget === "401" ? acc401 : creditTarget;
