@@ -662,7 +662,9 @@ const TYPE_KEYWORDS: Array<{ type: DocumentType; keywords: string[] }> = [
   },
   {
     type: "CHEQUE",
-    keywords: ["chèque", "cheque", "chq", "شيك", "ordre de paiement", "payez contre", "a l'ordre de", "à l'ordre de"],
+    // Only match STRONG cheque layout phrases — NOT generic mentions of "chèque" as a payment method
+    // (Sonelgaz, SEAAL, Mobilis invoices all mention "chèque" in their payment instructions)
+    keywords: ["payez contre", "a l'ordre de", "à l'ordre de", "ordre de paiement", "شيك بنكي", "لأمر"],
   },
   {
     type: "FACTURE_CLIENT",
@@ -684,6 +686,16 @@ function detectDocumentType(
   companyInput?: string | CompanyContext
 ): DocumentType {
   const haystack = `${text} ${filename}`.toLowerCase();
+
+  // ── Utility / Telecom invoices ── detected first, before any keyword loop.
+  // These documents often contain "chèque", "timbre" or other payment-mode words
+  // that would incorrectly match the CHEQUE type. Always treat them as FACTURE_FOURNISSEUR.
+  const UTILITY_TELECOM_RE =
+    /sonelgaz|nationale\s+de\s+distribution|seaal|ade\b|alg[eé]rienne\s+des\s+eaux|[eé]lectricit[eé]|facture\s+de\s+consommation|mobilis|djezzy|ooredoo|alg[eé]rie\s+t[eé]l[eé]com/i;
+  if (UTILITY_TELECOM_RE.test(`${text} ${filename}`)) {
+    return "FACTURE_FOURNISSEUR";
+  }
+
   let baseType: DocumentType = "AUTRE";
   for (const { type, keywords } of TYPE_KEYWORDS) {
     if (keywords.some((kw) => haystack.includes(kw.toLowerCase()))) {
