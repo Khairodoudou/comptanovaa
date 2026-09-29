@@ -99,16 +99,48 @@ export function DocumentValidationCard({
   let extractedSupplier = "Inconnu";
   let ocrRefNumber = "";
   let ocrDocDate: string | null = null;
+  let ocrRawText = "";
   if (document.ocrData) {
     try {
       const parsed = JSON.parse(document.ocrData);
       ocrAmountTTC = parsed.extracted?.amount || 0;
       extractedSupplier = cleanEntityName(parsed.supplier || parsed.extracted?.supplier || "Inconnu");
       ocrRefNumber = parsed.extracted?.invoiceNumber || parsed.extracted?.chequeNumber || "";
+      ocrRawText = parsed.rawText || "";
       if (parsed.extracted?.date || parsed.extracted?.chequeDate) {
         ocrDocDate = parsed.extracted.date || parsed.extracted.chequeDate;
       }
     } catch {}
+  }
+
+  // ── Cheque direction detection from OCR rawText ──────────────────────────────
+  // Compare "À l'ordre de <beneficiary>" against company name.
+  // If the company IS the beneficiary → received cheque (encaissement 512/411).
+  // If the company IS NOT the beneficiary → issued cheque (règlement 401/512).
+  const isChequeDocument = document.type === "CHEQUE";
+  let chequeIsReceived = false;
+  if (isChequeDocument && ocrRawText) {
+    const beneMatch = ocrRawText.match(
+      /(?:[Àà]\s+l['''`]ordre\s+de|A\s+l['''`]ordre\s+de|ordre\s+de\s+paiement|payable\s+[àa])\s*[:\-–]?\s*([^\n\r,=]{3,80})/i
+    );
+    const beneficiary = (beneMatch?.[1] || "")
+      .trim()
+      .toLowerCase()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/\b(sarl|eurl|spa|snc|ets|ste)\b/gi, "")
+      .replace(/[^a-z0-9]/g, "")
+      .trim();
+    const companyNorm = (document.company?.name || "")
+      .toLowerCase()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/\b(sarl|eurl|spa|snc|ets|ste)\b/gi, "")
+      .replace(/[^a-z0-9]/g, "")
+      .trim();
+    if (companyNorm.length >= 4 && beneficiary.length >= 4) {
+      chequeIsReceived =
+        beneficiary.includes(companyNorm) ||
+        companyNorm.includes(beneficiary.substring(0, Math.min(beneficiary.length, 12)));
+    }
   }
 
   // Fallback: check if initial entries already contain the supplier in their description
@@ -200,36 +232,34 @@ export function DocumentValidationCard({
     });
 
     if (isCheque) {
-      // Detect cheque direction from existing entries:
-      // - Received cheque (encaissement): Débit 512 / Crédit 411
-      // - Issued cheque (règlement):      Débit 401 / Crédit 512
+      const totalAmount = ocrAmountTTC > 0
+        ? ocrAmountTTC
+        : list.reduce((s, l) => Math.max(s, l.debit, l.credit), 0);
+
+      // Invalid accounts (stock, charges, TVA) — never valid for any cheque
+      const hasInvalidAccounts = list.some(
+        (l) => l.account === "30" || l.account === "380" || l.account.startsWith("6") || l.account.startsWith("445")
+      );
+
+      // ── Direction authority: OCR rawText wins over DB entries ───────────────
+      // chequeIsReceived was computed from "À l'ordre de" vs company.name BEFORE this closure.
+      // If OCR confirms direction, enforce it regardless of what was stored in DB.
       const hasDebit512 = list.some((l) => l.type === "DEBIT" && l.account.startsWith("512"));
       const hasCredit411 = list.some((l) => l.type === "CREDIT" && l.account.startsWith("411"));
       const hasDebit401 = list.some((l) => l.type === "DEBIT" && l.account.startsWith("401"));
       const hasCredit512 = list.some((l) => l.type === "CREDIT" && (l.account.startsWith("512") || l.account.startsWith("53")));
 
-      const isReceivedCheque = hasDebit512 && hasCredit411;
-      const isIssuedCheque = hasDebit401 && hasCredit512;
+      const dbIsReceived = hasDebit512 && hasCredit411;
+      const dbIsIssued   = hasDebit401 && hasCredit512;
 
-      // Invalid accounts common to both cheque types (stock, charges, TVA)
-      const hasInvalidAccounts = list.some(
-        (l) => l.account === "30" || l.account === "380" || l.account.startsWith("6") || l.account.startsWith("445")
-      );
+      // Mismatch: OCR says received but DB says issued (or vice versa) → force repair
+      const directionMismatch =
+        (chequeIsReceived && !dbIsReceived) ||
+        (!chequeIsReceived && !dbIsIssued);
 
-      if (hasInvalidAccounts || (!isReceivedCheque && !isIssuedCheque) || list.length === 0) {
-        const totalAmount = ocrAmountTTC > 0
-          ? ocrAmountTTC
-          : list.reduce((s, l) => Math.max(s, l.debit, l.credit), 0);
-
-        // Default to issued cheque (401/512) if direction cannot be inferred from broken entries.
-        // The AI explanation text can help: if it mentions "encaissement" or "411", use 512/411.
-        const entryComment = initialEntries[0]?.comment || "";
-        const looksLikeReceivedCheque =
-          /encaissement|411|client/i.test(entryComment) ||
-          (hasDebit512 && !hasDebit401);
-
-        if (looksLikeReceivedCheque) {
-          // Auto-repair → encaissement client (Débit 512 / Crédit 411.0)
+      if (hasInvalidAccounts || directionMismatch || list.length === 0) {
+        if (chequeIsReceived) {
+          // ── Encaissement client : Débit 512 (Banque) / Crédit 411.0 (Client) ──
           return [
             {
               id: "deb-512",
@@ -251,7 +281,7 @@ export function DocumentValidationCard({
             },
           ];
         } else {
-          // Auto-repair → règlement fournisseur (Débit 401.0 / Crédit 512)
+          // ── Règlement fournisseur : Débit 401.0 (Fournisseur) / Crédit 512 ──
           return [
             {
               id: "deb-401.0",
