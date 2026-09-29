@@ -21,12 +21,14 @@ import {
   X,
   CreditCard,
   MessageSquare,
+  FolderOpen,
 } from "lucide-react";
 
 interface SidebarT {
   accountant_space: string;
   dashboard: string;
   clients: string;
+  documents?: string;
   validate: string;
   journal: string;
   grand_livre: string;
@@ -120,6 +122,7 @@ export function ComptableSidebar({
       title: lang === "ar" ? "إدارة المحاسبة" : lang === "en" ? "MANAGEMENT" : "GESTION",
       items: [
         { label: t.clients, href: "clients", icon: Users },
+        { label: t.documents || (lang === "ar" ? "المستندات" : lang === "en" ? "Documents" : "Documents"), href: "documents", icon: FolderOpen },
         { label: t.journal, href: "journal", icon: BookOpen },
         { label: t.grand_livre, href: "grand-livre", icon: BookMarked },
         { label: t.rapprochement, href: "rapprochement", icon: GitMerge },
