@@ -58,83 +58,97 @@ export function supplierSuffix(supplier: string): string {
 
 // ─── Helper: detect SCF account for expenses / purchases ───────────────────
 export function detectScfAccount(description: string, supplier: string): string {
-  const text = `${description} ${supplier}`.toLowerCase();
+  const suppLower = (supplier || "").toLowerCase();
+  const descLower = (description || "").toLowerCase();
+
+  // Si c'est explicitement un achat commercial de marchandise / stock
+  if (/facture\s*d['’]achat|facture\s*achat|bon\s*de\s*commande|achat\s*de\s*marchandise/i.test(descLower)) {
+    return "380";
+  }
 
   // 1. Sonelgaz, Eau, Gaz, Électricité -> 607 (Achats non stockés de matières et fournitures)
+  // STRICT : Fournisseur Sonelgaz/SEAAL/ADE ou titre explicite de quittance de fluide
   if (
-    /sonelgaz|seaal|ade\b|alg[eé]rienne des eaux|[eé]lectricit[eé]|gaz\b|eau potable|fluide/i.test(text)
+    /sonelgaz|seaal|ade\b|ona\b|alg[eé]rienne des eaux|distribution de l['’]electricite/i.test(suppLower) ||
+    /(?:facture|quittance|redevance)\s*(?:de\s*|d['’]\s*)?(?:[eé]lectricit[eé]|gaz\b|eau potable|eau\b)/i.test(descLower) ||
+    /consommation\s*(?:d['’][eé]lectricit[eé]|de\s*gaz|d['’]eau)/i.test(descLower)
   ) {
     return "607";
   }
 
   // 2. Postes & Télécoms (Mobilis, Djezzy, Ooredoo, Algérie Télécom, etc.) -> 626
+  // STRICT : Uniquement si le fournisseur est un opérateur télécom / coursier ou facture télécom express.
+  // Ne JAMAIS matcher sur le numéro de téléphone ou le site web de contact d'un fournisseur marchand !
   if (
-    /mobilis|djezzy|ooredoo|alg[eé]rie t[eé]l[eé]com|t[eé]l[eé]phone|internet|adsl|fibre|4g|5g|forfait mobile|poste\b|timbre|yalidine|ems\b|courrier|envoi colis/i.test(text)
+    /mobilis|djezzy|ooredoo|alg[eé]rie t[eé]l[eé]com|algerie telecom|\bat\b|yalidine|ems\b|dhl\b|fedex|chronopost|alg[eé]rie poste/i.test(suppLower) ||
+    /(?:facture|quittance|redevance)\s*(?:de\s*|d['’]\s*)?(?:t[eé]l[eé]phone|internet|t[eé]l[eé]com|adsl|fibre)/i.test(descLower) ||
+    /redevance(?:s)?\s*t[eé]l[eé]phonique|forfait mobile|envoi colis|colis postal|frais d'affranchissement/i.test(descLower)
   ) {
     return "626";
   }
 
   // 3. Locations (Loyer, bail, leasing) -> 613
-  if (/loyer|location|bail\b|leasing|cr[eé]dit-bail/i.test(text)) {
+  if (/loyer|location|bail\b|leasing|cr[eé]dit-bail/i.test(descLower) || /location/i.test(suppLower)) {
     return "613";
   }
 
   // 4. Entretien et réparations -> 615
   if (
-    /entretien|r[eé]paration|maintenance|vidange|m[eé]canique|d[eé]pannage|pi[eè]ces? d[eé]tach[eé]es?|pi[eè]ces? de rechange/i.test(text)
+    /entretien|r[eé]paration|maintenance|vidange|m[eé]canique|d[eé]pannage/i.test(descLower)
   ) {
     return "615";
   }
 
   // 5. Primes d'assurances -> 616
   if (
-    /assurance|prime d'assurance|saa\b|caat\b|caar\b|ciar\b|cash assurances?|alliance assurances?|axa\b|macir/i.test(text)
+    /assurance|prime d'assurance|saa\b|caat\b|caar\b|ciar\b|cash assurances?|alliance assurances?|axa\b|macir/i.test(suppLower) ||
+    /prime d'assurance|police d'assurance/i.test(descLower)
   ) {
     return "616";
   }
 
   // 6. Rémunérations d'intermédiaires et honoraires -> 622
   if (
-    /honoraires?|avocat|notaire|expert.?comptable|commissaire aux comptes|consultant|conseil juridique|audit/i.test(text)
+    /honoraires?|avocat|notaire|expert.?comptable|commissaire aux comptes|consultant|conseil juridique|audit/i.test(descLower)
   ) {
     return "622";
   }
 
   // 7. Publicité, publications, relations publiques -> 623
   if (
-    /publicit|marketing|annonce|flyer|sponsoring|communication|r[eé]gie|foire|salon\b/i.test(text)
+    /campagne de publicit|annonce publicitaire|sponsoring|r[eé]gie publicitaire|foire|salon d['’]exposition/i.test(descLower)
   ) {
     return "623";
   }
 
   // 8. Transports de biens -> 624
-  if (/transport de biens|fret\b|livraison|d[eé]m[eé]nagement/i.test(text)) {
+  if (/frais de transport|fret\b|transport de marchandises|transport maritime|transport a[eé]rien|d[eé]m[eé]nagement/i.test(descLower)) {
     return "624";
   }
 
   // 9. Déplacements, missions et réceptions -> 625
   if (
-    /h[oô]tel|h[eé]bergement|billet d'avion|air alg[eé]rie|tassili|restaurant|d[eé]placement|mission/i.test(text)
+    /h[oô]tel|h[eé]bergement|billet d'avion|air alg[eé]rie|tassili|d[eé]placement professionnel/i.test(descLower)
   ) {
     return "625";
   }
 
   // 10. Fournitures de bureau consommables -> 602
-  if (/fournitures? de bureau|papeterie|cartouches?|toner|rame de papier/i.test(text)) {
+  if (/fournitures? de bureau|papeterie|cartouches? d'encre|toner|rame de papier/i.test(descLower)) {
     return "602";
   }
 
   // 11. Frais bancaires -> 627
-  if (/agios|frais bancaires?|frais de tenue de compte|commission de tenue/i.test(text)) {
+  if (/agios|frais bancaires?|frais de tenue de compte|commission de tenue/i.test(descLower)) {
     return "627";
   }
 
   // 12. Matières premières -> 381
-  if (/mati[eè]res? premi[eè]res?/i.test(text)) {
+  if (/mati[eè]res? premi[eè]res?/i.test(descLower)) {
     return "381";
   }
 
-  // Par défaut: 380 (Achats de marchandises)
+  // Par défaut: 380 (Achats de marchandises stockées)
   return "380";
 }
 
@@ -255,16 +269,52 @@ export function generateEntries(
   const acc30 = findSubAccount(subAccounts, "30", label);
 
   switch (docType) {
-    // ── Facture Fournisseur (Achat ou Charge d'exploitation) ───────────────
+    // ── Facture Fournisseur (Achat de marchandise ou Charge d'exploitation) ─
     case "FACTURE_FOURNISSEUR": {
       const detectedAcc = detectScfAccount(rawDesc, supplier);
+
+      const isUtility =
+        detectedAcc === "607" &&
+        (/sonelgaz|seaal|ade\b|ona\b|alg[eé]rienne des eaux/i.test(supplier) ||
+          /(?:facture|quittance|redevance)\s*(?:de\s*|d['’]\s*)?(?:[eé]lectricit[eé]|gaz\b|eau potable|eau\b)/i.test(rawDesc));
+      const isTelecom =
+        detectedAcc === "626" &&
+        (/mobilis|djezzy|ooredoo|alg[eé]rie t[eé]l[eé]com|algerie telecom|\bat\b/i.test(supplier) ||
+          /(?:facture|quittance|redevance)\s*(?:de\s*|d['’]\s*)?(?:t[eé]l[eé]phone|internet|t[eé]l[eé]com|adsl|fibre)/i.test(rawDesc));
+
+      if (isUtility) {
+        return [
+          {
+            debitAccount: "607",
+            creditAccount: "512",
+            amount: amountTTC,
+            description: `Achat Non stocké ( électricité, eau) — ${label}`,
+            reference: refNumber,
+          },
+        ];
+      }
+
+      if (isTelecom) {
+        return [
+          {
+            debitAccount: "626",
+            creditAccount: "512",
+            amount: amountTTC,
+            description: `Frais postaux et de télécommunications — ${label}`,
+            reference: refNumber,
+          },
+        ];
+      }
+
       const isChargeDoc = detectedAcc.startsWith("6");
       const baseDebitAcc = isChargeDoc
         ? detectedAcc
-        : findSubAccount(subAccounts, detectedAcc, label);
+        : (detectedAcc === "380" ? (acc380 === "380" ? "380.0" : acc380) : findSubAccount(subAccounts, detectedAcc, label));
 
-      const creditTarget = creditForCharge(rawDesc, acc401);
-      const creditAcc = creditTarget === "401" ? acc401 : creditTarget;
+      // Pour les factures d'achats commerciales, le compte créditeur est 401.0 (ou acc401)
+      const creditAcc = isChargeDoc
+        ? creditForCharge(rawDesc, acc401 === "401" ? "401.0" : acc401)
+        : (acc401 === "401" ? "401.0" : acc401);
 
       // Si régime IFU ou facture exonérée: enregistrement 100% TTC
       if (isIfu || tva === 0) {
@@ -274,28 +324,27 @@ export function generateEntries(
             creditAccount: creditAcc,
             amount: amountTTC,
             description: isIfu
-              ? `${isChargeDoc ? "Charge" : "Achat marchandises"} TTC (Régime IFU) — ${label}`
-              : `${isChargeDoc ? "Charge" : "Achat marchandises"} exonéré TVA — ${label}`,
+              ? `${isChargeDoc ? "Charge" : "Achat de marchandise"} TTC (Régime IFU) — ${label}`
+              : `${isChargeDoc ? "Charge" : "Achat de marchandise"} exonéré TVA — ${label}`,
             reference: refNumber,
           },
         ];
       }
 
-      // Régime Réel standard: Débit Charge/Stock (HT) + Débit 44566 (TVA) / Crédit 401 (TTC)
-      const tvaLabel = detectedTvaRate === 0.09 ? "9%" : "19%";
+      // Régime Réel standard (Figure 3) : Débit 380.0 (HT) + Débit 44566 (TVA) / Crédit 401.0 (TTC)
       return [
         {
           debitAccount: baseDebitAcc,
           creditAccount: creditAcc,
           amount: ht,
-          description: `${isChargeDoc ? "Charge" : "Achat marchandises"} HT — ${label}`,
+          description: isChargeDoc ? `Charge HT — ${label}` : `Achat de marchandise`,
           reference: refNumber,
         },
         {
           debitAccount: "44566",
           creditAccount: creditAcc,
           amount: tva,
-          description: `TVA déductible ${tvaLabel} — ${label}`,
+          description: `TVA déductible`,
           reference: refNumber,
         },
       ];
@@ -308,7 +357,7 @@ export function generateEntries(
       if (isIfu || tva === 0) {
         return [
           {
-            debitAccount: acc411,
+            debitAccount: acc411 === "411" ? "411.0" : acc411,
             creditAccount: "700",
             amount: amountTTC,
             description: isIfu
@@ -323,14 +372,14 @@ export function generateEntries(
       const tvaLabel = detectedTvaRate === 0.09 ? "9%" : "19%";
       return [
         {
-          debitAccount: acc411,
+          debitAccount: acc411 === "411" ? "411.0" : acc411,
           creditAccount: "700",
           amount: ht,
           description: `Vente HT — ${label}`,
           reference: refNumber,
         },
         {
-          debitAccount: acc411,
+          debitAccount: acc411 === "411" ? "411.0" : acc411,
           creditAccount: "44571",
           amount: tva,
           description: `TVA collectée ${tvaLabel} — ${label}`,
@@ -357,7 +406,7 @@ export function generateEntries(
       return [
         {
           debitAccount: "512",
-          creditAccount: acc401,
+          creditAccount: acc401 === "401" ? "401.0" : acc401,
           amount: amountTTC,
           description: `Mouvement bancaire — ${label}`,
           reference: refNumber,
@@ -369,7 +418,7 @@ export function generateEntries(
       return [
         {
           debitAccount: acc30,
-          creditAccount: acc380,
+          creditAccount: acc380 === "380" ? "380.0" : acc380,
           amount: ht,
           description: `Entrée en stock — ${label}`,
           reference: refNumber,
@@ -392,8 +441,9 @@ export function generateEntries(
     default: {
       const detectedAcc = detectScfAccount(rawDesc, supplier);
       const isUtility =
-        detectedAcc === "607" ||
-        /sonelgaz|seaal|ade\b|alg[eé]rienne des eaux|[eé]lectricit[eé]|gaz\b|eau potable/i.test(`${rawDesc} ${supplier}`);
+        detectedAcc === "607" &&
+        (/sonelgaz|seaal|ade\b|ona\b|alg[eé]rienne des eaux/i.test(supplier) ||
+          /(?:facture|quittance|redevance)\s*(?:de\s*|d['’]\s*)?(?:[eé]lectricit[eé]|gaz\b|eau potable|eau\b)/i.test(rawDesc));
 
       if (isUtility) {
         return [
@@ -408,10 +458,9 @@ export function generateEntries(
       }
 
       const isTelecom =
-        detectedAcc === "626" ||
-        /mobilis|djezzy|ooredoo|alg[eé]rie t[eé]l[eé]com|t[eé]l[eé]phone|internet|adsl|fibre|4g|5g|forfait mobile|t[eé]l[eé]com/i.test(
-          `${rawDesc} ${supplier}`
-        );
+        detectedAcc === "626" &&
+        (/mobilis|djezzy|ooredoo|alg[eé]rie t[eé]l[eé]com|algerie telecom|\bat\b/i.test(supplier) ||
+          /(?:facture|quittance|redevance)\s*(?:de\s*|d['’]\s*)?(?:t[eé]l[eé]phone|internet|t[eé]l[eé]com|adsl|fibre)/i.test(rawDesc));
 
       if (isTelecom) {
         return [
@@ -425,9 +474,9 @@ export function generateEntries(
         ];
       }
 
-      const chargeAcc = detectedAcc.startsWith("6") ? detectedAcc : "607";
-      const creditTarget = creditForCharge(rawDesc || label, `401.${suffix}`);
-      const creditAcc = creditTarget === "401" ? acc401 : creditTarget;
+      const chargeAcc = detectedAcc.startsWith("6") ? detectedAcc : (acc380 === "380" ? "380.0" : acc380);
+      const creditTarget = creditForCharge(rawDesc || label, acc401 === "401" ? "401.0" : acc401);
+      const creditAcc = creditTarget === "401" ? (acc401 === "401" ? "401.0" : acc401) : creditTarget;
 
       if (isIfu || tva === 0) {
         return [

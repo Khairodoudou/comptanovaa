@@ -7,14 +7,17 @@ export const SCF_ACCOUNT_LABELS: Record<string, string> = {
   "300": "Marchandises stockées",
   "31": "Matières premières et fournitures",
   "38": "Achats stockés",
-  "380": "Achats de marchandises",
+  "380": "Achat de marchandise",
+  "380.0": "Achat de marchandise",
   "381": "Achats de matières premières",
 
   // Classe 4 : Comptes de tiers
   "401": "Fournisseur",
+  "401.0": "Fournisseur",
   "4010": "Fournisseur",
   "404": "Fournisseur d'immobilisations",
   "411": "Client",
+  "411.0": "Client",
   "4110": "Client",
   "421": "Personnel - Rémunérations dues",
   "431": "Sécurité sociale (CNAS / CASNOS)",
@@ -63,6 +66,8 @@ export const SCF_ACCOUNT_LABELS: Record<string, string> = {
 export function cleanEntityName(name?: string | null): string {
   if (!name) return "";
   let clean = name.trim();
+  // Strip leading client/supplier field markers (e.g. "Nom du client : SARL Nord Pack", "Client : ...")
+  clean = clean.replace(/^(?:Nom\s*(?:du\s*)?(?:client|fournisseur)|Client|Fournisseur)\s*[:\-–]?\s*/i, "").trim();
   // Strip leading cheque beneficiary markers if they leaked in (e.g. "Avordrede SARL Color Print", "A l'ordre de...")
   clean = clean.replace(/^(?:A[vu\s]*l['’]?[o0]rdre(?:\s*de)?|Avordrede|لأمر|Ordre\s+de)\s*[:\-–]?\s*/i, "").trim();
   // Strip trailing OCR artifacts like "ADRESSE : TEL", "ADRESSE :", "TEL :", "ADR :"
@@ -138,7 +143,7 @@ export function getAccountTitle(account: string, entityName?: string): string {
 
   if (!label) {
     if (clean.startsWith("381")) label = "Achats de matières premières";
-    else if (clean.startsWith("380")) label = "Achats de marchandises";
+    else if (clean.startsWith("380")) label = "Achat de marchandise";
     else if (clean.startsWith("4456")) label = "TVA déductible";
     else if (clean.startsWith("4457")) label = "TVA collectée";
     else if (clean.startsWith("401")) label = "Fournisseur";

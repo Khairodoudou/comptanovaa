@@ -98,11 +98,13 @@ const TTC_PATTERNS: RegExp[] = [
 ];
 
 const THT_PATTERNS: RegExp[] = [
-  /[TY][\s.]*H[\s.]*[TI][\s]*[:\s]*([\d\s.,]+)/gi,
+  /TOTAL[\s]*H[\s.]*T[\s]*(?:\(valeur\s+d['’]entr[eé]e\s+en\s+stock\))?[\s]*[:\s]*([\d\s.,]+)/gi,
+  /MONTANT[\s]*(?:TOTAL\s*)?H[\s.]*T[\s]*[:\s]*([\d\s.,]+)/gi,
+  /TOTAL[\s]*HORS[\s]*TAXES?[\s]*[:\s]*([\d\s.,]+)/gi,
   /HORS[\s]*TAXES?[\s]*[:\s]*([\d\s.,]+)/gi,
-  /TOTAL[\s]*H[\s.]*T[\s]*[:\s]*([\d\s.,]+)/gi,
-  /MONTANT[\s]*H[\s.]*T[\s]*[:\s]*([\d\s.,]+)/gi,
   /BASE[\s]*(?:TVA|HT)[\s]*[:\s]*([\d\s.,]+)/gi,
+  /\bTOTAL\s+HT\b[\s\S]{0,40}?([\d\s.,]{3,20})\s*(?:DA|DZD)/gi,
+  /[TY][\s.]*H[\s.]*[TI][\s]*[:\s]*([\d\s.,]+)/gi,
 ];
 
 const TVA_AMOUNT_PATTERNS: RegExp[] = [
@@ -261,6 +263,8 @@ function cleanSupplierCandidate(raw: string): string {
   return raw
     .trim()
     .replace(/\s+/g, ' ')
+    // Strip leading client/supplier field markers (e.g. "Nom du client : SARL Nord Pack")
+    .replace(/^(?:Nom\s*(?:du\s*)?(?:client|fournisseur)|Client|Fournisseur)\s*[:\-–]?\s*/i, '')
     // Strip leading cheque beneficiary markers if they leaked in
     .replace(/^(?:A[vu\s]*l['’]?[o0]rdre(?:\s*de)?|Avordrede|لأمر|Ordre\s+de)\s*[:\-–]?\s*/i, '')
     // Remove markdown image syntax e.g. "![img-0.jpeg](img-0.jpeg)" or "! img-0.jpeg (img-0.jpeg)"
@@ -824,6 +828,14 @@ export function extractDocumentData(
   }
   if (amount && amountTVA && !amountHT) {
     amountHT = Math.round((amount - amountTVA) * 100) / 100;
+  }
+  // Coherence check: if both exist but do not sum to TTC, verify if TVA matches 19%
+  if (amount && amountHT && amountTVA && Math.abs(amountHT + amountTVA - amount) > 2) {
+    const expectedHT = Math.round((amount - amountTVA) * 100) / 100;
+    // If (amount - amountTVA) * 0.19 matches amountTVA, then expectedHT is the true Total HT
+    if (Math.abs(expectedHT * 0.19 - amountTVA) < 1.5 || Math.abs(expectedHT * 0.09 - amountTVA) < 1.5) {
+      amountHT = expectedHT;
+    }
   }
   if (amountHT && amount && amountHT >= amount) {
     amountHT = null;

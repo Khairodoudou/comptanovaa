@@ -164,10 +164,14 @@ export async function generateSmartEntries(
 
   // 4. FACTURE ÉLECTRICITÉ, EAU, GAZ (Fluides non stockés : Sonelgaz, SEAAL, ADE, etc.)
   // SCF Algérien direct : Débit 607 (Achat Non stocké : électricité, eau) / Crédit 512 (Banque) pour le montant TTC
-  const isUtilityInvoice =
-    /sonelgaz|seaal|ade\b|alg[eé]rienne des eaux|[eé]lectricit[eé]|gaz\b|eau potable|facture d['’]eau|facture d['’][eé]lectricit[eé]|facture électricité/i.test(
-      `${supplier} ${rawDesc} ${docType}`
-    );
+  // STRICT : Ne doit JAMAIS intercepter une facture d'achat commerciale ordinaire (ex: Color Print, papier, matériel)
+  const isPurchaseInvoice = /facture\s*d['’]achat|facture\s*achat|bon\s*de\s*commande|achat\s*de\s*marchandise/i.test(rawDesc);
+  const isUtilitySupplier = /sonelgaz|seaal|ade\b|ona\b|alg[eé]rienne des eaux|distribution de l['’]electricite/i.test(supplier);
+  const isUtilityDoc =
+    /(?:facture|quittance|redevance|note)\s*(?:de\s*|d['’]\s*)?(?:[eé]lectricit[eé]|gaz\b|eau potable|eau\b)/i.test(rawDesc) ||
+    /consommation\s*(?:d['’][eé]lectricit[eé]|de\s*gaz|d['’]eau)/i.test(rawDesc);
+
+  const isUtilityInvoice = !isPurchaseInvoice && (isUtilitySupplier || isUtilityDoc);
 
   if (isUtilityInvoice) {
     const acc607 = findSubAccount(subAccounts, "607", "Achats non stockés");
@@ -189,10 +193,15 @@ export async function generateSmartEntries(
 
   // 5. FACTURE TÉLÉPHONE, INTERNET, TÉLÉCOMS (Algérie Télécom, Mobilis, Djezzy, Ooredoo, etc.)
   // SCF Algérien direct : Débit 626 (Frais postaux et de télécommunications) / Crédit 512 (Banque) pour le montant TTC
-  const isTelecomInvoice =
-    /mobilis|djezzy|ooredoo|alg[eé]rie t[eé]l[eé]com|t[eé]l[eé]phone|internet|adsl|fibre|4g|5g|forfait mobile|facture t[eé]l[eé]phone|facture internet|t[eé]l[eé]com/i.test(
-      `${supplier} ${rawDesc} ${docType}`
-    );
+  // STRICT : Ne s'applique QUE si le fournisseur est un opérateur télécom ou si c'est expressément une facture télécom.
+  // Ne JAMAIS matcher une facture juste parce qu'il y a un numéro de téléphone ou un site web dans l'en-tête/pied de page !
+  const isTelecomSupplier =
+    /mobilis|djezzy|ooredoo|alg[eé]rie t[eé]l[eé]com|algerie telecom|\bat\b/i.test(supplier);
+  const isTelecomDoc =
+    /(?:facture|quittance|redevance|note)\s*(?:de\s*|d['’]\s*)?(?:t[eé]l[eé]phone|internet|t[eé]l[eé]com|adsl|fibre)/i.test(rawDesc) ||
+    /redevance(?:s)?\s*t[eé]l[eé]phonique|forfait mobile/i.test(rawDesc);
+
+  const isTelecomInvoice = !isPurchaseInvoice && (isTelecomSupplier || isTelecomDoc);
 
   if (isTelecomInvoice) {
     const acc626 = findSubAccount(subAccounts, "626", "Frais postaux et de télécommunications");

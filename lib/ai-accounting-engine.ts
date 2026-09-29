@@ -82,26 +82,34 @@ ${(req.ocrText || "").substring(0, 1500)}
 1. RÉGIME FORFAITAIRE (IFU) :
    - Si l'entreprise est à l'IFU, IL EST STRICTEMENT INTERDIT de déduire ou collecter la TVA (aucun compte 44566 ou 44571).
    - L'intégralité du montant TTC (${req.amountTTC} DZD) est imputée directement au compte de charge/achat au Débit et Fournisseur 401 au Crédit.
-2. RÉGIME RÉEL (Factures fournisseurs) :
-   - Décomposer rigoureusement : Montant HT au Débit (Charge 6xx, Stock 38x, ou Immo 21x) + Débit 44566 (TVA déductible 19% ou 9%) / Crédit 401 (Total TTC).
+2. RÉGIME RÉEL (Factures d'achat fournisseurs de marchandises et charges) :
+   - Pour les ACHATS DE MARCHANDISES / FOURNITURES COMMERCIALES (Facture achat fournisseur) :
+     * Débit 380.0 : "Achat de marchandise" [Montant HT]
+     * Débit 44566 : "TVA déductible" [Montant TVA (19% ou 9%)]
+     * Crédit 401.0 : "Fournisseur" (avec nom du fournisseur) [Montant Total TTC = HT + TVA]
+     * Exemple strict conforme SCF : Facture achat 239 071 DA TTC (HT: 200 900 DA, TVA: 38 171 DA) ->
+       - Débit: "380.0", Crédit: "401.0", Montant: 200900, Description: "Achat de marchandise"
+       - Débit: "44566", Crédit: "401.0", Montant: 38171, Description: "TVA déductible"
+   - Pour les CHARGES D'EXPLOITATION DE SERVICES (loyer 613, assurance 616, honoraires 622, entretien 615, etc.) :
+     * Débit 6xx [Montant HT] + Débit 44566 [Montant TVA] / Crédit 401.0 [Total TTC].
    - Si la facture est exonérée (ou TVA 0%), imputer 100% au Débit sans compte 44566.
-   - Si FACTURE_CLIENT : Débit 411 (TTC) / Crédit 700/704 (HT) + Crédit 44571 (TVA collectée).
+   - Si FACTURE_CLIENT : Débit 411.0 (TTC) / Crédit 700 (HT) + Crédit 44571 (TVA collectée).
 3. BON DE RÉCEPTION / BON D'ENTRÉE EN STOCK (TRÈS IMPORTANT) :
    - Si le document est un "Bon de réception", "Bon d'entrée", "BR N°", "BE N°", ou contient "entrée en stock" / "valeur d'entrée en stock" :
-   - L'écriture est une ENTRÉE EN STOCK : Débit 30 (Stocks de marchandises) ou Débit 32 (Approvisionnements) / Crédit 380 (Achats de marchandises).
+   - L'écriture est une ENTRÉE EN STOCK : Débit 30 (Stocks de marchandises) / Crédit 380.0 (Achats de marchandises).
    - Le montant est TOUJOURS le montant HT (valeur d'entrée en stock, hors TVA).
    - Il n'y a JAMAIS de compte 401, 44566 ou 44571 dans un bon d'entrée en stock.
-   - Exemple : Bon d'entrée 200 900 DA → Débit 30 / 200 900 DA | Crédit 380 / 200 900 DA.
+   - Exemple : Bon d'entrée 200 900 DA → Débit 30 / 200 900 DA | Crédit 380.0 / 200 900 DA.
 4. BON DE LIVRAISON / BON DE SORTIE DE STOCK :
    - Sortie de stock : Débit 600 (Achats de marchandises vendues) / Crédit 30 (Stocks de marchandises).
    - Le montant est le coût HT de revient des marchandises sorties.
 5. CHÈQUE — DEUX CAS OBLIGATOIRES À DISTINGUER (TRÈS IMPORTANT) :
    a) CHÈQUE ÉMIS (Règlement fournisseur) — si "À l'ordre de" est un FOURNISSEUR (pas la société cliente) :
-      - L'entreprise PAIE → Débit 401 (Fournisseurs) / Crédit 512 (Banques).
-      - Exemple : Chèque BEA N° 456782 à l'ordre de SARL Nord Pack → Débit 401 (SARL Nord Pack) | Crédit 512 (BEA).
+      - L'entreprise PAIE → Débit 401.0 (Fournisseur) / Crédit 512 (Banque).
+      - Exemple : Chèque BEA N° 456782 à l'ordre de SARL Nord Pack → Débit 401.0 (SARL Nord Pack) | Crédit 512 (BEA).
    b) CHÈQUE REÇU (Encaissement client) — si "À l'ordre de" est la SOCIÉTÉ CLIENTE elle-même :
-      - L'entreprise ENCAISSE → Débit 512 (Banques) / Crédit 411 (Clients).
-      - Exemple : Chèque reçu à l'ordre de SARL Café Et Snack → Débit 512 (Banque) | Crédit 411 (Client).
+      - L'entreprise ENCAISSE → Débit 512 (Banque) / Crédit 411.0 (Client).
+      - Exemple : Chèque reçu à l'ordre de SARL Café Et Snack → Débit 512 (Banque) | Crédit 411.0 (Client).
    - Il n'y a JAMAIS de compte TVA (44566 ou 44571) dans une écriture de chèque.
    - Le montant est TOUJOURS le montant TTC inscrit sur le chèque.
 6. RELEVÉ BANCAIRE :
@@ -110,12 +118,14 @@ ${(req.ocrText || "").substring(0, 1500)}
 
 7. FACTURES ÉLECTRICITÉ, EAU, GAZ (Fluides : Sonelgaz, SEAAL, ADE, etc.) :
    - RÈGLE OBLIGATOIRE SCF : Débit 607 (Achat Non stocké : électricité, eau) / Crédit 512 (Banque) pour l'intégralité du montant TTC.
-   - Ne JAMAIS créditer le compte 401 pour ces factures de fluides.
+   - S'applique UNIQUEMENT si le fournisseur est Sonelgaz, SEAAL ou ADE.
 8. FACTURES TÉLÉPHONE, INTERNET, TÉLÉCOMS (Algérie Télécom, Mobilis, Djezzy, Ooredoo, etc.) :
    - RÈGLE OBLIGATOIRE SCF : Débit 626 (Frais postaux et de télécommunications) / Crédit 512 (Banque) pour l'intégralité du montant TTC.
-   - Ne JAMAIS créditer le compte 401 pour ces factures de télécommunications.
+   - S'applique UNIQUEMENT et STRICTEMENT si le fournisseur est un opérateur télécom (Algérie Télécom, Mobilis, Djezzy, Ooredoo).
+   - ATTENTION : Ne JAMAIS appliquer 626 à une facture d'achat commerciale de marchandises (ex: Color Print, papier, matériel) sous prétexte qu'un numéro de téléphone ou un site web figure dans l'en-tête du fournisseur !
+   - 380.0 : Achats de marchandises stockées (Achat de marchandise)
    - 607 : Électricité, gaz, eau (Sonelgaz, SEAAL, ADE, etc.)
-   - 626 : Postes & Télécoms (Mobilis, Djezzy, Ooredoo, Algérie Télécom, internet, 4G, timbres)
+   - 626 : Postes & Télécoms (Mobilis, Djezzy, Ooredoo, Algérie Télécom)
    - 613 : Locations et charges locatives (loyer bureau, dépôt, leasing)
    - 615 : Entretien et réparations (vidange, mécanique, réparations matériel, climatisation)
    - 616 : Primes d'assurances (SAA, CAAT, CIAR, CAAR, etc.)
@@ -127,10 +137,9 @@ ${(req.ocrText || "").substring(0, 1500)}
    - 606 : Achats non stockés (carburant Naftal, lubrifiants, petit outillage)
    - 627 : Services bancaires (commissions, agios)
    - 218 : Matériel informatique ou de bureau durable (> 30 000 DA)
-   - 380 : Achats de marchandises stockées (à utiliser uniquement comme Crédit dans un bon de réception/bon d'entrée)
    - 381 : Achats de matières premières
-   - 30 : Stocks de marchandises (à utiliser comme Débit dans un bon de réception/bon d'entrée)
-8. ÉQUILIBRE OBLIGATOIRE :
+   - 30 : Stocks de marchandises (à utiliser comme Débit dans un bon d'entrée en stock)
+9. ÉQUILIBRE OBLIGATOIRE :
 
    - Chaque ligne d'écriture doit avoir debitAccount, creditAccount, amount (positif), description claire en français avec nom du tiers, et reference.
    - La somme des montants débités DOIT égaler exactement le montant utilisé (HT pour bons de stock, TTC pour factures).
