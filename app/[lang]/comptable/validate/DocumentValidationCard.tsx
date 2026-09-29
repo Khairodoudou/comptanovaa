@@ -508,6 +508,9 @@ export function DocumentValidationCard({
   const correctedDate = initialEntries.find((e) => e.correctedAt)?.correctedAt;
   const entrySource = initialEntries[0]?.source || "AI";
   const entryComment = initialEntries[0]?.comment;
+  const memoryId = (initialEntries[0] as any)?.memoryId as string | undefined;
+  const [clearingMemory, setClearingMemory] = useState(false);
+  const [memoryCleared, setMemoryCleared] = useState(false);
 
   // Calculate Totals & Balance
   const totalDebit = useMemo(() => lines.reduce((s, l) => s + (Number(l.debit) || 0), 0), [lines]);
@@ -823,10 +826,42 @@ export function DocumentValidationCard({
                     {correctedDate ? ` (${new Date(correctedDate).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })})` : ""}
                   </span>
                 </span>
-              ) : entrySource === "MEMORY" ? (
-                <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-full text-[10px] font-bold flex items-center gap-1">
-                  <Brain size={11} className="text-emerald-600" />
-                  <span>{lang === "ar" ? "ذاكرة المحاسب المتعلمة" : "Mémoire comptable apprise"}</span>
+              ) : entrySource === "MEMORY" && !memoryCleared ? (
+                <span className="flex items-center gap-1.5 flex-wrap">
+                  <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-full text-[10px] font-bold flex items-center gap-1">
+                    <Brain size={11} className="text-emerald-600" />
+                    <span>{lang === "ar" ? "ذاكرة المحاسب المتعلمة" : "Mémoire comptable apprise"}</span>
+                  </span>
+                  {/* Button to delete the wrong memory entry */}
+                  <button
+                    type="button"
+                    title={lang === "ar" ? "مسح هذا التعلم الخاطئ" : "Effacer cette mémoire incorrecte"}
+                    disabled={clearingMemory}
+                    onClick={async () => {
+                      if (!confirm(lang === "ar" ? "هل تريد مسح هذا التعلم المحفوظ؟" : "Effacer la mémoire apprise pour ce fournisseur ?")) return;
+                      setClearingMemory(true);
+                      try {
+                        // We delete by supplier name (server will find the entry)
+                        const res = await fetch(`/api/accounting-memory/clear`, {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ supplierName }),
+                        });
+                        if (res.ok) {
+                          setMemoryCleared(true);
+                          setSuccessMessage(lang === "ar" ? "تم مسح الذاكرة بنجاح. يرجى إعادة رفع الوثيقة للحصول على الكتابة الصحيحة." : "Mémoire effacée. Veuillez re-uploader le document pour obtenir l'écriture correcte.");
+                        } else {
+                          alert(lang === "ar" ? "فشل مسح الذاكرة" : "Échec de l'effacement");
+                        }
+                      } finally {
+                        setClearingMemory(false);
+                      }
+                    }}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-full text-[10px] font-bold transition-all cursor-pointer active:scale-95"
+                  >
+                    {clearingMemory ? <Loader2 size={9} className="animate-spin" /> : <Trash2 size={9} />}
+                    <span>{lang === "ar" ? "مسح الذاكرة" : "Effacer mémoire"}</span>
+                  </button>
                 </span>
               ) : null}
             </div>

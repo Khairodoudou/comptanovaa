@@ -229,6 +229,32 @@ export async function generateSmartEntries(
     console.warn("[SmartEntry] Memory lookup warning:", memErr);
   }
 
+  // CRITICAL DEFENSIVE GUARD: Validate memoryMatch before applying
+  if (memoryMatch) {
+    if (docType === "FACTURE_FOURNISSEUR" || docType.includes("FOURNISSEUR")) {
+      // 1. A purchase invoice NEVER credits bank (512) or cash (53) directly — credit must always be 401
+      if (memoryMatch.creditAccount.startsWith("5")) {
+        console.warn(`[SmartEntry] Discarding invalid memory for ${supplier}: credit account ${memoryMatch.creditAccount} cannot be used for a purchase invoice.`);
+        memoryMatch = null;
+      }
+      // 2. Reject 626 (telecom) memory if supplier/invoice is not telecom
+      else if (memoryMatch.debitAccount.startsWith("626") && !isTelecomInvoice) {
+        console.warn(`[SmartEntry] Discarding 626 telecom memory for non-telecom supplier: ${supplier}`);
+        memoryMatch = null;
+      }
+      // 3. Reject 607 (utility) memory if supplier/invoice is not utility
+      else if (memoryMatch.debitAccount.startsWith("607") && !isUtilityInvoice) {
+        console.warn(`[SmartEntry] Discarding 607 utility memory for non-utility supplier: ${supplier}`);
+        memoryMatch = null;
+      }
+      // 4. Reject 6xx charge memories for commercial purchase invoices (e.g. Facture achat Color Print)
+      else if (isPurchaseInvoice && memoryMatch.debitAccount.startsWith("6")) {
+        console.warn(`[SmartEntry] Discarding 6xx charge memory for commercial purchase invoice: ${supplier}`);
+        memoryMatch = null;
+      }
+    }
+  }
+
   if (memoryMatch && amountTTC > 0) {
     console.log(`[SmartEntry] Found learned accountant preference for ${supplier}: Débit ${memoryMatch.debitAccount}, Crédit ${memoryMatch.creditAccount}`);
 

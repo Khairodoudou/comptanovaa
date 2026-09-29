@@ -35,6 +35,22 @@ export interface AccountingMemoryMatch {
 }
 
 /**
+ * Checks if a supplier name corresponds to a known telecom operator.
+ * Only telecom operators should have 626 as debit account.
+ */
+function isTelecomSupplierName(name: string): boolean {
+  return /mobilis|djezzy|ooredoo|alg[eé]rie\s*t[eé]l[eé]com|algerie\s*telecom|\bat\b/i.test(name);
+}
+
+/**
+ * Checks if a supplier name corresponds to a known utility provider.
+ * Only utility suppliers should have 607 as debit account.
+ */
+function isUtilitySupplierName(name: string): boolean {
+  return /sonelgaz|seaal|\bade\b|\bona\b|alg[eé]rienne des eaux|distribution de l['']electricite/i.test(name);
+}
+
+/**
  * Look up learned accountant preference for a specific company + supplier.
  */
 export async function findAccountingMemory(
@@ -69,8 +85,19 @@ export async function findAccountingMemory(
     });
 
     if (exact) {
-      // Safety: Never apply stock accounts (30/380) or bank accounts (512) to an invoice
-      if (exact.debitAccount === "30" || exact.creditAccount === "380" || exact.creditAccount === "512") {
+      // Safety: Never apply stock accounts (30/380) or bank accounts (512, 53, 5xx) to an invoice credit
+      if (exact.debitAccount === "30" || exact.creditAccount === "380" || exact.creditAccount.startsWith("5")) {
+        return null;
+      }
+      // Safety: Never apply 626 (telecom charges) to a non-telecom supplier
+      // This prevents wrong memories from polluting purchase invoice entries
+      if (exact.debitAccount.startsWith("626") && !isTelecomSupplierName(rawSupplierName)) {
+        console.warn(`[AccountingMemory] Rejected 626 memory for non-telecom supplier: ${rawSupplierName}`);
+        return null;
+      }
+      // Safety: Never apply 607 (utility charges) to a non-utility supplier
+      if (exact.debitAccount.startsWith("607") && !isUtilitySupplierName(rawSupplierName)) {
+        console.warn(`[AccountingMemory] Rejected 607 memory for non-utility supplier: ${rawSupplierName}`);
         return null;
       }
       return {
@@ -97,9 +124,12 @@ export async function findAccountingMemory(
         (memNorm.length >= 3 && normalized.includes(memNorm)) ||
         (normalized.length >= 3 && memNorm.includes(normalized))
       ) {
-        if (mem.debitAccount === "30" || mem.creditAccount === "380" || mem.creditAccount === "512") {
+        if (mem.debitAccount === "30" || mem.creditAccount === "380" || mem.creditAccount.startsWith("5")) {
           continue;
         }
+        // Skip 626/607 memory for non-matching supplier types
+        if (mem.debitAccount.startsWith("626") && !isTelecomSupplierName(rawSupplierName)) continue;
+        if (mem.debitAccount.startsWith("607") && !isUtilitySupplierName(rawSupplierName)) continue;
         return {
           id: mem.id,
           supplierName: mem.supplierName,
@@ -154,6 +184,17 @@ export async function recordAccountingMemory(params: {
     creditAccount === "512" ||
     debitAccount.startsWith("401")
   ) {
+    return;
+  }
+
+  // CRITICAL: Never save telecom/utility accounts for non-matching suppliers.
+  // This prevents a single wrong OCR run from poisoning the memory for all future invoices.
+  if (debitAccount.startsWith("626") && !isTelecomSupplierName(supplierName)) {
+    console.warn(`[AccountingMemory] Blocked saving 626 for non-telecom supplier: ${supplierName}`);
+    return;
+  }
+  if (debitAccount.startsWith("607") && !isUtilitySupplierName(supplierName)) {
+    console.warn(`[AccountingMemory] Blocked saving 607 for non-utility supplier: ${supplierName}`);
     return;
   }
 
