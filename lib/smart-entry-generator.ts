@@ -1,4 +1,4 @@
-import { EntrySpec, generateEntries, TVA_RATE } from "./entry-generator";
+import { EntrySpec, generateEntries, findSubAccount, TVA_RATE } from "./entry-generator";
 import { findAccountingMemory, AccountingMemoryMatch } from "./accounting-memory";
 import { generateAccountingWithAi } from "./ai-accounting-engine";
 
@@ -52,7 +52,67 @@ export async function generateSmartEntries(
         regimeFiscal.toUpperCase().includes("IFU"))
   );
 
-  // ── Step 1: Check Accountant Preference Memory ──────────────────────────────
+  // ── RÈGLES MÉTIER SCF STRICTES (Non polluées par la mémoire de charge) ──────
+  // 1. CHEQUE : Règlement Fournisseur obligatoire (Débit 401.0 / Crédit 512)
+  if (docType === "CHEQUE") {
+    const acc401 = findSubAccount(subAccounts, "401", supplier);
+    const debitAccount = acc401 === "401" ? "401.0" : acc401;
+    const creditAccount = findSubAccount(subAccounts, "512", "Banque");
+    return {
+      source: "FALLBACK",
+      explanation: `Règlement fournisseur par chèque N° ${refNumber || ""} — Débit ${debitAccount} (Fournisseur) / Crédit ${creditAccount} (Banque) pour ${amountTTC} DA (Règle SCF obligatoire).`,
+      entries: [
+        {
+          debitAccount,
+          creditAccount,
+          amount: amountTTC,
+          description: `Règlement fournisseur — ${supplier}`,
+          reference: refNumber,
+        },
+      ],
+    };
+  }
+
+  // 2. BON DE RÉCEPTION / ENTRÉE EN STOCK : Débit 30 (Stock) / Crédit 380 (Achat stocké)
+  if (docType === "BON_RECEPTION") {
+    const acc30 = findSubAccount(subAccounts, "30", supplier);
+    const acc380 = findSubAccount(subAccounts, "380", supplier);
+    const amount = htOverride && htOverride > 0 && htOverride <= amountTTC ? htOverride : amountTTC;
+    return {
+      source: "FALLBACK",
+      explanation: `Entrée en stock selon bon de réception N° ${refNumber || ""} — Débit ${acc30} (Stocks) / Crédit ${acc380} (Achats de marchandises) pour ${amount} DA HT.`,
+      entries: [
+        {
+          debitAccount: acc30,
+          creditAccount: acc380,
+          amount,
+          description: `Entrée en stock — ${supplier}`,
+          reference: refNumber,
+        },
+      ],
+    };
+  }
+
+  // 3. BON DE LIVRAISON / SORTIE DE STOCK : Débit 600 / Crédit 30
+  if (docType === "BON_LIVRAISON") {
+    const acc30 = findSubAccount(subAccounts, "30", supplier);
+    const amount = htOverride && htOverride > 0 && htOverride <= amountTTC ? htOverride : amountTTC;
+    return {
+      source: "FALLBACK",
+      explanation: `Sortie de stock selon bon de livraison N° ${refNumber || ""} — Débit 600 / Crédit ${acc30} pour ${amount} DA HT.`,
+      entries: [
+        {
+          debitAccount: "600",
+          creditAccount: acc30,
+          amount,
+          description: `Sortie de stock — ${supplier}`,
+          reference: refNumber,
+        },
+      ],
+    };
+  }
+
+  // ── Step 1: Check Accountant Preference Memory (pour Factures / Charges) ──
   let memoryMatch: AccountingMemoryMatch | null = null;
   try {
     memoryMatch = await findAccountingMemory(companyId, supplier, docType);
@@ -63,9 +123,8 @@ export async function generateSmartEntries(
   if (memoryMatch && amountTTC > 0) {
     console.log(`[SmartEntry] Found learned accountant preference for ${supplier}: Débit ${memoryMatch.debitAccount}, Crédit ${memoryMatch.creditAccount}`);
 
-    // STOCK MOVEMENTS: BON_RECEPTION and BON_LIVRAISON never have TVA — always a direct entry
-    const isStockMovement = docType === "BON_RECEPTION" || docType === "BON_LIVRAISON";
-    if (isStockMovement || isIfu || memoryMatch.isExempt || memoryMatch.tvaRate === 0) {
+    // Si régime IFU ou exonéré
+    if (isIfu || memoryMatch.isExempt || memoryMatch.tvaRate === 0) {
       const amount = htOverride && htOverride > 0 && htOverride <= amountTTC ? htOverride : amountTTC;
       return {
         source: "MEMORY",
@@ -75,12 +134,8 @@ export async function generateSmartEntries(
           {
             debitAccount: memoryMatch.debitAccount,
             creditAccount: memoryMatch.creditAccount,
-            amount: isStockMovement ? amount : amountTTC,
-            description: memoryMatch.suggestedDesc || (
-              docType === "BON_RECEPTION" ? `Entrée en stock — ${supplier}` :
-              docType === "BON_LIVRAISON" ? `Sortie de stock — ${supplier}` :
-              `${docType === "FACTURE_CLIENT" ? "Vente" : "Charge/Achat"} — ${supplier}`
-            ),
+            amount: amountTTC,
+            description: memoryMatch.suggestedDesc || `${docType === "FACTURE_CLIENT" ? "Vente" : "Charge/Achat"} — ${supplier}`,
             reference: refNumber,
           },
         ],

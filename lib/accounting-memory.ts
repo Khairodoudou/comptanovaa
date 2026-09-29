@@ -42,6 +42,16 @@ export async function findAccountingMemory(
   rawSupplierName: string,
   documentType?: string
 ): Promise<AccountingMemoryMatch | null> {
+  // Non-invoice types have strict deterministic SCF accounting rules: never use charge memory
+  if (
+    documentType === "CHEQUE" ||
+    documentType === "BON_RECEPTION" ||
+    documentType === "BON_LIVRAISON" ||
+    documentType === "RELEVE_BANCAIRE"
+  ) {
+    return null;
+  }
+
   if (!companyId || !rawSupplierName || rawSupplierName === "Inconnu") {
     return null;
   }
@@ -59,6 +69,10 @@ export async function findAccountingMemory(
     });
 
     if (exact) {
+      // Safety: Never apply stock accounts (30/380) or bank accounts (512) to an invoice
+      if (exact.debitAccount === "30" || exact.creditAccount === "380" || exact.creditAccount === "512") {
+        return null;
+      }
       return {
         id: exact.id,
         supplierName: exact.supplierName,
@@ -83,6 +97,9 @@ export async function findAccountingMemory(
         (memNorm.length >= 3 && normalized.includes(memNorm)) ||
         (normalized.length >= 3 && memNorm.includes(normalized))
       ) {
+        if (mem.debitAccount === "30" || mem.creditAccount === "380" || mem.creditAccount === "512") {
+          continue;
+        }
         return {
           id: mem.id,
           supplierName: mem.supplierName,
@@ -125,6 +142,20 @@ export async function recordAccountingMemory(params: {
     isExempt = false,
     suggestedDesc,
   } = params;
+
+  // Never record stock movements, bank payments or cheques into supplier charge memory
+  if (
+    documentType === "CHEQUE" ||
+    documentType === "BON_RECEPTION" ||
+    documentType === "BON_LIVRAISON" ||
+    documentType === "RELEVE_BANCAIRE" ||
+    debitAccount === "30" ||
+    creditAccount === "380" ||
+    creditAccount === "512" ||
+    debitAccount.startsWith("401")
+  ) {
+    return;
+  }
 
   if (!companyId || !supplierName || supplierName === "Inconnu") return;
 

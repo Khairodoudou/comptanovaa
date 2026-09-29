@@ -767,8 +767,25 @@ export function extractDocumentData(
   const invoiceNumber = parseInvoiceNumber(rawText, filename);
   const chequeNumber = parseChequeNumber(rawText);
 
-  if (chequeNumber && (documentType === "AUTRE" || documentType === "FACTURE_FOURNISSEUR")) {
-    documentType = "CHEQUE";
+  // Strong cheque document markers (these appear on real cheque forms, not just in payment notes on invoices)
+  const hasStrongChequeMarkers = /payez\s+contre|[àa]\s+l[''']ordre\s+de|ordre\s+de\s+paiement|à\s+l[''']ordre|signataire|banque.*[àa].*vue|specimen|شيك\s+بنكي|لأمر/i.test(rawText);
+
+  if (chequeNumber) {
+    if (
+      documentType === "AUTRE" ||
+      documentType === "FACTURE_FOURNISSEUR"
+    ) {
+      // Any cheque number in a generic or supplier invoice → reclassify as cheque
+      documentType = "CHEQUE";
+    } else if (
+      (documentType === "BON_RECEPTION" ||
+        documentType === "BON_LIVRAISON" ||
+        documentType === "RELEVE_BANCAIRE") &&
+      hasStrongChequeMarkers
+    ) {
+      // Only reclassify stock/delivery notes if the doc ALSO has strong cheque layout markers
+      documentType = "CHEQUE";
+    }
   } else if (documentType === "AUTRE" && invoiceNumber) {
     documentType = "FACTURE_FOURNISSEUR";
   }

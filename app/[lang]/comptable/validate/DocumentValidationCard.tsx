@@ -199,13 +199,73 @@ export function DocumentValidationCard({
       });
     });
 
+    if (isCheque) {
+      // A cheque is exclusively a supplier debt settlement (Débit 401.0 / Crédit 512).
+      // If previous bad memory or generation populated stock (30/380), charges (6xx), or TVA (44566),
+      // auto-repair immediately to the exact SCF standard (Image 2).
+      const hasInvalidAccounts = list.some(
+        (l) => l.account === "30" || l.account === "380" || l.account.startsWith("6") || l.account.startsWith("445")
+      );
+      const hasValidDebit = list.some((l) => l.type === "DEBIT" && l.account.startsWith("401"));
+      const hasValidCredit = list.some((l) => l.type === "CREDIT" && (l.account.startsWith("512") || l.account.startsWith("53")));
+
+      if (hasInvalidAccounts || !hasValidDebit || !hasValidCredit || list.length === 0) {
+        const totalAmount = ocrAmountTTC > 0
+          ? ocrAmountTTC
+          : list.reduce((s, l) => Math.max(s, l.debit, l.credit), 0);
+
+        return [
+          {
+            id: "deb-401.0",
+            type: "DEBIT",
+            account: "401.0",
+            label: entityName ? `Fournisseur (${entityName})` : "Fournisseur",
+            debit: totalAmount,
+            credit: 0,
+            originalEntryId: initialEntries[0]?.id,
+          },
+          {
+            id: "cred-512",
+            type: "CREDIT",
+            account: "512",
+            label: "Banque",
+            debit: 0,
+            credit: totalAmount,
+            originalEntryId: initialEntries[0]?.id,
+          },
+        ];
+      }
+    }
+
+    if (document.type === "BON_RECEPTION") {
+      const hasInvalidAccounts = list.some((l) => l.account.startsWith("401") || l.account.startsWith("6") || l.account.startsWith("445"));
+      if (hasInvalidAccounts || list.length === 0) {
+        const totalAmount = ocrAmountTTC > 0 ? ocrAmountTTC : list.reduce((s, l) => Math.max(s, l.debit, l.credit), 0);
+        return [
+          {
+            id: "deb-30",
+            type: "DEBIT",
+            account: "30",
+            label: "Stocks de marchandises",
+            debit: totalAmount,
+            credit: 0,
+            originalEntryId: initialEntries[0]?.id,
+          },
+          {
+            id: "cred-380",
+            type: "CREDIT",
+            account: "380",
+            label: "Achats de marchandises",
+            debit: 0,
+            credit: totalAmount,
+            originalEntryId: initialEntries[0]?.id,
+          },
+        ];
+      }
+    }
+
     return list.length > 0
       ? list
-      : isCheque
-      ? [
-          { id: "1", type: "DEBIT", account: "401.0", label: entityName ? `Fournisseur (${entityName})` : "Fournisseur", debit: ocrAmountTTC, credit: 0 },
-          { id: "2", type: "CREDIT", account: "512", label: "Banque", debit: 0, credit: ocrAmountTTC },
-        ]
       : [
           { id: "1", type: "DEBIT", account: "380", label: "Achat de marchandise", debit: ocrAmountTTC, credit: 0 },
           { id: "2", type: "CREDIT", account: "401", label: entityName ? `Fournisseur (${entityName})` : "Fournisseur", debit: 0, credit: ocrAmountTTC },
