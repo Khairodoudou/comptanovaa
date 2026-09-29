@@ -756,12 +756,7 @@ export function DocumentValidationCard({
                   <Brain size={11} className="text-emerald-600" />
                   <span>{lang === "ar" ? "ذاكرة المحاسب المتعلمة" : "Mémoire comptable apprise"}</span>
                 </span>
-              ) : (
-                <span className="px-2.5 py-0.5 bg-purple-50 text-purple-700 border border-purple-200 rounded-full text-[10px] font-bold flex items-center gap-1">
-                  <Sparkles size={11} className="text-purple-600" />
-                  <span>{lang === "ar" ? "مقترح الذكاء الاصطناعي (Gemini SCF)" : "Proposée par Gemini SCF"}</span>
-                </span>
-              )}
+              ) : null}
             </div>
 
             <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 mt-1.5 font-medium">
@@ -855,30 +850,6 @@ export function DocumentValidationCard({
         </div>
       )}
 
-      {/* ── AI / Memory Insight Pill ────────────────────────────────────────── */}
-      {(displayComment || entryComment) && !isCorrected && (
-        <div
-          className={`p-3 rounded-xl text-xs border flex items-start gap-2.5 ${
-            entrySource === "MEMORY"
-              ? "bg-emerald-50/90 border-emerald-200 text-emerald-950"
-              : "bg-purple-50/90 border-purple-200 text-purple-950"
-          }`}
-        >
-          {entrySource === "MEMORY" ? (
-            <Brain size={16} className="text-emerald-600 shrink-0 mt-0.5" />
-          ) : (
-            <Sparkles size={16} className="text-purple-600 shrink-0 mt-0.5" />
-          )}
-          <div className="flex-1 space-y-0.5">
-            <span className="font-extrabold text-[11px] block uppercase tracking-wider text-opacity-80">
-              {entrySource === "MEMORY"
-                ? lang === "ar" ? "تفضيلك المحاسبي المحفوظ" : "Mémoire d'apprentissage active"
-                : lang === "ar" ? "تحليل الذكاء الاصطناعي (Gemini)" : "Analyse comptable Gemini SCF"}
-            </span>
-            <p className="text-xs leading-relaxed font-medium">{displayComment || entryComment}</p>
-          </div>
-        </div>
-      )}
 
       {/* ── Original AI History Toggle Button ──────────────────────────────── */}
       <div className="flex justify-end">
@@ -925,51 +896,6 @@ export function DocumentValidationCard({
         </div>
       )}
 
-      {/* ── Cheque Direction Switcher (Sens de l'écriture Chèque) ────────── */}
-      {isChequeDocument && (
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-3.5 bg-slate-50 border border-slate-200 rounded-xl">
-          <div className="flex items-center gap-2 text-xs">
-            <span className="font-bold text-slate-500">
-              {lang === "ar" ? "نوع معاملة الشيك :" : "Sens de l'opération :"}
-            </span>
-            <span
-              className={`px-2.5 py-1 rounded-md font-extrabold text-xs inline-flex items-center gap-1.5 ${
-                chequeDirection === "RECEIVED"
-                  ? "bg-emerald-100 text-emerald-800 border border-emerald-300/60"
-                  : "bg-blue-100 text-blue-800 border border-blue-300/60"
-              }`}
-            >
-              {chequeDirection === "RECEIVED"
-                ? (lang === "ar" ? "📥 شيك مقبوض (عميل) : مدين 512 / دائن 411" : "📥 Chèque Reçu (Client) : Débit 512 / Crédit 411")
-                : (lang === "ar" ? "📤 شيك صادر (مورد) : مدين 401 / دائن 512" : "📤 Chèque Émis (Fournisseur) : Débit 401 / Crédit 512")}
-            </span>
-          </div>
-          <div className="flex items-center gap-1.5 bg-white p-1 rounded-lg border border-slate-200 shadow-2xs">
-            <button
-              type="button"
-              onClick={() => handleToggleChequeDirection("RECEIVED")}
-              className={`flex-1 sm:flex-none px-3.5 py-1.5 rounded-md text-xs font-black transition-all cursor-pointer ${
-                chequeDirection === "RECEIVED"
-                  ? "bg-emerald-600 text-white shadow-xs"
-                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
-              }`}
-            >
-              {lang === "ar" ? "📥 شيك مقبوض (512 / 411)" : "📥 Chèque Reçu (512 / 411)"}
-            </button>
-            <button
-              type="button"
-              onClick={() => handleToggleChequeDirection("ISSUED")}
-              className={`flex-1 sm:flex-none px-3.5 py-1.5 rounded-md text-xs font-black transition-all cursor-pointer ${
-                chequeDirection === "ISSUED"
-                  ? "bg-blue-600 text-white shadow-xs"
-                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
-              }`}
-            >
-              {lang === "ar" ? "📤 شيك صادر (401 / 512)" : "📤 Chèque Émis (401 / 512)"}
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* ── Classic 5-Column Accounting Journal Table (Exact Design) ────────── */}
       <div className="bg-white overflow-hidden shadow-xs mt-2">
