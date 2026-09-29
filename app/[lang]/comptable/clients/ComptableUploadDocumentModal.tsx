@@ -20,7 +20,6 @@ import {
   Layers,
   ShieldCheck,
   Trash2,
-  FileCheck,
   ChevronDown,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -657,47 +656,6 @@ export function ComptableUploadDocumentModal({
                     </div>
                   </div>
 
-                  {/* Row 4: Generated Journal Entry Preview */}
-                  {journalEntry && (
-                    <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs space-y-2">
-                      <div className="flex items-center justify-between text-xs pb-1.5 border-b border-slate-100">
-                        <div className="flex items-center gap-1.5 font-bold text-slate-800">
-                          <FileCheck size={14} className="text-teal-600" />
-                          <span>{isRtl ? "معاينة القيد المقترح في اليومية" : "Écriture proposée au journal"}</span>
-                        </div>
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
-                          {isRtl ? "بانتظار التأكيد" : "PROPOSÉ"}
-                        </span>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2 text-xs">
-                        <div className="bg-slate-50 p-2 rounded-lg border border-slate-100">
-                          <span className="text-[10px] font-bold text-slate-400 block">
-                            {isRtl ? "حساب المدين (Débit)" : "Compte Débit"}
-                          </span>
-                          <span className="font-mono font-black text-slate-800 text-xs">
-                            {journalEntry.debitAccount || "607 / 4456"}
-                          </span>
-                        </div>
-
-                        <div className="bg-slate-50 p-2 rounded-lg border border-slate-100">
-                          <span className="text-[10px] font-bold text-slate-400 block">
-                            {isRtl ? "حساب الدائن (Crédit)" : "Compte Crédit"}
-                          </span>
-                          <span className="font-mono font-black text-slate-800 text-xs">
-                            {journalEntry.creditAccount || "401"}
-                          </span>
-                        </div>
-                      </div>
-
-                      {journalEntry.description && (
-                        <p className="text-[11px] text-slate-500 font-medium truncate pt-0.5">
-                          <span className="text-slate-400">{isRtl ? "البيان: " : "Libellé : "}</span>
-                          {journalEntry.description}
-                        </p>
-                      )}
-                    </div>
-                  )}
                 </div>
 
                 {/* Footer Action Buttons */}
