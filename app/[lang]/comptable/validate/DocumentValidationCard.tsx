@@ -358,84 +358,60 @@ export function DocumentValidationCard({
       }
     }
 
-    // ── Facture Électricité / Eau / Gaz (Sonelgaz, SEAAL, ADE, etc.) ────────
-    // Règle SCF directe : Débit 607 (Achat Non stocké : électricité, eau) / Crédit 512 (Banque)
-    const isUtilityDocument =
-      /sonelgaz|seaal|ade\b|alg[eé]rienne des eaux|[eé]lectricit[eé]|gaz\b|eau potable|facture d['’]eau|facture d['’][eé]lectricit[eé]|facture électricité/i.test(
-        `${document.originalName} ${extractedSupplier} ${ocrRawText}`
-      );
-
-    if (isUtilityDocument) {
-      const hasDebit607 = list.some((l) => l.type === "DEBIT" && l.account.startsWith("607"));
-      const hasCredit512 = list.some((l) => l.type === "CREDIT" && (l.account.startsWith("512") || l.account.startsWith("53")));
-
-      if (!hasDebit607 || !hasCredit512 || list.length === 0) {
-        const totalAmount = ocrAmountTTC > 0 ? ocrAmountTTC : list.reduce((s, l) => Math.max(s, l.debit, l.credit), 0);
-        return [
-          {
-            id: "deb-607",
-            type: "DEBIT" as const,
-            account: "607",
-            label: "Achat Non stocké ( électricité, eau)",
-            debit: totalAmount,
-            credit: 0,
-            originalEntryId: initialEntries[0]?.id,
-          },
-          {
-            id: "cred-512",
-            type: "CREDIT" as const,
-            account: "512",
-            label: "Banque",
-            debit: 0,
-            credit: totalAmount,
-            originalEntryId: initialEntries[0]?.id,
-          },
-        ];
-      }
+    if (list.length > 0) {
+      return list;
     }
 
-    // ── Facture Téléphone / Internet (Algérie Télécom, Mobilis, Djezzy, Ooredoo, etc.) ──
-    // Règle SCF directe : Débit 626 (Frais postaux et de télécommunications) / Crédit 512 (Banque)
-    const isTelecomDocument =
-      /mobilis|djezzy|ooredoo|alg[eé]rie t[eé]l[eé]com|t[eé]l[eé]phone|internet|adsl|fibre|4g|5g|forfait mobile|facture t[eé]l[eé]phone|facture internet|t[eé]l[eé]com/i.test(
-        `${document.originalName} ${extractedSupplier} ${ocrRawText}`
-      );
+    // ── Fallback ONLY if no journal entries were provided from the database ──
+    const isUtilitySupplier = /sonelgaz|seaal|ade\b|alg[eé]rienne des eaux/i.test(extractedSupplier);
+    const isTelecomSupplier = /mobilis|djezzy|ooredoo|alg[eé]rie t[eé]l[eé]com|algerie telecom|\bat\b/i.test(extractedSupplier);
 
-    if (isTelecomDocument) {
-      const hasDebit626 = list.some((l) => l.type === "DEBIT" && l.account.startsWith("626"));
-      const hasCredit512 = list.some((l) => l.type === "CREDIT" && (l.account.startsWith("512") || l.account.startsWith("53")));
-
-      if (!hasDebit626 || !hasCredit512 || list.length === 0) {
-        const totalAmount = ocrAmountTTC > 0 ? ocrAmountTTC : list.reduce((s, l) => Math.max(s, l.debit, l.credit), 0);
-        return [
-          {
-            id: "deb-626",
-            type: "DEBIT" as const,
-            account: "626",
-            label: "Frais postaux et de télécommunications",
-            debit: totalAmount,
-            credit: 0,
-            originalEntryId: initialEntries[0]?.id,
-          },
-          {
-            id: "cred-512",
-            type: "CREDIT" as const,
-            account: "512",
-            label: "Banque",
-            debit: 0,
-            credit: totalAmount,
-            originalEntryId: initialEntries[0]?.id,
-          },
-        ];
-      }
+    if (isUtilitySupplier) {
+      return [
+        {
+          id: "deb-607",
+          type: "DEBIT" as const,
+          account: "607",
+          label: "Achat Non stocké ( électricité, eau)",
+          debit: ocrAmountTTC,
+          credit: 0,
+        },
+        {
+          id: "cred-512",
+          type: "CREDIT" as const,
+          account: "512",
+          label: "Banque",
+          debit: 0,
+          credit: ocrAmountTTC,
+        },
+      ];
     }
 
-    return list.length > 0
-      ? list
-      : [
-          { id: "1", type: "DEBIT", account: "380", label: "Achat de marchandise", debit: ocrAmountTTC, credit: 0 },
-          { id: "2", type: "CREDIT", account: "401", label: entityName ? `Fournisseur (${entityName})` : "Fournisseur", debit: 0, credit: ocrAmountTTC },
-        ];
+    if (isTelecomSupplier) {
+      return [
+        {
+          id: "deb-626",
+          type: "DEBIT" as const,
+          account: "626",
+          label: "Frais postaux et de télécommunications",
+          debit: ocrAmountTTC,
+          credit: 0,
+        },
+        {
+          id: "cred-512",
+          type: "CREDIT" as const,
+          account: "512",
+          label: "Banque",
+          debit: 0,
+          credit: ocrAmountTTC,
+        },
+      ];
+    }
+
+    return [
+      { id: "1", type: "DEBIT", account: "380.0", label: "Achat de marchandise", debit: ocrAmountTTC, credit: 0 },
+      { id: "2", type: "CREDIT", account: "401.0", label: entityName ? `Fournisseur (${entityName})` : "Fournisseur", debit: 0, credit: ocrAmountTTC },
+    ];
   });
 
   const locale = lang === "ar" ? "ar-DZ" : lang === "en" ? "en-US" : "fr-FR";
