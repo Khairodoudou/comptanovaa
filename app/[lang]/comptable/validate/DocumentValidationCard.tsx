@@ -232,7 +232,18 @@ export function DocumentValidationCard({
       creditsMap[cleanCredit].amount += e.amount;
     });
 
-    Object.entries(debitsMap).forEach(([acc, data]) => {
+    // Sort debit entries strictly according to Algerian SCF conventions (Figure 2):
+    // 1. Primary purchase / charge / asset accounts (380.0, 6xx, 2xx) come FIRST
+    // 2. VAT / Tax accounts (44566, 445xx) come SECOND
+    const sortedDebitEntries = Object.entries(debitsMap).sort(([accA], [accB]) => {
+      const isTvaA = accA.startsWith("445");
+      const isTvaB = accB.startsWith("445");
+      if (!isTvaA && isTvaB) return -1;
+      if (isTvaA && !isTvaB) return 1;
+      return accA.localeCompare(accB);
+    });
+
+    sortedDebitEntries.forEach(([acc, data]) => {
       list.push({
         id: `deb-${acc}`,
         type: "DEBIT",
@@ -244,7 +255,18 @@ export function DocumentValidationCard({
       });
     });
 
-    Object.entries(creditsMap).forEach(([acc, data]) => {
+    // Sort credit entries strictly according to Algerian SCF conventions:
+    // 1. Primary sales / revenue accounts (70x) or supplier/bank (401, 512) come FIRST
+    // 2. Collected TVA (44571, 445xx) comes SECOND
+    const sortedCreditEntries = Object.entries(creditsMap).sort(([accA], [accB]) => {
+      const isTvaA = accA.startsWith("445");
+      const isTvaB = accB.startsWith("445");
+      if (!isTvaA && isTvaB) return -1;
+      if (isTvaA && !isTvaB) return 1;
+      return accA.localeCompare(accB);
+    });
+
+    sortedCreditEntries.forEach(([acc, data]) => {
       list.push({
         id: `cred-${acc}`,
         type: "CREDIT",
@@ -521,16 +543,32 @@ export function DocumentValidationCard({
   }, [isChequeDocument, chequeDirection, reference, supplierName, ocrAmountTTC, totalDebit, totalCredit, locale, lang, entryComment]);
 
   // Separate Debit lines & Credit lines for the classic 5-column journal layout
+  // Sorted strictly according to SCF standards (Figure 2):
+  // Debit: Primary accounts (380.0, 6xx, 2xx) FIRST, then TVA (44566) SECOND
   const debitLines = useMemo(() => {
     return lines
       .map((line, idx) => ({ ...line, originalIndex: idx }))
-      .filter((l) => l.type === "DEBIT" || l.debit > 0);
+      .filter((l) => l.type === "DEBIT" || l.debit > 0)
+      .sort((a, b) => {
+        const aIsTva = a.account.startsWith("445");
+        const bIsTva = b.account.startsWith("445");
+        if (!aIsTva && bIsTva) return -1;
+        if (aIsTva && !bIsTva) return 1;
+        return 0;
+      });
   }, [lines]);
 
   const creditLines = useMemo(() => {
     return lines
       .map((line, idx) => ({ ...line, originalIndex: idx }))
-      .filter((l) => l.type === "CREDIT" || (l.credit > 0 && l.debit === 0));
+      .filter((l) => l.type === "CREDIT" || (l.credit > 0 && l.debit === 0))
+      .sort((a, b) => {
+        const aIsTva = a.account.startsWith("445");
+        const bIsTva = b.account.startsWith("445");
+        if (!aIsTva && bIsTva) return -1;
+        if (aIsTva && !bIsTva) return 1;
+        return 0;
+      });
   }, [lines]);
 
   // Retrieve AI original proposals

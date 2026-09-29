@@ -239,47 +239,46 @@ export async function POST(req: NextRequest) {
 
   const entrySpecs = smartResult.entries;
 
-  const journalEntries = await Promise.all(
-    entrySpecs.map(async (spec) => {
-      const entry = await db.journalEntry.create({
-        data: {
-          date: new Date(date),
-          description: spec.description,
-          debitAccount: spec.debitAccount,
-          creditAccount: spec.creditAccount,
-          amount: spec.amount,
-          reference: spec.reference,
-          status: "PROPOSED",
-          source: smartResult.source,
-          comment: smartResult.explanation || null,
-          companyId,
-          documentId: document.id,
-          sentToClient: false,
-        },
-      });
+  const journalEntries = [];
+  for (const spec of entrySpecs) {
+    const entry = await db.journalEntry.create({
+      data: {
+        date: new Date(date),
+        description: spec.description,
+        debitAccount: spec.debitAccount,
+        creditAccount: spec.creditAccount,
+        amount: spec.amount,
+        reference: spec.reference,
+        status: "PROPOSED",
+        source: smartResult.source,
+        comment: smartResult.explanation || null,
+        companyId,
+        documentId: document.id,
+        sentToClient: false,
+      },
+    });
 
-      // Save initial AI Proposal Version (Never to be overwritten)
-      await db.journalEntryVersion.create({
-        data: {
-          journalEntryId: entry.id,
-          versionNumber: 1,
-          versionType: "AI_PROPOSAL",
-          actorType: smartResult.source === "MEMORY" ? "SYSTEM" : "AI",
-          debitAccount: spec.debitAccount,
-          creditAccount: spec.creditAccount,
-          amount: spec.amount,
-          description: spec.description,
-          reference: spec.reference,
-          reason:
-            smartResult.source === "MEMORY"
-              ? `Mémoire d'apprentissage du comptable (${smartResult.memoryMatch?.supplierName || supplier})`
-              : smartResult.explanation || "Proposition intelligente IA (Gemini SCF)",
-        },
-      });
+    // Save initial AI Proposal Version (Never to be overwritten)
+    await db.journalEntryVersion.create({
+      data: {
+        journalEntryId: entry.id,
+        versionNumber: 1,
+        versionType: "AI_PROPOSAL",
+        actorType: smartResult.source === "MEMORY" ? "SYSTEM" : "AI",
+        debitAccount: spec.debitAccount,
+        creditAccount: spec.creditAccount,
+        amount: spec.amount,
+        description: spec.description,
+        reference: spec.reference,
+        reason:
+          smartResult.source === "MEMORY"
+            ? `Mémoire d'apprentissage du comptable (${smartResult.memoryMatch?.supplierName || supplier})`
+            : smartResult.explanation || "Proposition intelligente IA (Gemini SCF)",
+      },
+    });
 
-      return entry;
-    })
-  );
+    journalEntries.push(entry);
+  }
 
   // ── Audit Log ───────────────────────────────────────────────────────────────
   await db.auditLog.create({
