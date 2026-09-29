@@ -85,6 +85,7 @@ export default async function ComptableDocumentsPage({
           <ComptableUploadDocumentModal
             companyId={firstCompany.id}
             companyName={firstCompany.name}
+            companies={companies.map((c) => ({ id: c.id, name: c.name }))}
             lang={lang}
           />
         )}
