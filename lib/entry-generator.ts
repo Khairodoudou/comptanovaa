@@ -388,9 +388,22 @@ export function generateEntries(
       ];
     }
 
-    // ── Chèque émis / Paiement fournisseur ──────────────────────────────────
-    // Débit 401.x (Fournisseur soldé) / Crédit 512 (Banque sortie trésorerie)
-    case "CHEQUE":
+    // ── Chèque / Règlement ──────────────────────────────────────────────────
+    // a) Chèque reçu / Encaissement client : Débit 512 (Banque) / Crédit 411 (Client)
+    // b) Chèque émis / Paiement fournisseur : Débit 401 (Fournisseur) / Crédit 512 (Banque)
+    case "CHEQUE": {
+      const isClientOrSale = /client|vente|encaiss|recu|re\u00e7u/i.test(label);
+      if (isClientOrSale) {
+        return [
+          {
+            debitAccount: "512",
+            creditAccount: acc411 === "411" ? "411.0" : acc411,
+            amount: amountTTC,
+            description: `Encaissement client — ${label}`,
+            reference: refNumber,
+          },
+        ];
+      }
       return [
         {
           debitAccount: acc401 === "401" ? "401.0" : acc401,
@@ -400,6 +413,7 @@ export function generateEntries(
           reference: refNumber,
         },
       ];
+    }
 
     // ── Relevé bancaire ────────────────────────────────────────────────────
     case "RELEVE_BANCAIRE":

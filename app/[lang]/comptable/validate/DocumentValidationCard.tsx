@@ -99,6 +99,8 @@ export function DocumentValidationCard({
 
   // Extract OCR metadata
   let ocrAmountTTC = 0;
+  let ocrAmountHT = 0;
+  let ocrAmountTVA = 0;
   let extractedSupplier = "Inconnu";
   let ocrRefNumber = "";
   let ocrDocDate: string | null = null;
@@ -107,6 +109,8 @@ export function DocumentValidationCard({
     try {
       const parsed = JSON.parse(document.ocrData);
       ocrAmountTTC = parsed.extracted?.amount || 0;
+      ocrAmountHT = parsed.extracted?.amountHT || 0;
+      ocrAmountTVA = parsed.extracted?.amountTVA || 0;
       extractedSupplier = cleanEntityName(parsed.supplier || parsed.extracted?.supplier || "Inconnu");
       ocrRefNumber = parsed.extracted?.invoiceNumber || parsed.extracted?.chequeNumber || "";
       ocrRawText = parsed.rawText || "";
@@ -129,8 +133,12 @@ export function DocumentValidationCard({
 
   if (isChequeDocument) {
     const fname = (document.originalName || "").toLowerCase();
-    const hasSaleKeyword = /vente|encaiss|recu|re\u00e7u|client|recette/i.test(fname);
-    const hasPurchaseKeyword = /reglement|paiement|fournisseur|achat|charge/i.test(fname);
+    const hasInitialClientEntry = initialEntries.some(
+      (e) => (e.debitAccount.startsWith("512") && e.creditAccount.startsWith("411")) ||
+             /client|vente|encaiss/i.test(e.description || "")
+    );
+    const hasSaleKeyword = /vente|encaiss|recu|re\u00e7u|client|recette/i.test(fname) || hasInitialClientEntry;
+    const hasPurchaseKeyword = /fournisseur|achat|charge|approvisionnement|d[eé]pense/i.test(fname);
 
     if (hasSaleKeyword) {
       chequeIsReceived = true;
@@ -299,13 +307,16 @@ export function DocumentValidationCard({
       const dbIsReceived = hasDebit512 && hasCredit411;
       const dbIsIssued   = hasDebit401 && hasCredit512;
 
+      // If DB already has received entries (512 / 411), preserve received direction!
+      const effectiveChequeIsReceived = chequeIsReceived || dbIsReceived;
+
       // Mismatch: OCR says received but DB says issued (or vice versa) → force repair
       const directionMismatch =
-        (chequeIsReceived && !dbIsReceived) ||
-        (!chequeIsReceived && !dbIsIssued);
+        (effectiveChequeIsReceived && !dbIsReceived) ||
+        (!effectiveChequeIsReceived && !dbIsIssued);
 
       if (hasInvalidAccounts || directionMismatch || list.length === 0) {
-        if (chequeIsReceived) {
+        if (effectiveChequeIsReceived) {
           // ── Encaissement client : Débit 512 (Banque) / Crédit 411.0 (Client) ──
           return [
             {
@@ -428,6 +439,20 @@ export function DocumentValidationCard({
           credit: ocrAmountTTC,
         },
       ];
+    }
+
+    if (document.type === "FACTURE_CLIENT") {
+      const clientLabel = entityName ? `Client (${entityName})` : "Client";
+      const ht = ocrAmountHT > 0 ? ocrAmountHT : Math.round((ocrAmountTTC / 1.19) * 100) / 100;
+      const tva = ocrAmountTVA > 0 ? ocrAmountTVA : Math.round((ocrAmountTTC - ht) * 100) / 100;
+      const res: DisplayLine[] = [
+        { id: "1", type: "DEBIT", account: "411.0", label: clientLabel, debit: ocrAmountTTC, credit: 0 },
+        { id: "2", type: "CREDIT", account: "700", label: "Ventes de marchandises", debit: 0, credit: ht },
+      ];
+      if (tva > 0) {
+        res.push({ id: "3", type: "CREDIT", account: "44571", label: "TVA collectée (19%)", debit: 0, credit: tva });
+      }
+      return res;
     }
 
     return [

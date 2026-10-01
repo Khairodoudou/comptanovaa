@@ -754,18 +754,73 @@ export function PaiementsClient({ companies, lang, locale, initialDeclarationId,
 
               {/* Accounting entry if confirmed */}
               {selectedDecl.accountingEntry && (
-                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 space-y-2">
-                  <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wide">Écriture comptable créée</p>
-                  <div className="grid grid-cols-3 gap-3 text-xs">
-                    <InfoSmall label="Compte débit" value={selectedDecl.accountingEntry.debitAccount} />
-                    <InfoSmall label="Compte crédit" value={selectedDecl.accountingEntry.creditAccount} />
-                    <InfoSmall label="Montant" value={`${fmt(selectedDecl.accountingEntry.amount, locale)} DA`} />
-                    <InfoSmall label="Date" value={new Date(selectedDecl.accountingEntry.date).toLocaleDateString(locale)} />
-                    <InfoSmall label="Statut" value={selectedDecl.accountingEntry.status} />
-                    <InfoSmall label="ID" value={selectedDecl.accountingEntry.id.slice(-8)} />
+                <div className="bg-white border border-black rounded-xl overflow-hidden p-3.5 space-y-2 shadow-xs">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-bold text-[#0f172a] uppercase tracking-wide">
+                      Écriture comptable au Journal
+                    </p>
+                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                      Validée
+                    </span>
+                  </div>
+                  <div className="overflow-hidden border border-black rounded-lg">
+                    <table className="w-full text-xs border-collapse">
+                      <thead>
+                        <tr className="border-b border-black bg-slate-50 font-bold">
+                          <th className="py-1.5 px-2 text-center border-r border-black w-14"><u>Débit</u></th>
+                          <th className="py-1.5 px-2 text-center border-r border-black w-14"><u>Crédit</u></th>
+                          <th className="py-1.5 px-3 text-center border-r border-black">
+                            <div className="border-b border-black pb-0.5 mb-0.5"><u>Libellé</u></div>
+                            <div className="font-normal text-[11px] text-slate-700"><u>Date :</u> {new Date(selectedDecl.accountingEntry.date).toLocaleDateString(locale)}</div>
+                          </th>
+                          <th className="py-1.5 px-2 text-center border-r border-black w-24"><u>Débit</u></th>
+                          <th className="py-1.5 px-2 text-center w-24"><u>Crédit</u></th>
+                        </tr>
+                      </thead>
+                      <tbody className="text-black text-xs font-normal">
+                        <tr className="border-b border-slate-100">
+                          <td className="py-1.5 px-2 text-center font-mono font-bold text-[#7fb2eb] border-r border-black">
+                            {selectedDecl.accountingEntry.debitAccount}
+                          </td>
+                          <td className="py-1.5 px-2 text-center border-r border-black"></td>
+                          <td className="py-1.5 px-3 border-r border-black font-medium">
+                            {selectedDecl.accountingEntry.debitAccount.startsWith("53") ? "Caisse" : "Banque"}
+                          </td>
+                          <td className="py-1.5 px-2 text-right font-mono font-bold text-[#7fb2eb] border-r border-black">
+                            {fmt(selectedDecl.accountingEntry.amount, locale)}
+                          </td>
+                          <td className="py-1.5 px-2"></td>
+                        </tr>
+                        <tr className="border-b border-slate-100">
+                          <td className="py-1.5 px-2 border-r border-black"></td>
+                          <td className="py-1.5 px-2 text-center font-mono font-bold text-[#7fb2eb] border-r border-black">
+                            {selectedDecl.accountingEntry.creditAccount}
+                          </td>
+                          <td className="py-1.5 px-3 border-r border-black font-medium pl-6">
+                            Client ({selectedDecl.invoice.company.client.name})
+                          </td>
+                          <td className="py-1.5 px-2 border-r border-black"></td>
+                          <td className="py-1.5 px-2 text-right font-mono font-bold text-[#7fb2eb]">
+                            {fmt(selectedDecl.accountingEntry.amount, locale)}
+                          </td>
+                        </tr>
+                        <tr>
+                          <td className="py-1.5 px-2 border-r border-black"></td>
+                          <td className="py-1.5 px-2 border-r border-black"></td>
+                          <td className="py-1.5 px-3 text-center italic text-slate-700 border-r border-black text-[11px]">
+                            {(() => {
+                              const { reference, isCheque } = getDeclarationDetails(selectedDecl);
+                              return isCheque ? `Chèque N° ${reference || "......."}` : (reference ? `Réf. ${reference}` : "Règlement client");
+                            })()}
+                          </td>
+                          <td className="py-1.5 px-2 border-r border-black"></td>
+                          <td className="py-1.5 px-2"></td>
+                        </tr>
+                      </tbody>
+                    </table>
                   </div>
                   {selectedDecl.confirmedAt && (
-                    <p className="text-xs text-emerald-600 mt-1">
+                    <p className="text-[11px] text-emerald-700 mt-1">
                       ✅ Confirmé le {new Date(selectedDecl.confirmedAt).toLocaleDateString(locale, { day: "numeric", month: "long", year: "numeric" })}
                       {selectedDecl.confirmedBy && ` par ${selectedDecl.confirmedBy.name}`}
                     </p>
@@ -819,7 +874,7 @@ export function PaiementsClient({ companies, lang, locale, initialDeclarationId,
       {/* ─── CONFIRM MODAL ─────────────────────────────────────────────────────── */}
       {showConfirmModal && selectedDecl && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md animate-in fade-in zoom-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg animate-in fade-in zoom-in duration-200">
             <div className="p-6 space-y-4">
               <div className="w-14 h-14 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center mx-auto">
                 <CheckCircle2 size={28} className="text-emerald-600" />
@@ -830,26 +885,76 @@ export function PaiementsClient({ companies, lang, locale, initialDeclarationId,
                   Êtes-vous sûr de vouloir confirmer ce paiement de{" "}
                   <strong>{fmt(selectedDecl.amount, locale)} DA</strong> ?
                 </p>
+
                 {(() => {
                   const { reference, displayDate, isCheque } = getDeclarationDetails(selectedDecl);
-                  return reference ? (
-                    <div className="bg-emerald-50/60 border border-emerald-200 rounded-xl p-3 text-xs text-emerald-900 space-y-1">
-                      <p className="font-semibold flex items-center gap-1.5">
-                        <CheckCircle2 size={13} className="text-emerald-600" />
-                        {isCheque ? "Chèque bancaire identifié" : "Référence de paiement"}
-                      </p>
-                      <p className="font-mono font-bold text-sm text-[#0f172a]">
-                        {isCheque ? `N° ${reference}` : reference}
-                      </p>
-                      <p className="text-[11px] text-slate-600">
-                        {isCheque ? "Date de valeur / chèque :" : "Date de paiement :"} {displayDate.toLocaleDateString(locale, { day: "numeric", month: "long", year: "numeric" })}
+                  const isEspeces = (selectedDecl.paymentMethod || "").toUpperCase() === "ESPECES";
+                  const debitAcc = isEspeces ? "53" : "512";
+                  const debitLabel = isEspeces ? "Caisse" : "Banque";
+                  const clientName = selectedDecl.invoice.company.client.name;
+
+                  return (
+                    <div className="space-y-2 mt-3 text-left">
+                      <div className="flex items-center justify-between px-1">
+                        <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                          Écriture comptable générée automatiquement :
+                        </span>
+                        <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                          {isCheque ? "Chèque" : (selectedDecl.paymentMethod || "VIREMENT")}
+                        </span>
+                      </div>
+
+                      {/* ── Table classique 5 colonnes conforme SCF Algérien ── */}
+                      <div className="bg-white overflow-hidden rounded-xl border border-black shadow-xs">
+                        <table className="w-full text-xs border-collapse">
+                          <thead>
+                            <tr className="border-b border-black bg-slate-50 font-bold">
+                              <th className="py-2 px-2 text-center border-r border-black w-14"><u>Débit</u></th>
+                              <th className="py-2 px-2 text-center border-r border-black w-14"><u>Crédit</u></th>
+                              <th className="py-2 px-3 text-center border-r border-black">
+                                <div className="border-b border-black pb-0.5 mb-0.5"><u>Libellé</u></div>
+                                <div className="font-normal text-[11px] text-slate-700"><u>Date :</u> {displayDate.toLocaleDateString(locale)}</div>
+                              </th>
+                              <th className="py-2 px-2 text-center border-r border-black w-24"><u>Débit</u></th>
+                              <th className="py-2 px-2 text-center w-24"><u>Crédit</u></th>
+                            </tr>
+                          </thead>
+                          <tbody className="text-black text-xs font-normal">
+                            {/* Ligne Débit : 512 Banque (ou 53 Caisse) */}
+                            <tr className="border-b border-slate-100">
+                              <td className="py-1.5 px-2 text-center font-mono font-bold text-[#7fb2eb] border-r border-black">{debitAcc}</td>
+                              <td className="py-1.5 px-2 text-center border-r border-black"></td>
+                              <td className="py-1.5 px-3 border-r border-black font-medium">{debitLabel}</td>
+                              <td className="py-1.5 px-2 text-right font-mono font-bold text-[#7fb2eb] border-r border-black">{fmt(selectedDecl.amount, locale)}</td>
+                              <td className="py-1.5 px-2"></td>
+                            </tr>
+                            {/* Ligne Crédit : 411 Client */}
+                            <tr className="border-b border-slate-100">
+                              <td className="py-1.5 px-2 border-r border-black"></td>
+                              <td className="py-1.5 px-2 text-center font-mono font-bold text-[#7fb2eb] border-r border-black">411</td>
+                              <td className="py-1.5 px-3 border-r border-black font-medium pl-6">Client ({clientName})</td>
+                              <td className="py-1.5 px-2 border-r border-black"></td>
+                              <td className="py-1.5 px-2 text-right font-mono font-bold text-[#7fb2eb]">{fmt(selectedDecl.amount, locale)}</td>
+                            </tr>
+                            {/* Référence de pièce */}
+                            <tr>
+                              <td className="py-1.5 px-2 border-r border-black"></td>
+                              <td className="py-1.5 px-2 border-r border-black"></td>
+                              <td className="py-1.5 px-3 text-center italic text-slate-700 border-r border-black text-[11px]">
+                                {isCheque ? `Chèque N° ${reference || "......."}` : (reference ? `Réf. ${reference}` : "Règlement client")}
+                              </td>
+                              <td className="py-1.5 px-2 border-r border-black"></td>
+                              <td className="py-1.5 px-2"></td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                      <p className="text-[11px] text-slate-500 text-center">
+                        Cette écriture comptable sera inscrite automatiquement au Journal officiel.
                       </p>
                     </div>
-                  ) : null;
+                  );
                 })()}
-                <p className="text-xs text-slate-500">
-                  Une écriture comptable (Débit 512 / Crédit 411) sera créée automatiquement et le client sera notifié.
-                </p>
               </div>
               {actionError && (
                 <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-xs text-red-600 flex items-center gap-2">

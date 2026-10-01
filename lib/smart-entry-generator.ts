@@ -61,7 +61,7 @@ export async function generateSmartEntries(
   if (docType === "CHEQUE") {
     // ── Detect cheque direction (received vs issued) ──────────────────────────
     const hasSaleKeyword = /vente|encaiss|recu|re\u00e7u|client|recette/i.test(rawDesc);
-    const hasPurchaseKeyword = /reglement|paiement|fournisseur|achat|charge/i.test(rawDesc);
+    const hasPurchaseKeyword = /fournisseur|achat|charge|approvisionnement|d[eé]pense/i.test(rawDesc);
 
     const beneficiaryMatch = rawDesc.match(
       /(?:[Àà]\s+l[''']ordre\s+de|A\s+l[''']ordre\s+de|ordre\s+de\s+paiement|payable\s+[àa])\s*[:\-–]?\s*([^\n\r,=]{3,80})/i
@@ -76,7 +76,7 @@ export async function generateSmartEntries(
       .replace(/[^a-z0-9]/g, "")
       .trim();
 
-    // Consider cheque RECEIVED if sale keyword in rawDesc OR beneficiary text contains company name
+    // Consider cheque RECEIVED if sale/client keyword in rawDesc OR beneficiary text contains company name
     const isReceivedCheque =
       hasSaleKeyword ||
       (!hasPurchaseKeyword &&

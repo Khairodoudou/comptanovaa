@@ -160,7 +160,9 @@ export async function POST(
             documentId: null,
             validatedById: user.userId,
             validatedAt: now,
-            sentToClient: false,
+            sentToClient: true,
+            sentToClientAt: now,
+            sentToClientById: user.userId,
           },
         });
 

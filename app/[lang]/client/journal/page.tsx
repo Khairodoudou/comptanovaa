@@ -385,6 +385,10 @@ export default async function ClientJournalPage({
                       opDesc += ` - Chèque N° ${mainRef}`;
                     }
 
+                    // Accumulate totals ← FIX: was missing, causing 0,00 in footer
+                    debitRows.forEach((r) => (totalClientDebit += r.amount));
+                    creditRows.forEach((r) => (totalClientCredit += r.amount));
+
                     return (
                       <tbody key={opIdx} className="border-b border-black text-black">
                         <tr>
