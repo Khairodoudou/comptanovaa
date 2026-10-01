@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { JournalFilters } from "./JournalFilters";
 import { NewEntryModal } from "./NewEntryModal";
 import { DeleteOperationButton } from "./DeleteOperationButton";
+import { JournalSortToggle } from "@/components/JournalSortToggle";
 import type { Prisma } from "@prisma/client";
 import { getDictionary } from "@/get-dictionary";
 import type { Locale } from "@/i18n-config";
@@ -15,13 +16,14 @@ export default async function ComptableJournalPage({
   searchParams,
 }: {
   params: Promise<{ lang: string }>;
-  searchParams: Promise<{ status?: string; client?: string; from?: string; to?: string }>;
+  searchParams: Promise<{ status?: string; client?: string; from?: string; to?: string; sort?: string }>;
 }) {
   const { lang } = await params;
   const filters = await searchParams;
   const user = await getCurrentUser();
   if (!user || user.role !== "COMPTABLE") redirect(`/${lang}/login`);
 
+  const sortOrder = filters.sort === "asc" ? "asc" : "desc";
   const [dict] = await Promise.all([getDictionary(lang as Locale)]);
   const c = dict.dashboard.comptable;
   const jLabels = dict.dashboard.journal;
@@ -69,7 +71,10 @@ export default async function ComptableJournalPage({
         document: { include: { company: { include: { client: { select: { id: true, name: true } } } } } },
         validatedBy: { select: { name: true } },
       },
-      orderBy: { createdAt: "asc" },
+      orderBy: [
+        { date: sortOrder },
+        { createdAt: sortOrder },
+      ],
       take: 500,
     }),
     db.user.findMany({
@@ -131,7 +136,7 @@ export default async function ComptableJournalPage({
 
         <div className="flex items-center gap-2 flex-wrap">
           <a
-            href={`/api/comptable/export/journal?format=pdf${filters.client ? `&companyId=${filters.client}` : ""}`}
+            href={`/api/comptable/export/journal?format=pdf${filters.client ? `&companyId=${filters.client}` : ""}&sort=${sortOrder}`}
             className="inline-flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold px-3.5 py-2.5 rounded-xl transition-all"
             target="_blank"
             rel="noopener noreferrer"
@@ -139,7 +144,7 @@ export default async function ComptableJournalPage({
             <span>PDF</span>
           </a>
           <a
-            href={`/api/comptable/export/journal?format=csv${filters.client ? `&companyId=${filters.client}` : ""}`}
+            href={`/api/comptable/export/journal?format=csv${filters.client ? `&companyId=${filters.client}` : ""}&sort=${sortOrder}`}
             className="inline-flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold px-3.5 py-2.5 rounded-xl transition-all"
           >
             <span>Excel / CSV</span>
@@ -164,6 +169,7 @@ export default async function ComptableJournalPage({
 
       <JournalFilters
         clients={clients}
+        lang={lang}
         t={{
           all_statuses: c.filter_all_statuses,
           all_clients: c.filter_all_clients,
@@ -278,10 +284,12 @@ export default async function ComptableJournalPage({
             }, {} as Record<string, { document: any; entries: typeof entries; date: Date; source?: string; timestamp: number }>);
 
             const sortedOps = Object.values(opsMap).sort((a, b) => {
-              if (a.timestamp !== b.timestamp) {
-                return a.timestamp - b.timestamp;
+              const timeA = new Date(a.date).getTime();
+              const timeB = new Date(b.date).getTime();
+              if (timeA !== timeB) {
+                return sortOrder === "desc" ? timeB - timeA : timeA - timeB;
               }
-              return new Date(a.date).getTime() - new Date(b.date).getTime();
+              return sortOrder === "desc" ? b.timestamp - a.timestamp : a.timestamp - b.timestamp;
             });
 
             let totalClientDebit = 0;
@@ -292,7 +300,7 @@ export default async function ComptableJournalPage({
                 key={cId}
                 className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden flex flex-col mb-8 last:mb-0"
               >
-                <div className="bg-slate-50/80 border-b border-slate-200 px-6 py-4 flex items-center justify-between gap-3">
+                <div className="bg-slate-50/80 border-b border-slate-200 px-6 py-4 flex items-center justify-between gap-3 flex-wrap">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-teal-500 flex items-center justify-center text-white font-bold shadow-sm">
                       <svg
@@ -317,6 +325,7 @@ export default async function ComptableJournalPage({
                       </p>
                     </div>
                   </div>
+                  <JournalSortToggle lang={lang} variant="badge" />
                 </div>
 
                 <div className="p-6 overflow-x-auto">

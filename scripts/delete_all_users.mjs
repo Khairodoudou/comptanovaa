@@ -22,6 +22,7 @@ const client = createClient({
 
 async function deleteAll() {
   const steps = [
+    ["AccountingMemory",    "DELETE FROM AccountingMemory"],
     ["AuditLog",            "DELETE FROM AuditLog"],
     ["Message",             "DELETE FROM Message"],
     ["Notification",        "DELETE FROM Notification"],

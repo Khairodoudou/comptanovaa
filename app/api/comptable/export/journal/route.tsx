@@ -91,13 +91,14 @@ export async function GET(req: NextRequest) {
     ];
   }
 
+  const sortParam = searchParams.get("sort") === "asc" ? "asc" : "desc";
   const entries = await db.journalEntry.findMany({
     where,
     include: {
       company: true,
       document: { include: { company: true } },
     },
-    orderBy: [{ createdAt: "asc" }, { date: "asc" }],
+    orderBy: [{ date: sortParam }, { createdAt: sortParam }],
   });
 
   if (format === "csv") {

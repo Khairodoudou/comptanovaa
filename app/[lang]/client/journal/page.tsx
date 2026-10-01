@@ -2,6 +2,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { ClientJournalFilters } from "./ClientJournalFilters";
+import { JournalSortToggle } from "@/components/JournalSortToggle";
 import { getDictionary } from "@/get-dictionary";
 import type { Locale } from "@/i18n-config";
 import type { Prisma } from "@prisma/client";
@@ -13,13 +14,14 @@ export default async function ClientJournalPage({
   searchParams,
 }: {
   params: Promise<{ lang: string }>;
-  searchParams: Promise<{ from?: string; to?: string; account?: string }>;
+  searchParams: Promise<{ from?: string; to?: string; account?: string; sort?: string; status?: string }>;
 }) {
   const { lang } = await params;
   const filters = await searchParams;
   const user = await getCurrentUser();
   if (!user || user.role !== "CLIENT") redirect(`/${lang}/login`);
 
+  const sortOrder = filters.sort === "asc" ? "asc" : "desc";
   const [dict, company] = await Promise.all([
     getDictionary(lang as Locale),
     db.company.findFirst({
@@ -73,7 +75,10 @@ export default async function ClientJournalPage({
       document: true,
       validatedBy: { select: { name: true } },
     },
-    orderBy: { createdAt: "asc" },
+    orderBy: [
+      { date: sortOrder },
+      { createdAt: sortOrder },
+    ],
     take: 500,
   });
 
@@ -140,6 +145,7 @@ export default async function ClientJournalPage({
       <ClientJournalFilters
         filterAccountPlaceholder={j.filter_account || "Filtrer par compte (ex: 401, 512)"}
         clearLabel={j.clear || "Réinitialiser"}
+        lang={lang}
         tStatuses={{
           all: "Toutes les écritures validées",
           validated: "Validées",
@@ -234,10 +240,12 @@ export default async function ClientJournalPage({
           }, {} as Record<string, { document: any; entries: typeof entries; date: Date; source?: string; timestamp: number }>);
 
           const sortedOps = Object.values(opsMap).sort((a, b) => {
-            if (a.timestamp !== b.timestamp) {
-              return a.timestamp - b.timestamp;
+            const timeA = new Date(a.date).getTime();
+            const timeB = new Date(b.date).getTime();
+            if (timeA !== timeB) {
+              return sortOrder === "desc" ? timeB - timeA : timeA - timeB;
             }
-            return new Date(a.date).getTime() - new Date(b.date).getTime();
+            return sortOrder === "desc" ? b.timestamp - a.timestamp : a.timestamp - b.timestamp;
           });
 
           let totalClientDebit = 0;
@@ -246,7 +254,7 @@ export default async function ClientJournalPage({
 
           return (
             <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden flex flex-col mb-8">
-              <div className="bg-slate-50/80 border-b border-slate-200 px-6 py-4 flex items-center justify-between gap-3">
+              <div className="bg-slate-50/80 border-b border-slate-200 px-6 py-4 flex items-center justify-between gap-3 flex-wrap">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-teal-600 to-blue-600 flex items-center justify-center text-white font-bold shadow-sm">
                     <svg
@@ -271,6 +279,7 @@ export default async function ClientJournalPage({
                     </p>
                   </div>
                 </div>
+                <JournalSortToggle lang={lang} variant="badge" />
               </div>
 
               <div className="p-6 overflow-x-auto">
