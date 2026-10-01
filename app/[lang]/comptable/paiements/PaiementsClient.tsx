@@ -46,6 +46,7 @@ interface Declaration {
     invoiceNumber: string | null;
     amount: number;
     status: string;
+    description?: string | null;
     company: {
       id: string;
       name: string;
@@ -53,6 +54,7 @@ interface Declaration {
     };
     document?: {
       id: string;
+      type?: string | null;
       originalName: string;
       mimeType: string | null;
     } | null;
@@ -889,9 +891,27 @@ export function PaiementsClient({ companies, lang, locale, initialDeclarationId,
                 {(() => {
                   const { reference, displayDate, isCheque } = getDeclarationDetails(selectedDecl);
                   const isEspeces = (selectedDecl.paymentMethod || "").toUpperCase() === "ESPECES";
-                  const debitAcc = isEspeces ? "53" : "512";
-                  const debitLabel = isEspeces ? "Caisse" : "Banque";
-                  const clientName = selectedDecl.invoice.company.client.name;
+                  const bankAcc = isEspeces ? "53" : "512";
+                  const bankLabel = isEspeces ? "Caisse" : "Banque";
+
+                  const docType = (selectedDecl.invoice.document?.type || "").toUpperCase();
+                  const invDesc = (selectedDecl.invoice.description || "").toLowerCase();
+                  const docName = (selectedDecl.invoice.document?.originalName || "").toLowerCase();
+                  const isSupplier =
+                    docType === "FACTURE_FOURNISSEUR" ||
+                    docType === "ACHAT" ||
+                    /fournisseur|achat/i.test(invDesc) ||
+                    /fournisseur|achat/i.test(docName) ||
+                    (!/client|vente/i.test(invDesc) && !/client|vente/i.test(docName) && docType !== "FACTURE_CLIENT" && docType !== "VENTE");
+
+                  let entityName = "Tiers";
+                  if (isSupplier) {
+                    const raw = selectedDecl.invoice.description?.replace(/^Facture\s*(Fournisseur)?\s*[-–—:]\s*/i, "").trim();
+                    entityName = raw || "Fournisseur";
+                  } else {
+                    const raw = selectedDecl.invoice.description?.replace(/^Facture\s*(Client)?\s*[-–—:]\s*/i, "").trim();
+                    entityName = raw || selectedDecl.invoice.company?.client?.name || "Client";
+                  }
 
                   return (
                     <div className="space-y-2 mt-3 text-left">
@@ -900,7 +920,7 @@ export function PaiementsClient({ companies, lang, locale, initialDeclarationId,
                           Écriture comptable générée automatiquement :
                         </span>
                         <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                          {isCheque ? "Chèque" : (selectedDecl.paymentMethod || "VIREMENT")}
+                          {isSupplier ? "Règlement fournisseur" : "Règlement client"} — {isCheque ? "Chèque" : (selectedDecl.paymentMethod || "VIREMENT")}
                         </span>
                       </div>
 
@@ -920,28 +940,53 @@ export function PaiementsClient({ companies, lang, locale, initialDeclarationId,
                             </tr>
                           </thead>
                           <tbody className="text-black text-xs font-normal">
-                            {/* Ligne Débit : 512 Banque (ou 53 Caisse) */}
-                            <tr className="border-b border-slate-100">
-                              <td className="py-1.5 px-2 text-center font-mono font-bold text-[#7fb2eb] border-r border-black">{debitAcc}</td>
-                              <td className="py-1.5 px-2 text-center border-r border-black"></td>
-                              <td className="py-1.5 px-3 border-r border-black font-medium">{debitLabel}</td>
-                              <td className="py-1.5 px-2 text-right font-mono font-bold text-[#7fb2eb] border-r border-black">{fmt(selectedDecl.amount, locale)}</td>
-                              <td className="py-1.5 px-2"></td>
-                            </tr>
-                            {/* Ligne Crédit : 411 Client */}
-                            <tr className="border-b border-slate-100">
-                              <td className="py-1.5 px-2 border-r border-black"></td>
-                              <td className="py-1.5 px-2 text-center font-mono font-bold text-[#7fb2eb] border-r border-black">411</td>
-                              <td className="py-1.5 px-3 border-r border-black font-medium pl-6">Client ({clientName})</td>
-                              <td className="py-1.5 px-2 border-r border-black"></td>
-                              <td className="py-1.5 px-2 text-right font-mono font-bold text-[#7fb2eb]">{fmt(selectedDecl.amount, locale)}</td>
-                            </tr>
+                            {isSupplier ? (
+                              <>
+                                {/* Ligne Débit : 401 Fournisseur */}
+                                <tr className="border-b border-slate-100">
+                                  <td className="py-1.5 px-2 text-center font-mono font-bold text-[#7fb2eb] border-r border-black">401</td>
+                                  <td className="py-1.5 px-2 text-center border-r border-black"></td>
+                                  <td className="py-1.5 px-3 border-r border-black font-medium">Fournisseur ({entityName})</td>
+                                  <td className="py-1.5 px-2 text-right font-mono font-bold text-[#7fb2eb] border-r border-black">{fmt(selectedDecl.amount, locale)}</td>
+                                  <td className="py-1.5 px-2"></td>
+                                </tr>
+                                {/* Ligne Crédit : 512 Banque (ou 53 Caisse) */}
+                                <tr className="border-b border-slate-100">
+                                  <td className="py-1.5 px-2 border-r border-black"></td>
+                                  <td className="py-1.5 px-2 text-center font-mono font-bold text-[#7fb2eb] border-r border-black">{bankAcc}</td>
+                                  <td className="py-1.5 px-3 border-r border-black font-medium pl-6">{bankLabel}</td>
+                                  <td className="py-1.5 px-2 border-r border-black"></td>
+                                  <td className="py-1.5 px-2 text-right font-mono font-bold text-[#7fb2eb]">{fmt(selectedDecl.amount, locale)}</td>
+                                </tr>
+                              </>
+                            ) : (
+                              <>
+                                {/* Ligne Débit : 512 Banque (ou 53 Caisse) */}
+                                <tr className="border-b border-slate-100">
+                                  <td className="py-1.5 px-2 text-center font-mono font-bold text-[#7fb2eb] border-r border-black">{bankAcc}</td>
+                                  <td className="py-1.5 px-2 text-center border-r border-black"></td>
+                                  <td className="py-1.5 px-3 border-r border-black font-medium">{bankLabel}</td>
+                                  <td className="py-1.5 px-2 text-right font-mono font-bold text-[#7fb2eb] border-r border-black">{fmt(selectedDecl.amount, locale)}</td>
+                                  <td className="py-1.5 px-2"></td>
+                                </tr>
+                                {/* Ligne Crédit : 411 Client */}
+                                <tr className="border-b border-slate-100">
+                                  <td className="py-1.5 px-2 border-r border-black"></td>
+                                  <td className="py-1.5 px-2 text-center font-mono font-bold text-[#7fb2eb] border-r border-black">411</td>
+                                  <td className="py-1.5 px-3 border-r border-black font-medium pl-6">Client ({entityName})</td>
+                                  <td className="py-1.5 px-2 border-r border-black"></td>
+                                  <td className="py-1.5 px-2 text-right font-mono font-bold text-[#7fb2eb]">{fmt(selectedDecl.amount, locale)}</td>
+                                </tr>
+                              </>
+                            )}
                             {/* Référence de pièce */}
                             <tr>
                               <td className="py-1.5 px-2 border-r border-black"></td>
                               <td className="py-1.5 px-2 border-r border-black"></td>
                               <td className="py-1.5 px-3 text-center italic text-slate-700 border-r border-black text-[11px]">
-                                {isCheque ? `Chèque N° ${reference || "......."}` : (reference ? `Réf. ${reference}` : "Règlement client")}
+                                {isCheque
+                                  ? `Chèque N° ${reference || "......."}`
+                                  : (reference ? `Réf. ${reference}` : (isSupplier ? "Règlement fournisseur" : "Règlement client"))}
                               </td>
                               <td className="py-1.5 px-2 border-r border-black"></td>
                               <td className="py-1.5 px-2"></td>

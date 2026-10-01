@@ -48,6 +48,7 @@ export async function GET(req: NextRequest) {
             document: {
               select: {
                 id: true,
+                type: true,
                 originalName: true,
                 mimeType: true,
               },

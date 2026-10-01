@@ -16,20 +16,77 @@ import { getCurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { NextRequest } from "next/server";
 
-// Map payment method to appropriate debit account
-function getDebitAccount(paymentMethod: string | null): string {
-  switch ((paymentMethod || "VIREMENT").toUpperCase()) {
-    case "VIREMENT":
-    case "CIB":
-    case "EDAHABIA":
-      return "512"; // Banque
-    case "CHEQUE":
-      return "512"; // Banque (cheque also credited through bank)
-    case "ESPECES":
-      return "530"; // Caisse
-    default:
-      return "512";
+// Map payment method to appropriate treasury (bank/cash) account
+function getTreasuryAccount(paymentMethod: string | null): { account: string; isCash: boolean } {
+  const method = (paymentMethod || "VIREMENT").toUpperCase();
+  if (method === "ESPECES") {
+    return { account: "53", isCash: true };
   }
+  return { account: "512", isCash: false };
+}
+
+function determineInvoiceDirection(invoice: any): { isSupplier: boolean; entityName: string } {
+  const docType = (invoice?.document?.type || "").toUpperCase();
+  const isExplicitSupplierDoc = docType === "FACTURE_FOURNISSEUR" || docType === "ACHAT";
+  const isExplicitClientDoc = docType === "FACTURE_CLIENT" || docType === "VENTE";
+
+  const invDesc = (invoice?.description || "").toLowerCase();
+  const docName = (invoice?.document?.originalName || "").toLowerCase();
+  const hasSupplierKeyword = /fournisseur|achat/i.test(invDesc) || /fournisseur|achat/i.test(docName);
+  const hasClientKeyword = /client|vente/i.test(invDesc) || /client|vente/i.test(docName);
+
+  const docEntries = invoice?.document?.journalEntries || [];
+  const hasCredit401 = docEntries.some((e: any) => e.creditAccount?.startsWith("401"));
+  const hasDebit411 = docEntries.some((e: any) => e.debitAccount?.startsWith("411"));
+
+  let isSupplier = true;
+  if (isExplicitSupplierDoc || hasCredit401) {
+    isSupplier = true;
+  } else if (isExplicitClientDoc || hasDebit411) {
+    isSupplier = false;
+  } else if (hasSupplierKeyword && !hasClientKeyword) {
+    isSupplier = true;
+  } else if (hasClientKeyword && !hasSupplierKeyword) {
+    isSupplier = false;
+  } else {
+    isSupplier = true;
+  }
+
+  // Extract entity name
+  let entityName = "";
+  if (isSupplier) {
+    const descMatch = invoice?.description?.replace(/^Facture\s*(Fournisseur)?\s*[-–—:]\s*/i, "").trim();
+    if (descMatch && descMatch.toLowerCase() !== "fournisseur") {
+      entityName = descMatch;
+    }
+    if (!entityName && docEntries.length > 0) {
+      for (const e of docEntries) {
+        const parts = (e.description || "").split("—");
+        if (parts.length > 1 && parts[1].trim()) {
+          entityName = parts[1].trim();
+          break;
+        }
+      }
+    }
+    if (!entityName && invoice?.document?.ocrData) {
+      try {
+        const parsed = JSON.parse(invoice.document.ocrData);
+        entityName = parsed.extracted?.supplier || parsed.supplier || "";
+      } catch {}
+    }
+    if (!entityName) entityName = "Fournisseur";
+  } else {
+    const descMatch = invoice?.description?.replace(/^Facture\s*(Client)?\s*[-–—:]\s*/i, "").trim();
+    if (descMatch && descMatch.toLowerCase() !== "client") {
+      entityName = descMatch;
+    }
+    if (!entityName && invoice?.company?.client?.name) {
+      entityName = invoice.company.client.name;
+    }
+    if (!entityName) entityName = "Client";
+  }
+
+  return { isSupplier, entityName };
 }
 
 export async function POST(
@@ -53,6 +110,17 @@ export async function POST(
       include: {
         invoice: {
           include: {
+            document: {
+              select: {
+                id: true,
+                type: true,
+                originalName: true,
+                ocrData: true,
+                journalEntries: {
+                  select: { debitAccount: true, creditAccount: true, description: true },
+                },
+              },
+            },
             company: {
               select: {
                 id: true,
@@ -93,7 +161,6 @@ export async function POST(
     const invoice = declaration.invoice;
     const company = invoice.company;
     const now = new Date();
-    const debitAccount = getDebitAccount(declaration.paymentMethod);
     const invoiceLabel = invoice.invoiceNumber ?? invoice.id.slice(-6);
 
     // === ATOMIC TRANSACTION ===
@@ -140,24 +207,48 @@ export async function POST(
         const chequeRef = chequeNumber
           ? ` - Chèque N° ${chequeNumber}`
           : "";
-        const entryDesc = `Règlement client - Facture ${invoiceLabel} - ${company.client.name}${chequeRef}`;
+
+        // Determine if it is a Supplier invoice or Client invoice
+        const { isSupplier, entityName } = determineInvoiceDirection(invoice);
+        const treasury = getTreasuryAccount(fresh.paymentMethod || declaration.paymentMethod);
+        const treasuryAccount = treasury.account; // "512" or "53"
+        const journalType = treasury.isCash ? "CAISSE" : "BANQUE";
+
+        let debitAccount: string;
+        let creditAccount: string;
+        let entryDesc: string;
+
+        if (isSupplier) {
+          // ── Règlement d'une facture FOURNISSEUR ──
+          // Débit: 401 (Fournisseur) / Crédit: 512 (Banque) ou 53 (Caisse)
+          debitAccount = "401";
+          creditAccount = treasuryAccount;
+          entryDesc = `Règlement fournisseur — Facture ${invoiceLabel} — ${entityName}${chequeRef}`;
+        } else {
+          // ── Encaissement d'une facture CLIENT ──
+          // Débit: 512 (Banque) ou 53 (Caisse) / Crédit: 411 (Client)
+          debitAccount = treasuryAccount;
+          creditAccount = "411";
+          entryDesc = `Règlement client — Facture ${invoiceLabel} — ${entityName}${chequeRef}`;
+        }
+
         // Use cheque date when available; fall back to declared payment date, then now
         const entryDate = chequeDate || (fresh.paymentDate ? new Date(fresh.paymentDate) : now);
 
-        // Step 1 — Create JournalEntry (documentId is null because payment is an independent banking entry with justificatif on PaymentDeclaration)
+        // Step 1 — Create JournalEntry
         const entry = await tx.journalEntry.create({
           data: {
             date: entryDate,
             description: entryDesc,
             debitAccount,
-            creditAccount: "411",
+            creditAccount,
             amount: fresh.amount,
             reference: chequeNumber || null,
             status: "VALIDATED",
             source: "PAIEMENT",
-            journalType: "BANQUE",
+            journalType,
             companyId: company.id,
-            documentId: null,
+            documentId: invoice.documentId || null,
             validatedById: user.userId,
             validatedAt: now,
             sentToClient: true,
@@ -173,13 +264,13 @@ export async function POST(
             versionNumber: 1,
             versionType: "VALIDATION",
             debitAccount,
-            creditAccount: "411",
+            creditAccount,
             amount: fresh.amount,
             description: entry.description,
             reference: chequeNumber || null,
             createdById: user.userId,
             actorType: "USER",
-            reason: `Confirmation du paiement déclaré - méthode : ${fresh.paymentMethod || "VIREMENT"}`,
+            reason: `Confirmation du paiement déclaré - méthode : ${fresh.paymentMethod || declaration.paymentMethod || "VIREMENT"} (${isSupplier ? "Fournisseur 401/512" : "Client 512/411"})`,
           },
         });
 
@@ -231,7 +322,7 @@ export async function POST(
               status: "CONFIRMED",
               accountingEntryId: entry.id,
               debitAccount,
-              creditAccount: "411",
+              creditAccount,
               amount: declaration.amount,
               newInvoiceStatus,
             }),

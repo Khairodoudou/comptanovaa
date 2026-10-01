@@ -214,11 +214,26 @@ export default async function ComptableJournalPage({
             return acc;
           }, {} as Record<string, { clientName: string; entries: typeof entries }>);
 
+          const extractEntityFromDesc = (desc: string) => {
+            if (!desc) return "";
+            const emParts = desc.split("—").map((s) => s.trim()).filter(Boolean);
+            if (emParts.length >= 2) {
+              const nonMeta = emParts.filter((p) => !/^(facture|ch[eèé]que|r[eèé]glement)/i.test(p));
+              if (nonMeta.length > 0) return cleanEntityName(nonMeta[0].split(/\s*-\s*ch[eèé]que/i)[0]);
+              return cleanEntityName(emParts[emParts.length - 1].split(/\s*-\s*ch[eèé]que/i)[0]);
+            }
+            const hypParts = desc.split(/\s+-\s+/).map((s) => s.trim()).filter(Boolean);
+            if (hypParts.length >= 2) {
+              const nonMeta = hypParts.filter((p) => !/^(facture|ch[eèé]que|r[eèé]glement)/i.test(p));
+              if (nonMeta.length > 0) return cleanEntityName(nonMeta[0]);
+            }
+            return "";
+          };
+
           const formatDebitDescription = (account: string, originalDesc: string) => {
             const parts = (originalDesc || "").split("—");
             const baseDesc = parts[0]?.trim() || "";
-            const rawEntity = parts[1]?.trim() || "";
-            const entityName = cleanEntityName(rawEntity);
+            const entityName = extractEntityFromDesc(originalDesc);
 
             if (account.startsWith("401")) return entityName ? `Fournisseur ${entityName}` : (baseDesc || "Fournisseurs");
             if (account.startsWith("411")) return entityName ? `Client ${entityName}` : (baseDesc || "Clients");
@@ -234,8 +249,7 @@ export default async function ComptableJournalPage({
           const formatCreditDescription = (account: string, originalDesc: string) => {
             const parts = (originalDesc || "").split("—");
             const baseDesc = parts[0]?.trim() || "";
-            const rawEntity = parts[1]?.trim() || "";
-            const entityName = cleanEntityName(rawEntity);
+            const entityName = extractEntityFromDesc(originalDesc);
 
             if (account.startsWith("401")) return entityName ? `Fournisseur ${entityName}` : "Fournisseurs";
             if (account.startsWith("411")) return entityName ? `Client ${entityName}` : "Clients";
@@ -431,11 +445,13 @@ export default async function ComptableJournalPage({
                       const entityName = cleanEntityName(rawEntity);
                       const descBase = primaryEntry.description.split("—")[0].trim();
 
-                      let opDesc = descBase;
-                      if (entityName && !opDesc.includes(entityName)) {
+                      let opDesc = isPayment
+                        ? primaryEntry.description.replace(/\s*—\s*/g, " - ")
+                        : descBase;
+                      if (!isPayment && entityName && !opDesc.includes(entityName)) {
                         opDesc += ` chez ${entityName}`;
                       }
-                      if (isPayment && mainRef && !opDesc.includes(mainRef)) {
+                      if (!isPayment && mainRef && !opDesc.includes(mainRef)) {
                         opDesc += ` - Chèque N° ${mainRef}`;
                       }
 
