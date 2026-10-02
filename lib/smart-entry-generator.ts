@@ -290,14 +290,17 @@ export async function generateSmartEntries(
     const entries: EntrySpec[] = isClientFacture
       ? [
           {
-            debitAccount: memoryMatch.creditAccount || "411",
-            creditAccount: memoryMatch.debitAccount || "700",
+            // SCF Algérien obligatoire : Facture de VENTE → Débit 411 (Client / TTC) / Crédit 700 (Produit / HT)
+            // On n'utilise PAS memoryMatch.debitAccount/creditAccount ici car les comptes 411 et 700
+            // sont fixés par la règle SCF et ne doivent jamais être inversés.
+            debitAccount: "411.0",
+            creditAccount: "700",
             amount: ht,
             description: `Ventes de marchandises / Prestations HT — ${supplier}`,
             reference: refNumber,
           },
           {
-            debitAccount: memoryMatch.creditAccount || "411",
+            debitAccount: "411.0",
             creditAccount: "44571",
             amount: tva,
             description: `TVA collectée (${Math.round(tvaRate * 100)}%) — ${supplier}`,

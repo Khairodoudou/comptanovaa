@@ -364,6 +364,62 @@ export function DocumentValidationCard({
       }
     }
 
+    // ── FACTURE_CLIENT : Garde anti-inversion (correction des \u00e9critures DB erron\u00e9es) ───────────
+    // Si la DB a enregistr\u00e9 700 en D\u00e9bit et 411 en Cr\u00e9dit (bug du smart-entry-generator),
+    // on corrige automatiquement : D\u00e9bit 411 (TTC) / Cr\u00e9dit 700 (HT) + Cr\u00e9dit 44571 (TVA)
+    if (document.type === "FACTURE_CLIENT" && list.length > 0) {
+      const has700Debit = list.some((l) => l.type === "DEBIT" && l.account.startsWith("700"));
+      const has411Credit = list.some((l) => l.type === "CREDIT" && l.account.startsWith("411"));
+      if (has700Debit && has411Credit) {
+        // Reconstruire les lignes correctes \u00e0 partir des montants existants
+        const totalTTC = list.reduce((s, l) => s + l.debit, 0) || list.reduce((s, l) => s + l.credit, 0);
+        const credit700 = list.find((l) => l.type === "CREDIT" && l.account.startsWith("700"));
+        const credit44571 = list.find((l) => l.type === "CREDIT" && l.account.startsWith("445"));
+        const debit700 = list.find((l) => l.type === "DEBIT" && l.account.startsWith("700"));
+        const credit411 = list.find((l) => l.type === "CREDIT" && l.account.startsWith("411"));
+
+        // Les montants HT et TVA peuvent \u00eatre dans les cr\u00e9dits existants (si partiellement correct)
+        // ou inversement dans les d\u00e9bits (cas compl\u00e8tement invers\u00e9)
+        const amountTTC = ocrAmountTTC > 0 ? ocrAmountTTC : totalTTC;
+        const htVal = credit700?.credit || credit411?.credit || Math.round((amountTTC / 1.19) * 100) / 100;
+        const tvaVal = credit44571?.credit || Math.round((amountTTC - htVal) * 100) / 100;
+        const clientLabel = entityName ? `Client (${entityName})` : "Client";
+
+        const corrected: DisplayLine[] = [
+          {
+            id: "deb-411.0",
+            type: "DEBIT" as const,
+            account: "411.0",
+            label: clientLabel,
+            debit: amountTTC,
+            credit: 0,
+            originalEntryId: (debit700 || credit411)?.originalEntryId,
+          },
+          {
+            id: "cred-700",
+            type: "CREDIT" as const,
+            account: "700",
+            label: "Ventes de marchandises",
+            debit: 0,
+            credit: htVal,
+            originalEntryId: (debit700 || credit411)?.originalEntryId,
+          },
+        ];
+        if (tvaVal > 0) {
+          corrected.push({
+            id: "cred-44571",
+            type: "CREDIT" as const,
+            account: "44571",
+            label: "TVA collect\u00e9e (19%)",
+            debit: 0,
+            credit: tvaVal,
+            originalEntryId: credit44571?.originalEntryId,
+          });
+        }
+        return corrected;
+      }
+    }
+
     if (document.type === "BON_RECEPTION") {
       const hasInvalidAccounts = list.some((l) => l.account.startsWith("401") || l.account.startsWith("6") || l.account.startsWith("445"));
       if (hasInvalidAccounts || list.length === 0) {
