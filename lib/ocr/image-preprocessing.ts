@@ -32,7 +32,7 @@ export async function preprocessImage(
 ): Promise<{ buffer: Buffer; width: number; height: number; format: string }> {
   const opts = { ...DEFAULTS, ...options };
 
-  let pipeline = sharp(input, { failOnError: false })
+  let pipeline = sharp(input, { failOn: "none" })
     // Auto-rotate based on EXIF orientation data
     .rotate()
     // Convert to greyscale — reduces noise and improves contrast for OCR
