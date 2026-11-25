@@ -206,6 +206,16 @@ export function RapprochementClient({
   const [importError, setImportError] = useState<string | null>(null);
   const [importResult, setImportResult] = useState<any | null>(null);
 
+  // Manual entry form (shown when PDF parse fails or opened directly)
+  const [showManualEntry, setShowManualEntry] = useState(false);
+  const [manualFromParseFailure, setManualFromParseFailure] = useState(false);
+  const [manualError, setManualError] = useState<string | null>(null);
+  const [manualRows, setManualRows] = useState<
+    { date: string; description: string; amount: string; sens: "D" | "C"; reference: string }[]
+  >([{ date: "", description: "", amount: "", sens: "C", reference: "" }]);
+  const [savingManual, setSavingManual] = useState(false);
+  const [manualSaveResult, setManualSaveResult] = useState<any>(null);
+
   // Comparison data (loaded on demand or from initial props)
   const [comparisonRows, setComparisonRows] = useState<ComparisonRow[]>([]);
   const [comparisonSummary, setComparisonSummary] = useState<ComparisonSummary | null>(null);
@@ -273,13 +283,33 @@ export function RapprochementClient({
     setImporting(true);
     setImportError(null);
     setImportResult(null);
+    setShowManualEntry(false);
+    setManualFromParseFailure(false);
+    setManualError(null);
+    setManualSaveResult(null);
     try {
       const fd = new FormData();
       fd.append("file", importFile);
       fd.append("companyId", selectedCompanyId);
       const res = await fetch("/api/bank/reconcile", { method: "POST", body: fd });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Erreur d'import");
+      if (!res.ok) {
+        const isParseFailure =
+          Boolean(data.canManualEntry) ||
+          (data.error &&
+            (data.error.includes("reconnaître") ||
+              data.error.includes("Impossible") ||
+              data.error.includes("Aucune opération") ||
+              data.error.includes("Aucune transaction")));
+        if (isParseFailure) {
+          setImportError(data.error);
+          setManualFromParseFailure(true);
+          setShowManualEntry(true);
+        } else {
+          throw new Error(data.error ?? "Erreur d'import");
+        }
+        return;
+      }
       setImportResult(data);
       setImportFile(null);
       await loadComparison();
@@ -288,6 +318,46 @@ export function RapprochementClient({
       setImportError(err.message);
     } finally {
       setImporting(false);
+    }
+  }
+
+  async function handleManualSave() {
+    if (!selectedCompanyId) return;
+    setManualError(null);
+    const validRows = manualRows.filter(
+      (r) => r.date && r.description.trim() && r.amount && parseFloat(r.amount) > 0
+    );
+    if (validRows.length === 0) {
+      setManualError("Veuillez renseigner la date, le libellé et un montant positif pour au moins une ligne.");
+      return;
+    }
+    setSavingManual(true);
+    try {
+      const rows = validRows.map((r) => ({
+        date: r.date,
+        description: r.description.trim(),
+        amount: r.sens === "D" ? -Math.abs(parseFloat(r.amount)) : Math.abs(parseFloat(r.amount)),
+        reference: r.reference.trim() || undefined,
+      }));
+      const res = await fetch("/api/bank/reconcile/manual", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ companyId: selectedCompanyId, rows }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Erreur de sauvegarde");
+      setManualSaveResult(data);
+      setImportError(null);
+      setImportFile(null);
+      setShowManualEntry(false);
+      setManualFromParseFailure(false);
+      setManualRows([{ date: "", description: "", amount: "", sens: "C", reference: "" }]);
+      await loadComparison();
+      router.refresh();
+    } catch (err: any) {
+      setManualError(err.message);
+    } finally {
+      setSavingManual(false);
     }
   }
 
@@ -1156,10 +1226,10 @@ export function RapprochementClient({
           </div>
 
           {/* Import actions */}
-          {importFile && (
-            <div style={{ display: "flex", gap: "12px", justifyContent: "center" }}>
+          {importFile ? (
+            <div style={{ display: "flex", gap: "12px", justifyContent: "center", flexWrap: "wrap" }}>
               <button
-                onClick={() => { setImportFile(null); setImportError(null); setImportResult(null); }}
+                onClick={() => { setImportFile(null); setImportError(null); setImportResult(null); setManualError(null); }}
                 style={{
                   display: "flex", alignItems: "center", gap: "6px",
                   padding: "10px 20px", borderRadius: "8px",
@@ -1186,10 +1256,31 @@ export function RapprochementClient({
                 {importing ? "Import en cours…" : "Lancer l'import et le rapprochement"}
               </button>
             </div>
+          ) : !showManualEntry && (
+            <div style={{ display: "flex", justifyContent: "center" }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setImportError(null);
+                  setManualError(null);
+                  setManualSaveResult(null);
+                  setManualFromParseFailure(false);
+                  setShowManualEntry(true);
+                }}
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: "6px",
+                  padding: "8px 16px", borderRadius: "8px",
+                  border: "1px solid #cbd5e1", background: "#fff",
+                  color: "#475569", cursor: "pointer", fontSize: "12px", fontWeight: 600,
+                }}
+              >
+                <Edit3 size={13} /> Saisir les opérations manuellement
+              </button>
+            </div>
           )}
 
-          {/* Errors */}
-          {importError && (
+          {/* Errors & manual entry */}
+          {importError && !showManualEntry && (
             <div style={{
               display: "flex", alignItems: "flex-start", gap: "10px",
               background: "#fff1f2", border: "1px solid #fecdd3",
@@ -1198,6 +1289,268 @@ export function RapprochementClient({
             }}>
               <XCircle size={16} style={{ flexShrink: 0, marginTop: "1px" }} />
               <span style={{ fontSize: "13px" }}>{importError}</span>
+            </div>
+          )}
+
+          {/* ── Manual entry panel (shown when PDF parse fails or opened directly) ── */}
+          {showManualEntry && (
+            <div style={{
+              background: manualFromParseFailure ? "#fffbeb" : "#f8fafc",
+              border: `1px solid ${manualFromParseFailure ? "#fde68a" : "#cbd5e1"}`,
+              borderRadius: "14px",
+              padding: "20px 24px",
+            }}>
+              {/* Header */}
+              <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "4px" }}>
+                <AlertCircle size={18} color={manualFromParseFailure ? "#b45309" : "#2563eb"} />
+                <span style={{ fontWeight: 700, fontSize: "15px", color: manualFromParseFailure ? "#92400e" : "#1e293b" }}>
+                  {manualFromParseFailure
+                    ? "Structure du relevé non reconnue automatiquement"
+                    : "Saisie manuelle des opérations bancaires"}
+                </span>
+              </div>
+              <p style={{ fontSize: "13px", color: manualFromParseFailure ? "#78350f" : "#64748b", margin: "0 0 16px 28px" }}>
+                {manualFromParseFailure && importError
+                  ? `${importError} Saisissez les opérations ci-dessous — elles seront intégrées au rapprochement.`
+                  : "Ajoutez les lignes de votre relevé bancaire ci-dessous pour lancer le rapprochement automatique."}
+              </p>
+
+              {/* Table */}
+              <div style={{ overflowX: "auto", marginBottom: "12px" }}>
+                <table style={{ width: "100%", minWidth: "660px", borderCollapse: "collapse", fontSize: "13px" }}>
+                  <thead>
+                    <tr style={{ background: manualFromParseFailure ? "#fef3c7" : "#e2e8f0" }}>
+                      {["Date", "Libellé / Opération", "Montant (DZD)", "D / C", "Référence (opt.)", ""].map((h) => (
+                        <th key={h} style={{
+                          padding: "8px 10px", textAlign: "left",
+                          fontWeight: 600, color: manualFromParseFailure ? "#92400e" : "#334155", fontSize: "11px",
+                          textTransform: "uppercase", whiteSpace: "nowrap",
+                          borderBottom: `1px solid ${manualFromParseFailure ? "#fde68a" : "#cbd5e1"}`,
+                        }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {manualRows.map((row, idx) => (
+                      <tr key={idx} style={{ borderBottom: `1px solid ${manualFromParseFailure ? "#fef3c7" : "#e2e8f0"}` }}>
+                        <td style={{ padding: "6px 8px" }}>
+                          <input
+                            type="date"
+                            value={row.date}
+                            onChange={(e) => {
+                              const copy = [...manualRows];
+                              copy[idx] = { ...copy[idx], date: e.target.value };
+                              setManualRows(copy);
+                            }}
+                            style={{
+                              border: "1px solid #cbd5e1", borderRadius: "6px",
+                              padding: "5px 8px", fontSize: "12px", width: "135px",
+                              background: "#fff", color: "#0f172a",
+                            }}
+                          />
+                        </td>
+                        <td style={{ padding: "6px 8px" }}>
+                          <input
+                            type="text"
+                            placeholder="ex: Virement client ABC"
+                            value={row.description}
+                            onChange={(e) => {
+                              const copy = [...manualRows];
+                              copy[idx] = { ...copy[idx], description: e.target.value };
+                              setManualRows(copy);
+                            }}
+                            style={{
+                              border: "1px solid #cbd5e1", borderRadius: "6px",
+                              padding: "5px 8px", fontSize: "12px", width: "220px",
+                              background: "#fff", color: "#0f172a",
+                            }}
+                          />
+                        </td>
+                        <td style={{ padding: "6px 8px" }}>
+                          <input
+                            type="number"
+                            placeholder="0,00"
+                            min="0"
+                            step="0.01"
+                            value={row.amount}
+                            onChange={(e) => {
+                              const copy = [...manualRows];
+                              copy[idx] = { ...copy[idx], amount: e.target.value };
+                              setManualRows(copy);
+                            }}
+                            style={{
+                              border: "1px solid #cbd5e1", borderRadius: "6px",
+                              padding: "5px 8px", fontSize: "12px", width: "120px",
+                              textAlign: "right", background: "#fff", color: "#0f172a",
+                            }}
+                          />
+                        </td>
+                        <td style={{ padding: "6px 8px" }}>
+                          <select
+                            value={row.sens}
+                            onChange={(e) => {
+                              const copy = [...manualRows];
+                              copy[idx] = { ...copy[idx], sens: e.target.value as "D" | "C" };
+                              setManualRows(copy);
+                            }}
+                            style={{
+                              border: "1px solid #cbd5e1", borderRadius: "6px",
+                              padding: "5px 8px", fontSize: "12px", width: "115px",
+                              background: row.sens === "D" ? "#fff1f2" : "#f0fdf4",
+                              color: row.sens === "D" ? "#dc2626" : "#16a34a",
+                              fontWeight: 600,
+                            }}
+                          >
+                            <option value="C">C — Crédit</option>
+                            <option value="D">D — Débit</option>
+                          </select>
+                        </td>
+                        <td style={{ padding: "6px 8px" }}>
+                          <input
+                            type="text"
+                            placeholder="Réf / Chèque"
+                            value={row.reference}
+                            onChange={(e) => {
+                              const copy = [...manualRows];
+                              copy[idx] = { ...copy[idx], reference: e.target.value };
+                              setManualRows(copy);
+                            }}
+                            style={{
+                              border: "1px solid #cbd5e1", borderRadius: "6px",
+                              padding: "5px 8px", fontSize: "12px", width: "130px",
+                              background: "#fff", color: "#0f172a",
+                            }}
+                          />
+                        </td>
+                        <td style={{ padding: "6px 8px" }}>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setManualRows((prev) =>
+                                prev.length <= 1
+                                  ? [{ date: "", description: "", amount: "", sens: "C", reference: "" }]
+                                  : prev.filter((_, i) => i !== idx)
+                              )
+                            }
+                            style={{
+                              background: "none", border: "none",
+                              color: "#ef4444", cursor: "pointer", padding: "4px",
+                            }}
+                            title="Supprimer cette ligne"
+                          >
+                            <X size={15} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {manualError && (
+                <div style={{
+                  display: "flex", alignItems: "center", gap: "8px",
+                  background: "#fff1f2", border: "1px solid #fecdd3",
+                  borderRadius: "8px", padding: "10px 12px", color: "#be123c",
+                  fontSize: "12px", marginBottom: "12px",
+                }}>
+                  <XCircle size={14} style={{ flexShrink: 0 }} />
+                  <span>{manualError}</span>
+                </div>
+              )}
+
+              {/* Row actions */}
+              <div style={{ display: "flex", gap: "10px", justifyContent: "space-between", flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setManualRows((prev) => [
+                      ...prev,
+                      { date: "", description: "", amount: "", sens: "C", reference: "" },
+                    ])
+                  }
+                  style={{
+                    display: "inline-flex", alignItems: "center", gap: "6px",
+                    padding: "8px 14px", borderRadius: "8px",
+                    border: `1px dashed ${manualFromParseFailure ? "#d97706" : "#3b82f6"}`, background: "#fff",
+                    color: manualFromParseFailure ? "#b45309" : "#2563eb", fontSize: "12px", fontWeight: 600, cursor: "pointer",
+                  }}
+                >
+                  <PlusCircle size={13} /> Ajouter une ligne
+                </button>
+
+                <div style={{ display: "flex", gap: "10px" }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowManualEntry(false);
+                      setManualFromParseFailure(false);
+                      setManualError(null);
+                      setImportError(null);
+                      setManualRows([{ date: "", description: "", amount: "", sens: "C", reference: "" }]);
+                    }}
+                    style={{
+                      padding: "8px 16px", borderRadius: "8px",
+                      border: "1px solid #e2e8f0", background: "#fff",
+                      color: "#64748b", fontSize: "12px", cursor: "pointer",
+                    }}
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleManualSave}
+                    disabled={savingManual}
+                    style={{
+                      display: "inline-flex", alignItems: "center", gap: "6px",
+                      padding: "8px 20px", borderRadius: "8px",
+                      border: "none",
+                      background: savingManual ? "#93c5fd" : "linear-gradient(135deg, #1d4ed8, #3b82f6)",
+                      color: "#fff", fontSize: "13px", fontWeight: 600,
+                      cursor: savingManual ? "not-allowed" : "pointer",
+                      boxShadow: "0 2px 8px rgba(29,78,216,0.3)",
+                    }}
+                  >
+                    {savingManual ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+                    {savingManual ? "Enregistrement…" : "Enregistrer les opérations"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Manual save success */}
+          {manualSaveResult && (
+            <div style={{
+              background: "#f0fdf4",
+              border: "1px solid #bbf7d0",
+              borderRadius: "12px",
+              padding: "16px 20px",
+              color: "#15803d",
+            }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "12px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <CheckCircle2 size={18} />
+                  <span style={{ fontSize: "13px", fontWeight: 600 }}>
+                    {manualSaveResult.total} opération(s) enregistrée(s) — {manualSaveResult.matched ?? 0} rapprochée(s), {manualSaveResult.unmatched ?? 0} en attente.
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const el = document.getElementById("section-rapprochement");
+                    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+                  }}
+                  style={{
+                    display: "inline-flex", alignItems: "center", gap: "6px",
+                    padding: "6px 14px", borderRadius: "8px",
+                    border: "1px solid #16a34a", background: "#fff",
+                    color: "#16a34a", cursor: "pointer", fontSize: "12px", fontWeight: 600,
+                  }}
+                >
+                  <ArrowRightLeft size={13} /> Voir le tableau de rapprochement
+                </button>
+              </div>
             </div>
           )}
 

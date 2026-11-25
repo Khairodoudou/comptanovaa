@@ -84,13 +84,22 @@ async function extractTextWithTesseract(imageBuffer: Buffer): Promise<string> {
   }
 }
 
+const DEFAULT_OCR_PROMPT =
+  "Extrais l'intégralité du texte et des données de cette facture ou chèque comptable algérien (Fournisseur/Client, N° Facture, Date, Montant TTC/HT/TVA). Rends uniquement le texte brut extrait.";
+
+const BANK_STATEMENT_OCR_PROMPT =
+  "Tu es un expert comptable algérien. Extrais TOUTES les lignes d'opérations de ce relevé bancaire (sur toutes les pages, sans rien résumer ni omettre) sous forme de tableau Markdown propre avec les colonnes présentes dans le document, par exemple : | Date | Date Valeur | Libellé | Débit | Crédit | Solde | (ou | Date | Libellé | Montant | Sens | Solde |). Conserve fidèlement chaque date, libellé et montant exact. Rends uniquement le tableau Markdown.";
+
 export async function runOcr(
   buffer: Buffer,
   filename: string,
   mimeType: string,
-  companyInput: string | CompanyContext = ""
+  companyInput: string | CompanyContext = "",
+  options?: { mode?: "default" | "bank_statement" }
 ): Promise<OcrResult> {
   const startMs = Date.now();
+  const ocrPrompt =
+    options?.mode === "bank_statement" ? BANK_STATEMENT_OCR_PROMPT : DEFAULT_OCR_PROMPT;
 
   if (isCsvMimeType(mimeType)) {
     return extractFromCsv(buffer.toString("utf-8"));
@@ -130,7 +139,7 @@ export async function runOcr(
               {
                 parts: [
                   {
-                    text: "Extrais l'intégralité du texte et des données de cette facture ou chèque comptable algérien (Fournisseur/Client, N° Facture, Date, Montant TTC/HT/TVA). Rends uniquement le texte brut extrait.",
+                    text: ocrPrompt,
                   },
                   { inline_data: { mime_type: geminiMime, data: base64 } },
                 ],
@@ -144,6 +153,9 @@ export async function runOcr(
           const candText = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
           if (candText.trim().length > 10) {
             rawText = candText.trim();
+            if (options?.mode === "bank_statement" && rawText.includes("|")) {
+              markdown = rawText;
+            }
             method = "gemini_ocr";
             confidence = 95;
             return true;
@@ -228,7 +240,7 @@ export async function runOcr(
                     content: [
                       {
                         type: "text",
-                        text: "Extrais l'intégralité du texte et des données de cette facture ou chèque comptable algérien (Fournisseur/Client, N° Facture, Date, Montant TTC/HT/TVA). Rends uniquement le texte brut.",
+                        text: ocrPrompt,
                       },
                       {
                         type: "image_url",
@@ -244,6 +256,9 @@ export async function runOcr(
               const pixText = pixData.choices?.[0]?.message?.content ?? "";
               if (pixText.trim().length > 10) {
                 rawText = pixText.trim();
+                if (options?.mode === "bank_statement" && rawText.includes("|")) {
+                  markdown = rawText;
+                }
                 method = "mistral_ocr";
                 confidence = 90;
               }
